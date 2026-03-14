@@ -1,0 +1,45 @@
+# IDE and user-specific files
+.vs/
+.vscode/
+*.user
+*.rsuser
+*.suo
+
+# .NET build output
+bin/
+obj/
+
+# Node and frontend dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment and secrets
+.env
+.env.*
+google.env
+parahrasekey/
+
+# Local databases and machine-specific data
+*.db
+*.db-*
+*.db.dsn
+*.db.old_*
+
+# Generated exports, caches, and logs
+Exports/
+artifacts/
+Processed/
+runtime_logs/
+
+# Transient tooling folders
+_ps1.code-search
+
+# Large local installers and archives
+*.msi
+*.zip
+
+# OS noise
+Thumbs.db
+Desktop.ini
