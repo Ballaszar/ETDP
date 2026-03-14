@@ -488,7 +488,7 @@ static string? SelectBestExistingCandidate(IEnumerable<string> candidates, strin
         .FirstOrDefault();
 }
 
-static string? FindProjectRoot(params string[] probes)
+static string? FindProjectRoot(params string?[] probes)
 {
     foreach (var probe in probes)
     {

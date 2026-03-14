@@ -926,7 +926,7 @@ namespace ETD.Api.Controllers
             public List<string> ResourceHints { get; set; } = new();
         }
 
-        private async Task<(List<WorkbookActivityBundle> Bundles, string SourceLabel)> BuildWorkbookActivitiesAsync(
+        private Task<(List<WorkbookActivityBundle> Bundles, string SourceLabel)> BuildWorkbookActivitiesAsync(
             Subject subject,
             Qualification qualification,
             int maxActivities,
@@ -940,7 +940,10 @@ namespace ETD.Api.Controllers
             var criteriaItems = BuildAssessmentCriteriaFocusedItems(items)
                 .Take(maxActivities)
                 .ToList();
-            if (criteriaItems.Count == 0) return (new List<WorkbookActivityBundle>(), sourceLabel);
+            if (criteriaItems.Count == 0)
+            {
+                return Task.FromResult((new List<WorkbookActivityBundle>(), sourceLabel));
+            }
 
             var bundles = new List<WorkbookActivityBundle>();
             var activityNumber = 1;
@@ -956,7 +959,7 @@ namespace ETD.Api.Controllers
                 activityNumber++;
             }
 
-            return (bundles, sourceLabel);
+            return Task.FromResult((bundles, sourceLabel));
         }
 
         private async Task<List<WorkbookActivityBundle>> BuildWorkbookActivitiesWithSemanticKernelFallbackAsync(
