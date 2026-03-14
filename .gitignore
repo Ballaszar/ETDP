@@ -20,6 +20,7 @@ yarn-error.log*
 .env.*
 google.env
 parahrasekey/
+Security/keys/*.txt
 
 # Local databases and machine-specific data
 *.db
@@ -48,6 +49,8 @@ Imports/*
 
 # Transient tooling folders
 _ps1.code-search
+**/.venv/
+**/.venv*/
 
 # Large local installers and archives
 *.msi
