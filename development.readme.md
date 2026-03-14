@@ -1,6 +1,6 @@
 # ETDP Development Knowledge Base
 
-Last verified: March 5, 2026.
+Last verified: March 14, 2026.
 
 This file is the primary knowledge base for the in-app AI support stack:
 - `GET /api/Knowledge/development-readme` (sidebar AI knowledge source)
@@ -44,6 +44,16 @@ This is why Library Manager and Content Builder can stay functional without Foun
 - Default frontend dev URL: `http://localhost:5173`.
 - Vite proxy maps `/api` -> `http://localhost:5299`.
 - Qualification context stores numeric `qualificationId` in local storage.
+- Export UI entry points:
+  - `frontend/src/pages/KnowledgeQuestionnairePage.jsx`
+  - `frontend/src/pages/LearnerGuidePage.jsx`
+  - `frontend/src/pages/WorkbookPage.jsx`
+- Export backend controllers:
+  - `Controllers/KnowledgeQuestionnaireController.cs`
+  - `Controllers/LearnerGuideController.cs`
+  - `Controllers/WorkbookController.cs`
+- Knowledge Questionnaire draft/classification service:
+  - `Services/KnowledgeQuestionnaireV1Service.cs`
 
 ---
 
@@ -637,11 +647,30 @@ Content and search:
 - `GET /api/Content/upload-structure-readme`
 
 Export and print:
+- `/api/LearnerGuide/export-readiness`
 - `/api/LearnerGuide/download`
+- `/api/LearnerGuide/download-range`
+- `/api/LearnerGuide/download-audio`
 - `/api/Workbook/download`
+- `/api/Workbook/download-range`
 - `/api/Workbook/download-memorandum`
+- `/api/Workbook/download-memorandum-range`
+- `/api/Workbook/download-report`
+- `/api/Workbook/download-report-range`
+- `/api/KnowledgeQuestionnaire/v1-draft`
+- `/api/KnowledgeQuestionnaire/v1-phase-draft`
+- `POST /api/KnowledgeQuestionnaire/smi-draft`
+- `POST /api/KnowledgeQuestionnaire/v1-phase-smi-draft`
+- `POST /api/KnowledgeQuestionnaire/v1-phase-export-docx`
 - `/api/KnowledgeQuestionnaire/download`
+- `/api/KnowledgeQuestionnaire/download-range`
+- `/api/KnowledgeQuestionnaire/download-consolidated`
 - `/api/KnowledgeQuestionnaire/download-memorandum`
+- `/api/KnowledgeQuestionnaire/download-memorandum-range`
+- `/api/KnowledgeQuestionnaire/download-memorandum-consolidated-range`
+- `/api/KnowledgeQuestionnaire/report`
+- `/api/KnowledgeQuestionnaire/download-report`
+- `/api/KnowledgeQuestionnaire/download-report-range`
 - `/api/LearningSchedule/download`
 - `/api/LearningSchedule/download-docx`
 - `/api/ProjectRollout/export`
@@ -672,6 +701,247 @@ AI and code diagnostics:
 - `/api/Knowledge/health`
 - `/api/Knowledge/chat`
 - `/api/Code/list`, `/api/Code/read`, `/api/Code/search`
+
+---
+
+## 12.1) Knowledge Questionnaire v1 Workflow (`/learning-material/summative-assessment`)
+
+Frontend orchestration:
+- Main page: `frontend/src/pages/KnowledgeQuestionnairePage.jsx`
+- Draft state utilities: `frontend/src/utils/knowledgeQuestionnaireV1.js`
+- Route intent: one formal Knowledge Questionnaire is produced per main category inside the selected Knowledge Learning phase.
+
+Phase workflow sequence:
+1. Lecturer selects a qualification and curriculum phase.
+2. Frontend loads `GET /api/KnowledgeQuestionnaire/v1-phase-draft?qualificationId=<id>&phaseId=<id>`.
+3. Backend calls `KnowledgeQuestionnaireV1Service.BuildPhaseDraft(...)` to produce a consolidated phase draft.
+4. Frontend splits the phase draft into main-category plans by subject code and keeps local overrides in browser storage per qualification/phase.
+5. Lecturer reviews routed criteria, question counts, pass mark, created/reviewed by fields, and can override metadata or reroute weak rows out of KQ.
+6. Frontend sends the selected main-category scope to `POST /api/KnowledgeQuestionnaire/v1-phase-smi-draft`.
+7. Generated question rows can then be previewed or exported through `POST /api/KnowledgeQuestionnaire/v1-phase-export-docx`.
+
+Draft logic currently implemented:
+- Topic-only draft endpoint: `GET /api/KnowledgeQuestionnaire/v1-draft`
+- Phase-wide draft endpoint: `GET /api/KnowledgeQuestionnaire/v1-phase-draft`
+- Topic draft and phase draft both decompose assessment criteria into intent rows using Bloom-style verb matching.
+- `BuildCriterionIntents(...)` stamps:
+  - detected verb
+  - canonical verb
+  - Bloom domain and level
+  - qualifier
+  - coverage type (`direct` or `proxy`)
+  - routing status (`KQ` or `Other Assessment`)
+- Empty or verb-free criteria still become a fallback KQ intent so they remain visible for lecturer review.
+
+Phase draft normalization rules:
+- Duplicate subject rows are collapsed inside the selected phase.
+- Duplicate topics are collapsed by subject code, topic code, and topic description.
+- Duplicate assessment criteria are collapsed by subject code, topic code, and criterion text.
+- If a Knowledge Learning phase has no directly linked subjects, recovery logic can repopulate the scope from subject codes starting with `KM-`.
+- Draft warnings are returned so the UI can show data-recovery or routing issues before generation.
+
+Question-count policy:
+- Service baseline remains `2` minimum questions per KQ-routed criterion.
+- Topic and raw phase draft metadata still compute a floor of `Math.Max(100, kqCriteriaCount * 2)` for total questions.
+- The current phase UI then recalculates each main-category exam separately and defaults each category to `criterionCount * 2`.
+- Default split is half True/False and the remainder Multiple Choice.
+- Frontend text explicitly warns that changing the ratio can destabilize the standing exam weighting.
+
+SMI generation path:
+- Subject-level SMI endpoint: `POST /api/KnowledgeQuestionnaire/smi-draft`
+- Phase-wide SMI endpoint: `POST /api/KnowledgeQuestionnaire/v1-phase-smi-draft`
+- The phase endpoint filters the consolidated draft by selected subject ids and assessment-criteria ids before generation.
+- `BuildPhaseCriterionSeeds(...)` resolves lesson evidence per subject and keeps the strongest row per criterion bundle.
+- `TryBuildPhaseQuestionsWithSmiAsync(...)` is SMI-first but falls back deterministically if the SMI service is disabled, unresponsive, or returns unparseable JSON.
+- The returned payload carries:
+  - generated question rows
+  - per-row subject/topic/criterion context
+  - `questionSource`
+  - learning resource suggestions
+
+Legacy/parallel questionnaire exports still available:
+- `GET /api/KnowledgeQuestionnaire/download`
+- `GET /api/KnowledgeQuestionnaire/download-range`
+- `GET /api/KnowledgeQuestionnaire/download-consolidated`
+- `GET /api/KnowledgeQuestionnaire/download-memorandum`
+- `GET /api/KnowledgeQuestionnaire/download-memorandum-range`
+- `GET /api/KnowledgeQuestionnaire/download-memorandum-consolidated-range`
+- `GET /api/KnowledgeQuestionnaire/report`
+- `GET /api/KnowledgeQuestionnaire/download-report`
+- `GET /api/KnowledgeQuestionnaire/download-report-range`
+
+Knowledge Questionnaire DOCX composition:
+- Standard subject export and phase export both create:
+  - cover page
+  - legal disclaimer page
+  - `DocumentRevisionQualityControlPage`
+  - table of contents page
+  - question body
+  - closing summary
+- The phase DOCX export groups rows by subject and topic, then renders one response table per question.
+- The subject questionnaire export currently renders true/false-only tables in the final paper, even though the phase SMI workflow supports both True/False and Multiple Choice rows.
+
+Knowledge Questionnaire DOCX Word styling:
+- Font family: `Times New Roman`
+- Heading styles:
+  - `Heading1` for title, section, summary, TOC, bibliography
+  - `Heading2` for per-subject grouping in phase export
+- Heading spacing: `Before=120`, `After=80`
+- Body paragraph spacing: `Line=280`, first-line indent `680`
+- Topic metadata paragraph spacing: `Before=80`, `After=40`, `Line=240`
+- Table of contents fields are marked `UpdateFieldsOnOpen=true`, so Word can populate the TOC on open/update.
+- Visible table lines are implemented deliberately:
+  - `BuildVisibleTableBorders()` applies single black outer and inner borders
+  - `BuildVisibleTableCellBorders()` applies single black borders on every cell edge
+  - response tables also use cell shading for header rows and fixed table layout widths
+- Current phase response tables:
+  - True/False table has visible statement/true/false columns
+  - Multiple Choice table has visible option/statement/learner-choice columns
+
+---
+
+## 12.2) Learner Guide Workflow (`/learning-material/learner-guide`)
+
+Frontend orchestration:
+- Main page: `frontend/src/pages/LearnerGuidePage.jsx`
+- Learning Material save wrapper: `frontend/src/pages/LearningMaterialLearnerGuidePage.jsx`
+- Frontend flow text is explicit: `Phase Sequence -> Subject Code -> Topic Order -> Assessment Criteria -> LPN`
+
+Learner Guide operator flow:
+1. Select the target subject.
+2. Optionally run the paraphrase workflow.
+3. Optionally review and manually save paraphrase edits.
+4. Run export readiness (`GET /api/LearnerGuide/export-readiness`).
+5. Preview the DOCX on-screen.
+6. Download the `.docx`.
+7. Optionally download learner-guide audio (`GET /api/LearnerGuide/download-audio`).
+
+Current export endpoints:
+- `GET /api/LearnerGuide/export-readiness`
+- `GET /api/LearnerGuide/download`
+- `GET /api/LearnerGuide/download-range`
+- `GET /api/LearnerGuide/download-audio`
+- Paraphrase support:
+  - `POST /api/LearnerGuide/paraphrase`
+  - `POST /api/LearnerGuide/paraphrase-workflow`
+  - `GET /api/LearnerGuide/paraphrase-review`
+  - `POST /api/LearnerGuide/paraphrase-review/save`
+
+Readiness logic:
+- If a qualification has multiple subjects and no `subjectId` is provided, readiness returns `requiresSubjectSelection=true`.
+- Readiness deduplicates topics and criteria before evaluating coverage.
+- Primary content source is `LecturerToolkitEntries` that match the selected subject/criteria.
+- Fallback content source is `LessonPlans`.
+- Diagnostics returned include:
+  - total topics
+  - total criteria
+  - criteria matched to toolkit rows
+  - criteria with lesson content
+  - coverage percent
+  - unmapped toolkit rows
+  - subject-code mismatch rows
+- `ready=true` when mapped guide source content exists for the selected subject scope.
+
+Learner Guide build sequence:
+- `BuildLearnerGuideDocumentAsync(...)` is the main DOCX pipeline.
+- For each subject in scope, `BuildSubjectGuideChapterAsync(...)`:
+  - resolves phase
+  - loads topics ordered by `Order`, `TopicCode`, then id
+  - deduplicates topics by topic identity
+  - loads assessment criteria and deduplicates them by criterion identity
+  - loads lesson plans per criterion
+  - loads lecturer toolkit rows for the qualification
+  - resolves guide lesson blocks from toolkit first, then lesson-plan fallback
+  - paraphrases descriptions/actions when requested
+  - deduplicates lesson blocks
+  - resolves workbook activities for chapter summary
+  - resolves topic illustrations from source materials and optional AI generation
+- If no chapter has topic data, export fails rather than emitting an empty learner guide.
+
+Chapter assembly order:
+- cover page
+- disclaimer page
+- `DocumentRevisionQualityControlPage`
+- table of contents page
+- one chapter per subject
+- inside each chapter:
+  - chapter heading
+  - subject heading
+  - subject purpose
+  - subject assessment criteria
+  - each topic in topic order
+  - topic illustrations (if enabled and available)
+  - lesson-plan headings by LPN
+  - exact lesson-plan content blocks
+  - end-of-chapter summary
+  - workbook activities summary
+
+Learner Guide content rules:
+- Toolkit rows are preferred over raw lesson-plan rows because they carry curated guide text.
+- Once a toolkit row is consumed for a criterion, it is not reused for a second criterion in the same export.
+- If toolkit lesson description/content is empty, the exporter backfills from matched lesson plans.
+- Lesson-plan content is preserved as multi-paragraph body copy; title-like lines are promoted into mini headings.
+- Reviewed paraphrase cache is loaded only when both `paraphrase=true` and `useWorkflowCache=true`.
+- Illustration generation is optional and clamped to `1..4` images per topic.
+
+Learner Guide DOCX Word styling:
+- Font family: `Times New Roman`
+- Heading system:
+  - `Heading1`: chapter heading and top-level learner-guide headings
+  - `Heading2`: subject heading and chapter summary heading
+  - `Heading3`: subject assessment criteria and workbook activity headings
+  - `Heading4`: topic heading
+  - `Heading5`: lesson-plan heading
+  - `Heading6`: lesson-content title heading
+- Shared heading spacing rule: `Line=360`, `LineRule=Auto`
+- Body paragraph spacing: `Line=360`, first-line indent default `720`
+- Chapter heading:
+  - all caps
+  - bold
+  - left aligned
+- Subject heading:
+  - all caps
+  - bottom border enabled
+- Assessment Criteria heading:
+  - all caps
+  - bold
+  - top and bottom borders enabled
+  - grey fill (`D9D9D9`)
+- Topic heading:
+  - all caps
+  - bottom border enabled
+- Lesson-plan heading:
+  - right aligned
+- Lesson-content title heading:
+  - left aligned
+  - top border enabled
+- TOC fields are marked `UpdateFieldsOnOpen=true`, so Word can refresh the table automatically when opened or updated.
+
+Important export formatting note:
+- Learner Guide currently uses bordered headings rather than data tables for the main lesson flow.
+- Visible table-line support is already implemented for questionnaire/workbook exports through shared border helpers and can be reused if the learner guide later needs explicit grid tables.
+
+---
+
+## 12.3) DOCX Export Style Baselines
+
+Knowledge Questionnaire:
+- Controller: `Controllers/KnowledgeQuestionnaireController.cs`
+- Font: `Times New Roman`
+- Heading/body sizes are compacted through `CompactHeadingPt(...)` and `CompactBodyHalfPt(...)`
+- Question and memorandum tables use explicit visible borders
+
+Learner Guide:
+- Controller: `Controllers/LearnerGuideController.cs`
+- Font: `Times New Roman`
+- Heading hierarchy is explicit and semantically mapped to `Heading1` through `Heading6`
+- Paragraph borders and shading are part of the final Word design, not a preview-only effect
+
+Workbook:
+- Controller: `Controllers/WorkbookController.cs`
+- Font: `Arial Narrow`
+- Workbook tables also use `BuildVisibleTableBorders()` and `BuildVisibleTableCellBorders()` for visible black table lines
+- This controller remains the reference pattern if future exports need dense bordered activity tables
 
 ---
 
@@ -739,6 +1009,7 @@ dotnet build E:\ETDP\ETDP\ETDP.csproj -nologo
 - Update this file whenever routes, menu labels, runtime behavior, or endpoints change.
 - Keep Main Menu, Learning Material Dashboard, and Content Builder sections synchronized with current frontend code.
 - Keep support playbooks specific and operational. Avoid generic guidance.
+- Keep `AGENTS.md` and `codex-startup.md` synchronized with workflow or architecture changes that future Codex sessions must know at startup.
 
 ---
 
@@ -756,6 +1027,16 @@ dotnet build E:\ETDP\ETDP\ETDP.csproj -nologo
 - automatic on startup
 - scheduled (default every 360 minutes)
 - manual endpoint: `POST /api/Diagnostics/codex-continuity-refresh?reason=<tag>`
+
+### Codex Startup Instructions
+- Repo-level startup file: `E:\ETDP\ETDP\AGENTS.md`
+- Persistent Codex app log: `E:\ETDP\ETDP\codex-startup.md`
+- Future Codex sessions working inside this repo should read, in order:
+  1. `AGENTS.md`
+  2. `codex-startup.md`
+  3. `development.readme.md`
+  4. `SystemData\CodexContinuity\codex-continuity-latest.md`
+- The goal is to combine stable repo instructions (`AGENTS.md`, `codex-startup.md`) with the latest generated runtime snapshot (`codex-continuity-latest.md`).
 
 ### Automated Workspace Backup
 - Background service: `WorkspaceBackupService`.
