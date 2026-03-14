@@ -33,6 +33,19 @@ artifacts/
 Processed/
 runtime_logs/
 
+# Imported knowledge and curriculum payloads
+Imports/*
+!Imports/Coverpages/
+!Imports/Coverpages/**
+!Imports/ExcelCSVTemplates/
+!Imports/ExcelCSVTemplates/**
+!Imports/Example Learner Guide/
+!Imports/Example Learner Guide/**
+!Imports/Logos/
+!Imports/Logos/**
+!Imports/SlideTemplate/
+!Imports/SlideTemplate/**
+
 # Transient tooling folders
 _ps1.code-search
 

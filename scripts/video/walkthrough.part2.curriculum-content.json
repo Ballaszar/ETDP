@@ -1,0 +1,40 @@
+{
+  "name": "ETDP Walkthrough Part 2 - Curriculum and Content",
+  "initialDelayMs": 1200,
+  "steps": [
+    {
+      "title": "Subjects",
+      "note": "Capture subjects or import from template.",
+      "path": "/subjects",
+      "waitMs": 2600
+    },
+    {
+      "title": "Topics",
+      "note": "Define topic-level structure and criteria links.",
+      "path": "/topics",
+      "waitMs": 2600
+    },
+    {
+      "title": "Lecturer Toolkit",
+      "note": "Prepare lesson plan numbers and supporting data.",
+      "path": "/lecturer-toolkit",
+      "waitMs": 2800
+    },
+    {
+      "title": "Exports Entry",
+      "note": "Move into export workflows after content preparation.",
+      "path": "/exports",
+      "waitMs": 2600
+    },
+    {
+      "title": "Dashboard Recap",
+      "note": "Workflow readiness checkpoint before final outputs.",
+      "path": "/",
+      "waitMs": 2600,
+      "actions": [
+        "scroll-menu-down",
+        "scroll-menu-top"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "scripts": {
+    "video:setup": "npx playwright install chromium",
+    "video:record": "node scripts/video/record-walkthrough.mjs",
+    "video:record:auto": "powershell -ExecutionPolicy Bypass -File ./scripts/video/record-walkthrough.ps1",
+    "video:record:slow:series": "powershell -ExecutionPolicy Bypass -File ./scripts/video/record-walkthrough-series.ps1 -Narrate -Mp4"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.4"
+  },
+  "devDependencies": {
+    "playwright": "^1.52.0"
+  }
+}

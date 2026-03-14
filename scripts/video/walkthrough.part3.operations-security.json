@@ -1,0 +1,37 @@
+{
+  "name": "ETDP Walkthrough Part 3 - Operations and Security",
+  "initialDelayMs": 1200,
+  "steps": [
+    {
+      "title": "Project Rollout Plan",
+      "note": "Set dates, preview semester flow, and export workbook.",
+      "path": "/project-rollout-plan",
+      "waitMs": 2800
+    },
+    {
+      "title": "Automation Jobs",
+      "note": "Queue and monitor scheduled automation runs.",
+      "path": "/automation-jobs",
+      "waitMs": 2600
+    },
+    {
+      "title": "System Diagnostics",
+      "note": "Review diagnostics and failure traces for support.",
+      "path": "/system-diagnostics",
+      "waitMs": 2600
+    },
+    {
+      "title": "User Guide",
+      "note": "Use the in-app guide for workflow and troubleshooting.",
+      "path": "/user-guide",
+      "waitMs": 2600
+    },
+    {
+      "title": "License and Activation Control",
+      "note": "This platform requires key activation and is not for uncontrolled redistribution.",
+      "caption": "Key activation required. Controlled deployment only.",
+      "path": "/",
+      "waitMs": 3200
+    }
+  ]
+}

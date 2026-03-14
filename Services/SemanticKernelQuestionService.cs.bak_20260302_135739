@@ -1,0 +1,362 @@
+using System.Text;
+using System.Text.Json;
+using ETD.Api.Utils;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+
+namespace ETD.Api.Services
+{
+    public sealed class SemanticKernelQuestionService
+    {
+        private readonly Kernel? _kernel;
+        private readonly bool _enabled;
+        private readonly string _model;
+
+        public SemanticKernelQuestionService()
+        {
+            _enabled = ResolveEnabledFlag();
+            _model = (Environment.GetEnvironmentVariable("SK_OPENAI_MODEL")
+                ?? Environment.GetEnvironmentVariable("OPENAI_MODEL")
+                ?? "gpt-4o-mini").Trim();
+
+            if (!_enabled || !AiRuntime.AllowOpenAi())
+            {
+                return;
+            }
+
+            var apiKey = (Environment.GetEnvironmentVariable("SK_OPENAI_API_KEY") ?? Secrets.GetOpenAIKey() ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return;
+            }
+
+            try
+            {
+                var builder = Kernel.CreateBuilder();
+                builder.AddOpenAIChatCompletion(modelId: _model, apiKey: apiKey);
+                _kernel = builder.Build();
+            }
+            catch
+            {
+                _kernel = null;
+            }
+        }
+
+        public bool IsAvailable()
+            => _enabled && _kernel != null && AiRuntime.AllowOpenAi();
+
+        public async Task<AssessmentDrivenQuestionGenerator.GeneratedQuestion?> GenerateTrueFalseQuestionAsync(
+            AssessmentDrivenQuestionGenerator.LessonEvidenceItem item,
+            int number,
+            int marks = 1,
+            int optionCount = 4,
+            CancellationToken cancellationToken = default)
+        {
+            if (!IsAvailable()) return null;
+
+            var prompt = BuildPrompt(
+                item,
+                questionType: "TrueFalse",
+                optionCount: Math.Clamp(optionCount, 2, 6),
+                marks: Math.Max(1, marks));
+
+            var generated = await InvokeAndParseAsync(prompt, cancellationToken);
+            if (generated == null) return null;
+
+            generated.Number = number;
+            generated.Type = "TrueFalse";
+            generated.TopicCode = item.TopicCode;
+            generated.TopicDescription = item.TopicDescription;
+            generated.LessonPlanLabel = item.LessonPlanLabel;
+            generated.AssessmentCriteriaDescription = item.AssessmentCriteriaDescription;
+            generated.BundleKey = item.BundleKey;
+            generated.Marks = Math.Max(1, marks);
+
+            if (!ValidateTrueFalse(generated, expectedOptionCount: Math.Clamp(optionCount, 2, 6)))
+            {
+                return null;
+            }
+
+            return generated.ToGeneratedQuestion();
+        }
+
+        public async Task<AssessmentDrivenQuestionGenerator.GeneratedQuestion?> GenerateMultipleChoiceQuestionAsync(
+            AssessmentDrivenQuestionGenerator.LessonEvidenceItem item,
+            int number,
+            int marks = 1,
+            int distractorCount = 4,
+            CancellationToken cancellationToken = default)
+        {
+            if (!IsAvailable()) return null;
+
+            var optionCount = Math.Clamp(distractorCount, 2, 8) + 1;
+            var prompt = BuildPrompt(
+                item,
+                questionType: "MultipleChoice",
+                optionCount: optionCount,
+                marks: Math.Max(1, marks));
+
+            var generated = await InvokeAndParseAsync(prompt, cancellationToken);
+            if (generated == null) return null;
+
+            generated.Number = number;
+            generated.Type = "MultipleChoice";
+            generated.TopicCode = item.TopicCode;
+            generated.TopicDescription = item.TopicDescription;
+            generated.LessonPlanLabel = item.LessonPlanLabel;
+            generated.AssessmentCriteriaDescription = item.AssessmentCriteriaDescription;
+            generated.BundleKey = item.BundleKey;
+            generated.Marks = Math.Max(1, marks);
+
+            if (!ValidateMultipleChoice(generated, expectedOptionCount: optionCount))
+            {
+                return null;
+            }
+
+            return generated.ToGeneratedQuestion();
+        }
+
+        private async Task<GeneratedQuestionEnvelope?> InvokeAndParseAsync(string prompt, CancellationToken cancellationToken)
+        {
+            if (_kernel == null) return null;
+
+            var settings = new OpenAIPromptExecutionSettings
+            {
+                Temperature = 0.2,
+                TopP = 0.9,
+                MaxTokens = 1100
+            };
+
+            var args = new KernelArguments(settings);
+            var result = await _kernel.InvokePromptAsync(prompt, args, cancellationToken: cancellationToken);
+            var raw = result.GetValue<string>() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+
+            return TryParse(raw);
+        }
+
+        private static GeneratedQuestionEnvelope? TryParse(string raw)
+        {
+            var text = StripCodeFence(raw).Trim();
+            if (string.IsNullOrWhiteSpace(text)) return null;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(text);
+                var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Object) return null;
+
+                var prompt = ReadString(root, "prompt");
+                var rationale = ReadString(root, "rationale");
+                var correctAnswer = ReadString(root, "correctAnswer");
+
+                var options = new List<string>();
+                if (root.TryGetProperty("options", out var optionsEl) && optionsEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var option in optionsEl.EnumerateArray())
+                    {
+                        var v = option.GetString();
+                        if (!string.IsNullOrWhiteSpace(v))
+                        {
+                            options.Add(v.Trim());
+                        }
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(prompt) || options.Count == 0 || string.IsNullOrWhiteSpace(correctAnswer))
+                {
+                    return null;
+                }
+
+                return new GeneratedQuestionEnvelope
+                {
+                    Prompt = prompt,
+                    Options = options,
+                    CorrectAnswer = correctAnswer,
+                    Rationale = string.IsNullOrWhiteSpace(rationale)
+                        ? "Generated with Semantic Kernel using lesson evidence and assessment criterion."
+                        : rationale
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string ReadString(JsonElement root, string name)
+        {
+            if (!root.TryGetProperty(name, out var v)) return string.Empty;
+            return v.ValueKind == JsonValueKind.String ? (v.GetString() ?? string.Empty).Trim() : string.Empty;
+        }
+
+        private static string StripCodeFence(string raw)
+        {
+            var trimmed = raw.Trim();
+            if (!trimmed.StartsWith("```", StringComparison.Ordinal)) return trimmed;
+
+            var firstNewline = trimmed.IndexOf('\n');
+            if (firstNewline < 0) return trimmed.Trim('`');
+
+            var body = trimmed[(firstNewline + 1)..];
+            var closingFence = body.LastIndexOf("```", StringComparison.Ordinal);
+            if (closingFence >= 0)
+            {
+                body = body[..closingFence];
+            }
+            return body;
+        }
+
+        private static bool ValidateTrueFalse(GeneratedQuestionEnvelope candidate, int expectedOptionCount)
+        {
+            if (candidate.Options.Count != expectedOptionCount) return false;
+            var correctKeys = ParseTrueFalseCorrectKeys(candidate.CorrectAnswer);
+            if (correctKeys.Count != 1) return false;
+            var key = correctKeys[0];
+            return key >= 0 && key < expectedOptionCount;
+        }
+
+        private static bool ValidateMultipleChoice(GeneratedQuestionEnvelope candidate, int expectedOptionCount)
+        {
+            if (candidate.Options.Count != expectedOptionCount) return false;
+            var correctIndex = ParseOptionLabel(candidate.CorrectAnswer);
+            return correctIndex >= 0 && correctIndex < expectedOptionCount;
+        }
+
+        private static List<int> ParseTrueFalseCorrectKeys(string correctAnswer)
+        {
+            var result = new List<int>();
+            var pieces = (correctAnswer ?? string.Empty)
+                .Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var piece in pieces)
+            {
+                var row = piece.Trim();
+                if (string.IsNullOrWhiteSpace(row)) continue;
+                var eq = row.IndexOf('=', StringComparison.Ordinal);
+                if (eq <= 0) continue;
+
+                var label = row.Substring(0, eq).Trim();
+                var tf = row[(eq + 1)..].Trim();
+                if (!tf.Equals("True", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var index = ParseOptionLabel(label);
+                if (index >= 0) result.Add(index);
+            }
+            return result;
+        }
+
+        private static int ParseOptionLabel(string value)
+        {
+            var v = (value ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(v)) return -1;
+            var c = char.ToUpperInvariant(v[0]);
+            if (c < 'A' || c > 'Z') return -1;
+            return c - 'A';
+        }
+
+        private static string BuildPrompt(
+            AssessmentDrivenQuestionGenerator.LessonEvidenceItem item,
+            string questionType,
+            int optionCount,
+            int marks)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("You are a strict TVET assessment designer for South African occupational training.");
+            sb.AppendLine("Create exactly one assessment item and return ONLY raw JSON (no markdown, no explanation).");
+            sb.AppendLine();
+            sb.AppendLine("JSON schema:");
+            sb.AppendLine("{");
+            sb.AppendLine("  \"prompt\": \"string\",");
+            sb.AppendLine("  \"options\": [\"string\"],");
+            sb.AppendLine("  \"correctAnswer\": \"string\",");
+            sb.AppendLine("  \"rationale\": \"string\"");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            sb.AppendLine($"QuestionType: {questionType}");
+            sb.AppendLine($"OptionCount: {optionCount}");
+            sb.AppendLine($"Marks: {marks}");
+            sb.AppendLine("Rules:");
+            if (string.Equals(questionType, "TrueFalse", StringComparison.OrdinalIgnoreCase))
+            {
+                sb.AppendLine("- Build one stem and exactly OptionCount statements.");
+                sb.AppendLine("- Exactly one statement must be true.");
+                sb.AppendLine("- correctAnswer format must be like: \"A=True; B=False; C=False; D=False\".");
+            }
+            else
+            {
+                sb.AppendLine("- Build one stem and exactly OptionCount options.");
+                sb.AppendLine("- Exactly one option must be correct.");
+                sb.AppendLine("- correctAnswer format must be the option letter only, for example: \"B\".");
+            }
+            sb.AppendLine("- Keep wording clear, measurable, and criterion-aligned.");
+            sb.AppendLine("- Avoid leading conversational phrasing.");
+            sb.AppendLine();
+            sb.AppendLine("Context:");
+            sb.AppendLine($"TopicCode: {CleanPromptField(item.TopicCode)}");
+            sb.AppendLine($"TopicDescription: {CleanPromptField(item.TopicDescription)}");
+            sb.AppendLine($"LessonPlanLabel: {CleanPromptField(item.LessonPlanLabel)}");
+            sb.AppendLine($"LessonPlanDescription: {CleanPromptField(item.LessonPlanDescription)}");
+            sb.AppendLine($"AssessmentCriterion: {CleanPromptField(item.AssessmentCriteriaDescription)}");
+            sb.AppendLine($"EvidenceText: {CleanPromptField(TrimForPrompt(item.EvidenceText, 1500))}");
+            return sb.ToString();
+        }
+
+        private static string CleanPromptField(string? value)
+            => (value ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim();
+
+        private static string TrimForPrompt(string? value, int maxChars)
+        {
+            var clean = CleanPromptField(value);
+            if (clean.Length <= maxChars) return clean;
+            return clean[..maxChars];
+        }
+
+        private static bool ResolveEnabledFlag()
+        {
+            var explicitSetting = (Environment.GetEnvironmentVariable("ETDP_USE_SEMANTIC_KERNEL_QUESTIONS") ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(explicitSetting))
+            {
+                var v = explicitSetting.ToLowerInvariant();
+                return v == "1" || v == "true" || v == "yes" || v == "on";
+            }
+
+            // Default on in this build; set ETDP_USE_SEMANTIC_KERNEL_QUESTIONS=false to disable.
+            return true;
+        }
+
+        private sealed class GeneratedQuestionEnvelope
+        {
+            public int Number { get; set; }
+            public string Type { get; set; } = string.Empty;
+            public string Prompt { get; set; } = string.Empty;
+            public List<string> Options { get; set; } = new();
+            public string CorrectAnswer { get; set; } = string.Empty;
+            public string TopicCode { get; set; } = string.Empty;
+            public string TopicDescription { get; set; } = string.Empty;
+            public string LessonPlanLabel { get; set; } = string.Empty;
+            public string AssessmentCriteriaDescription { get; set; } = string.Empty;
+            public string Rationale { get; set; } = string.Empty;
+            public int Marks { get; set; }
+            public string BundleKey { get; set; } = string.Empty;
+
+            public AssessmentDrivenQuestionGenerator.GeneratedQuestion ToGeneratedQuestion()
+            {
+                return new AssessmentDrivenQuestionGenerator.GeneratedQuestion
+                {
+                    Number = Number,
+                    Type = Type,
+                    Prompt = Prompt,
+                    Options = Options,
+                    CorrectAnswer = CorrectAnswer,
+                    TopicCode = TopicCode,
+                    TopicDescription = TopicDescription,
+                    LessonPlanLabel = LessonPlanLabel,
+                    AssessmentCriteriaDescription = AssessmentCriteriaDescription,
+                    Rationale = Rationale,
+                    Marks = Marks,
+                    BundleKey = BundleKey
+                };
+            }
+        }
+    }
+}

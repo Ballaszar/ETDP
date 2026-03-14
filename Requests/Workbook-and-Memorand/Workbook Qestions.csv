@@ -1,0 +1,981 @@
+QuestionNumber | Module | TopicCode | TopicName | AssessmentCriterion | QuestionType | Stem | OptionA | OptionB | OptionC | OptionD | OptionE | CorrectAnswer | Marks | BloomLevel
+1 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Responsibilities and work setting | MCQ | Which statement best describes the primary responsibilities of a fitter and turner? | They only operate CNC machines | They only perform welding tasks | They maintain, repair and install mechanical components | They work exclusively with electrical systems | They only do machining work | C | 1 | Understand
+2 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Responsibilities and work setting | TF | A fitter and turner is responsible for maintaining and repairing mechanical assemblies. | True | False |  |  |  | A | 1 | Remember
+3 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Responsibilities and work setting | MCQ | In which type of industries can a qualified fitter and turner work? | Only automotive | Only mining | A wide range of industries requiring mechanical maintenance | Only manufacturing | Only construction | C | 1 | Understand
+4 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Responsibilities and work setting | TF | Fitter and turners only work on new equipment and never repair old machinery. | True | False |  |  |  | B | 1 | Understand
+5 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Occupational profile | MCQ | Which option best describes the occupational profile of a fitter and turner? | A person who installs electrical wiring | A person who maintains and repairs mechanical systems | A person who designs engineering software | A person who supervises construction sites | A person who only operates forklifts | B | 1 | Understand
+6 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Occupational profile | TF | The occupational profile of a fitter and turner includes machining, maintenance and installation tasks. | True | False |  |  |  | A | 1 | Remember
+7 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Occupational profile | MCQ | Which skill is essential for a fitter and turner? | Advanced programming | Mechanical hand skills | Chemical analysis | Electrical design | Accounting | B | 1 | Understand
+8 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Occupational profile | TF | A fitter and turner must understand mechanical drawings and specifications. | True | False |  |  |  | A | 1 | Apply
+9 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Legislation | MCQ | Which legislation is most relevant to apprentices in the fitting and turning trade? | Labour Relations Act | Occupational Health and Safety Act | National Credit Act | Basic Education Act | Consumer Protection Act | B | 1 | Remember
+10 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Legislation | TF | Apprentices must comply with workplace safety legislation at all times. | True | False |  |  |  | A | 1 | Understand
+11 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Legislation | MCQ | What is the purpose of legislation related to apprentices? | To limit workplace learning | To ensure safe and fair training conditions | To reduce training costs | To replace formal education | To remove employer responsibility | B | 1 | Understand
+12 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Legislation | TF | Legislation protects both the apprentice and the employer. | True | False |  |  |  | A | 1 | Understand
+13 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Responsibilities and work setting | MCQ | Which activity forms part of a fitter and turner?s daily tasks? | Writing financial statements | Repairing mechanical assemblies | Conducting legal audits | Managing HR files | Teaching mathematics | B | 1 | Understand
+14 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Responsibilities and work setting | TF | Fitter and turners often work with rotating machinery. | True | False |  |  |  | A | 1 | Remember
+15 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Occupational profile | MCQ | Which attribute is important for a fitter and turner? | Strong mechanical reasoning | Advanced legal knowledge | High-level chemistry skills | Graphic design skills | Marketing skills | A | 1 | Understand
+16 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Occupational profile | TF | A fitter and turner must be able to work independently and in teams. | True | False |  |  |  | A | 1 | Apply
+17 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Legislation | MCQ | Which statement is TRUE regarding apprentice legislation? | It is optional | It ensures safe working conditions | It only applies to supervisors | It only applies to large companies | It replaces training manuals | B | 1 | Understand
+18 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Legislation | TF | Apprenticeship legislation includes rules about workplace safety. | True | False |  |  |  | A | 1 | Remember
+19 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Responsibilities and work setting | MCQ | Which environment is typical for a fitter and turner? | Office cubicle | Mechanical workshop | Retail store | Hospital ward | Call centre | B | 1 | Understand
+20 | KM-01 | KT0101 | Introduction to the Fitting & Turning Trade | Responsibilities and work setting | TF | Fitter and turners must follow technical specifications when repairing equipment. | True | False |  |  |  | A | 1 | Apply
+21 | KM-01 | KT0201 | Workplace Health, Safety & Environmental Protection | Safe work practices | MCQ | What is the primary purpose of occupational health and safety legislation? | To punish workers | To ensure safe working environments | To reduce salaries | To increase production only | To remove employer responsibility | B | 1 | Understand
+22 | KM-01 | KT0201 | Workplace Health, Safety & Environmental Protection | Safe work practices | TF | OHS legislation exists to protect both employees and employers. | True | False |  |  |  | A | 1 | Remember
+23 | KM-01 | KT0202 | Workplace Health, Safety & Environmental Protection | Workshop safety rules | MCQ | Which of the following is a general workshop safety rule? | Running in the workshop is allowed | Always wear appropriate PPE | Ignore warning signs | Use damaged tools if necessary | Store chemicals anywhere | B | 1 | Understand
+24 | KM-01 | KT0202 | Workplace Health, Safety & Environmental Protection | Workshop safety rules | TF | Tools must be inspected before use to ensure they are safe. | True | False |  |  |  | A | 1 | Apply
+25 | KM-01 | KT0204 | Workplace Health, Safety & Environmental Protection | Safety symbols | MCQ | What does a yellow triangular sign typically indicate? | Mandatory action | Prohibition | Warning or caution | Safe condition | Fire equipment | C | 1 | Remember
+26 | KM-01 | KT0204 | Workplace Health, Safety & Environmental Protection | Safety symbols | TF | A red circular sign with a diagonal line indicates ?Do Not?. | True | False |  |  |  | A | 1 | Remember
+27 | KM-01 | KT0205 | Workplace Health, Safety & Environmental Protection | PPE | MCQ | Which PPE is required when grinding metal? | Hard hat only | Safety goggles or face shield | Earplugs only | Welding helmet | Respirator only | B | 1 | Apply
+28 | KM-01 | KT0205 | Workplace Health, Safety & Environmental Protection | PPE | TF | PPE must be selected based on the specific hazards of the task. | True | False |  |  |  | A | 1 | Understand
+29 | KM-01 | KT0206 | Workplace Health, Safety & Environmental Protection | Hazard identification | MCQ | What is the first step in hazard identification? | Ignoring minor hazards | Reporting only serious hazards | Observing the work environment | Waiting for an accident | Asking a coworker | C | 1 | Understand
+30 | KM-01 | KT0206 | Workplace Health, Safety & Environmental Protection | Hazard identification | TF | A hazard is anything with the potential to cause harm. | True | False |  |  |  | A | 1 | Remember
+31 | KM-01 | KT0206 | Workplace Health, Safety & Environmental Protection | Risk assessment | MCQ | Risk is defined as: | The chance of harm occurring | A guaranteed accident | A minor inconvenience | A type of PPE | A type of tool | A | 1 | Understand
+32 | KM-01 | KT0206 | Workplace Health, Safety & Environmental Protection | Risk assessment | TF | Risk assessment helps determine the likelihood and severity of harm. | True | False |  |  |  | A | 1 | Understand
+33 | KM-01 | KT0207 | Workplace Health, Safety & Environmental Protection | Securing worksites | MCQ | Why must a worksite be secured before starting a task? | To impress supervisors | To prevent unauthorized access and accidents | To reduce paperwork | To avoid cleaning | To increase noise levels | B | 1 | Apply
+34 | KM-01 | KT0207 | Workplace Health, Safety & Environmental Protection | Securing worksites | TF | Barricades and warning signs help prevent accidents. | True | False |  |  |  | A | 1 | Remember
+35 | KM-01 | KT0208 | Workplace Health, Safety & Environmental Protection | Environmental protection | MCQ | Which of the following is considered hazardous waste? | Clean water | Scrap paper | Used oil | Cardboard | Wood shavings | C | 1 | Understand
+36 | KM-01 | KT0208 | Workplace Health, Safety & Environmental Protection | Environmental protection | TF | Hazardous waste must be disposed of according to environmental regulations. | True | False |  |  |  | A | 1 | Remember
+37 | KM-01 | KT0208 | Workplace Health, Safety & Environmental Protection | Environmental protection | MCQ | What is the purpose of spill containment? | To hide spills | To prevent environmental contamination | To increase production | To cool machinery | To reduce noise | B | 1 | Apply
+38 | KM-01 | KT0208 | Workplace Health, Safety & Environmental Protection | Environmental protection | TF | Oil spills can contaminate soil and groundwater. | True | False |  |  |  | A | 1 | Understand
+39 | KM-01 | KT0202 | Workplace Health, Safety & Environmental Protection | Workshop safety rules | MCQ | Which action is unsafe in a workshop? | Keeping walkways clear | Wearing PPE | Using tools correctly | Running or horseplay | Reporting hazards | D | 1 | Remember
+40 | KM-01 | KT0202 | Workplace Health, Safety & Environmental Protection | Workshop safety rules | TF | Only supervisors are responsible for safety in the workshop. | True | False |  |  |  | B | 1 | Understand
+41 | KM-01 | KT0201 | Workplace Health, Safety & Environmental Protection | Safe work practices | MCQ | Safe work practices are important because they: | Slow down production | Reduce accidents and injuries | Increase paperwork | Replace PPE | Remove hazards completely | B | 1 | Understand
+42 | KM-01 | KT0201 | Workplace Health, Safety & Environmental Protection | Safe work practices | TF | Safe work practices must be followed at all times, even during simple tasks. | True | False |  |  |  | A | 1 | Apply
+43 | KM-01 | KT0204 | Workplace Health, Safety & Environmental Protection | Safety symbols | MCQ | A green square sign usually indicates: | Danger | Mandatory action | Safe condition | Prohibition | Fire equipment | C | 1 | Remember
+44 | KM-01 | KT0204 | Workplace Health, Safety & Environmental Protection | Safety symbols | TF | Fire equipment signs are normally red. | True | False |  |  |  | A | 1 | Remember
+45 | KM-01 | KT0205 | Workplace Health, Safety & Environmental Protection | PPE | MCQ | Which PPE protects against hearing damage? | Gloves | Safety boots | Ear protection | Goggles | Hard hat | C | 1 | Remember
+46 | KM-01 | KT0205 | Workplace Health, Safety & Environmental Protection | PPE | TF | PPE must be maintained and replaced when damaged. | True | False |  |  |  | A | 1 | Apply
+47 | KM-01 | KT0206 | Workplace Health, Safety & Environmental Protection | Hazard identification | MCQ | A common hazard in mechanical workshops is: | Loud music | Poor lighting | Clean floors | Organized tools | Good ventilation | B | 1 | Understand
+48 | KM-01 | KT0206 | Workplace Health, Safety & Environmental Protection | Hazard identification | TF | Hazard identification should be done continuously, not only once. | True | False |  |  |  | A | 1 | Understand
+49 | KM-01 | KT0207 | Workplace Health, Safety & Environmental Protection | Securing worksites | MCQ | Lockout/Tagout procedures are used to: | Increase machine speed | Prevent accidental machine start-up | Reduce paperwork | Improve lighting | Store tools | B | 1 | Apply
+50 | KM-01 | KT0207 | Workplace Health, Safety & Environmental Protection | Securing worksites | TF | Lockout/Tagout protects workers from unexpected energy release. | True | False |  |  |  | A | 1 | Apply
+51 | KM-01 | KT0301 | Engineering Drawings | Freehand accuracy | MCQ | What is the purpose of freehand engineering sketches? | To create artistic drawings | To quickly communicate technical ideas | To replace detailed CAD drawings | To decorate workshop walls | To record financial data | B | 1 | Understand
+52 | KM-01 | KT0301 | Engineering Drawings | Freehand accuracy | TF | Freehand sketches must resemble the object in shape and proportion. | True | False |  |  |  | A | 1 | Apply
+53 | KM-01 | KT0302 | Engineering Drawings | Symbols & abbreviations | MCQ | What does the symbol ù represent on a drawing? | Radius | Diameter | Length | Width | Angle | B | 1 | Remember
+54 | KM-01 | KT0302 | Engineering Drawings | Symbols & abbreviations | TF | The abbreviation ?THRU? means a hole goes completely through the material. | True | False |  |  |  | A | 1 | Remember
+55 | KM-01 | KT0303 | Engineering Drawings | Instruments | MCQ | Which instrument is used to draw circles and arcs? | Protractor | Compass | Divider | French curve | Scriber | B | 1 | Remember
+56 | KM-01 | KT0303 | Engineering Drawings | Instruments | TF | A protractor is used to measure angles. | True | False |  |  |  | A | 1 | Remember
+57 | KM-01 | KT0304 | Engineering Drawings | Dimensioning | MCQ | Which rule applies to dimensioning? | Dimensions must be duplicated | Dimensions must be clear and not cluttered | Dimensions must be hidden | Dimensions must be placed randomly | Dimensions must be written in cursive | B | 1 | Understand
+58 | KM-01 | KT0304 | Engineering Drawings | Dimensioning | TF | Dimension lines must not touch the object lines. | True | False |  |  |  | A | 1 | Apply
+59 | KM-01 | KT0305 | Engineering Drawings | Isometric interpretation | MCQ | An isometric drawing shows an object in: | True 2D | True 3D | 3D illusion with equal axes | Orthographic projection | Sectional view | C | 1 | Understand
+60 | KM-01 | KT0305 | Engineering Drawings | Isometric interpretation | TF | In isometric drawings, all axes are drawn at 120¯ to each other. | True | False |  |  |  | A | 1 | Remember
+61 | KM-01 | KT0306 | Engineering Drawings | Assembly interpretation | MCQ | What is the purpose of an assembly drawing? | To show only dimensions | To show how parts fit together | To show only material types | To show only tolerances | To show only surface finish | B | 1 | Understand
+62 | KM-01 | KT0306 | Engineering Drawings | Assembly interpretation | TF | Assembly drawings often include item numbers and a parts list. | True | False |  |  |  | A | 1 | Remember
+63 | KM-01 | KT0301 | Engineering Drawings | Freehand accuracy | MCQ | Which feature is MOST important in freehand sketches? | Artistic shading | Exact colour | Proportional accuracy | Perfect line weight | Decorative borders | C | 1 | Apply
+64 | KM-01 | KT0302 | Engineering Drawings | Symbols & abbreviations | MCQ | What does the abbreviation ?R? indicate? | Radius | Roughness | Right-hand thread | Recess | Reference | A | 1 | Remember
+65 | KM-01 | KT0302 | Engineering Drawings | Symbols & abbreviations | TF | The symbol ? indicates a countersink. | True | False |  |  |  | B | 1 | Remember
+66 | KM-01 | KT0303 | Engineering Drawings | Instruments | MCQ | Which tool is used to check 90¯ angles? | Vernier caliper | Steel rule | Engineer?s square | Divider | Compass | C | 1 | Apply
+67 | KM-01 | KT0303 | Engineering Drawings | Instruments | TF | A divider is used to transfer measurements. | True | False |  |  |  | A | 1 | Remember
+68 | KM-01 | KT0304 | Engineering Drawings | Dimensioning | MCQ | Which type of line is used for dimension lines? | Thick continuous | Thin continuous | Chain line | Phantom line | Hidden line | B | 1 | Remember
+69 | KM-01 | KT0304 | Engineering Drawings | Dimensioning | TF | Arrowheads must be neat and consistent in size. | True | False |  |  |  | A | 1 | Apply
+70 | KM-01 | KT0305 | Engineering Drawings | Isometric interpretation | MCQ | Which statement is TRUE about isometric drawings? | Circles appear as perfect circles | Circles appear as ellipses | Only two axes are used | Dimensions are not shown | Hidden lines are always included | B | 1 | Understand
+71 | KM-01 | KT0305 | Engineering Drawings | Isometric interpretation | TF | Isometric drawings help visualize the object in 3D. | True | False |  |  |  | A | 1 | Understand
+72 | KM-01 | KT0306 | Engineering Drawings | Sectional drawings | MCQ | What is the purpose of a sectional view? | To show colour | To show hidden internal features | To show only the outside | To show only dimensions | To show surface finish | B | 1 | Understand
+73 | KM-01 | KT0306 | Engineering Drawings | Sectional drawings | TF | Section lines (hatching) indicate cut surfaces. | True | False |  |  |  | A | 1 | Remember
+74 | KM-01 | KT0306 | Engineering Drawings | Detailed drawings | MCQ | A detailed drawing typically includes: | Only a picture | Only a title | Dimensions, tolerances, and notes | Only material type | Only surface finish | C | 1 | Understand
+75 | KM-01 | KT0306 | Engineering Drawings | Detailed drawings | TF | Detailed drawings must contain all information needed to manufacture a part. | True | False |  |  |  | A | 1 | Apply
+76 | KM-01 | KT0302 | Engineering Drawings | Symbols & abbreviations | MCQ | What does the abbreviation ?CSK? mean? | Countersink | Counterbore | Case hardened | Cold steel | Centre slot | A | 1 | Remember
+77 | KM-01 | KT0302 | Engineering Drawings | Symbols & abbreviations | TF | The abbreviation ?CB? stands for counterbore. | True | False |  |  |  | A | 1 | Remember
+78 | KM-01 | KT0303 | Engineering Drawings | Instruments | MCQ | Which instrument is used for precise linear measurement? | Steel rule | Vernier caliper | Divider | Compass | Protractor | B | 1 | Apply
+79 | KM-01 | KT0303 | Engineering Drawings | Instruments | TF | A steel rule provides more precise measurements than a vernier caliper. | True | False |  |  |  | B | 1 | Understand
+80 | KM-01 | KT0304 | Engineering Drawings | Dimensioning | MCQ | Which dimensioning method places dimensions outside the view? | Aligned | Unidirectional | Baseline | Chain | External | E | 1 | Understand
+81 | KM-01 | KT0401 | Engineering Materials | Basic metallurgy | MCQ | What is metallurgy? | The study of metals and their properties | The study of electricity | The study of plastics | The study of heat transfer only | The study of gases | A | 1 | Understand
+82 | KM-01 | KT0401 | Engineering Materials | Basic metallurgy | TF | Heat treatment can change the hardness of a metal. | True | False |  |  |  | A | 1 | Apply
+83 | KM-01 | KT0401 | Engineering Materials | Basic metallurgy | MCQ | Which heat treatment process increases hardness? | Annealing | Normalizing | Hardening | Tempering | Stress relieving | C | 1 | Remember
+84 | KM-01 | KT0401 | Engineering Materials | Basic metallurgy | TF | Annealing softens metal and improves ductility. | True | False |  |  |  | A | 1 | Understand
+85 | KM-01 | KT0402 | Engineering Materials | Properties | MCQ | Which property describes a material?s ability to resist wear? | Brittleness | Hardness | Ductility | Malleability | Conductivity | B | 1 | Remember
+86 | KM-01 | KT0402 | Engineering Materials | Properties | TF | Ductility refers to a material?s ability to be drawn into wire. | True | False |  |  |  | A | 1 | Remember
+87 | KM-01 | KT0402 | Engineering Materials | Properties | MCQ | Which material is known for high corrosion resistance? | Mild steel | Cast iron | Stainless steel | Carbon steel | Tool steel | C | 1 | Understand
+88 | KM-01 | KT0402 | Engineering Materials | Properties | TF | Synthetic materials include plastics and composites. | True | False |  |  |  | A | 1 | Remember
+89 | KM-01 | KT0403 | Engineering Materials | Ferrous vs non-ferrous | MCQ | Which of the following is a ferrous metal? | Aluminium | Copper | Brass | Mild steel | Lead | D | 1 | Remember
+90 | KM-01 | KT0403 | Engineering Materials | Ferrous vs non-ferrous | TF | Non-ferrous metals do not contain iron. | True | False |  |  |  | A | 1 | Remember
+91 | KM-01 | KT0403 | Engineering Materials | Ferrous vs non-ferrous | MCQ | Which metal is commonly used for electrical wiring? | Cast iron | Brass | Copper | Stainless steel | Tool steel | C | 1 | Understand
+92 | KM-01 | KT0403 | Engineering Materials | Ferrous vs non-ferrous | TF | Brass is an alloy of copper and zinc. | True | False |  |  |  | A | 1 | Remember
+93 | KM-01 | KT0404 | Engineering Materials | Specifications & testing | MCQ | Tensile testing measures a material?s: | Colour | Electrical resistance | Strength under tension | Melting point | Hardness only | C | 1 | Understand
+94 | KM-01 | KT0404 | Engineering Materials | Specifications & testing | TF | Hardness testing determines a material?s resistance to indentation. | True | False |  |  |  | A | 1 | Remember
+95 | KM-01 | KT0404 | Engineering Materials | Specifications & testing | MCQ | Which test uses a diamond pyramid indenter? | Brinell | Rockwell B | Vickers | Charpy | Izod | C | 1 | Remember
+96 | KM-01 | KT0404 | Engineering Materials | Specifications & testing | TF | Charpy testing measures impact toughness. | True | False |  |  |  | A | 1 | Understand
+97 | KM-01 | KT0402 | Engineering Materials | Properties | MCQ | Which property describes a material?s ability to deform without breaking? | Brittleness | Elasticity | Ductility | Hardness | Conductivity | C | 1 | Understand
+98 | KM-01 | KT0402 | Engineering Materials | Properties | TF | Brittle materials break suddenly without significant deformation. | True | False |  |  |  | A | 1 | Remember
+99 | KM-01 | KT0401 | Engineering Materials | Basic metallurgy | MCQ | Which process relieves internal stresses in metal? | Hardening | Tempering | Stress relieving | Case hardening | Quenching | C | 1 | Understand
+100 | KM-01 | KT0401 | Engineering Materials | Basic metallurgy | TF | Quenching involves rapid cooling of heated metal. | True | False |  |  |  | A | 1 | Remember
+101 | KM-01 | KT0403 | Engineering Materials | Ferrous vs non-ferrous | MCQ | Which of the following is a non-ferrous alloy? | Stainless steel | Cast iron | Bronze | Tool steel | Carbon steel | C | 1 | Remember
+102 | KM-01 | KT0403 | Engineering Materials | Ferrous vs non-ferrous | TF | Aluminium is lightweight and corrosion resistant. | True | False |  |  |  | A | 1 | Understand
+103 | KM-01 | KT0404 | Engineering Materials | Specifications & testing | MCQ | Material specifications typically include: | Colour and shape | Dimensions only | Chemical composition and mechanical properties | Price and supplier | Surface finish only | C | 1 | Understand
+104 | KM-01 | KT0404 | Engineering Materials | Specifications & testing | TF | Mechanical properties include hardness, toughness, and tensile strength. | True | False |  |  |  | A | 1 | Remember
+105 | KM-01 | KT0402 | Engineering Materials | Properties | MCQ | Which material is known for excellent heat resistance? | Aluminium | Mild steel | Cast iron | Copper | Plastic | C | 1 | Understand
+106 | KM-01 | KT0402 | Engineering Materials | Properties | TF | Plastics generally have low melting points compared to metals. | True | False |  |  |  | A | 1 | Remember
+107 | KM-01 | KT0401 | Engineering Materials | Basic metallurgy | MCQ | Case hardening is used to: | Harden the entire metal | Soften the metal | Harden the surface while keeping the core tough | Remove impurities | Improve electrical conductivity | C | 1 | Apply
+108 | KM-01 | KT0401 | Engineering Materials | Basic metallurgy | TF | Tempering reduces brittleness after hardening. | True | False |  |  |  | A | 1 | Understand
+109 | KM-01 | KT0403 | Engineering Materials | Ferrous vs non-ferrous | MCQ | Which metal is commonly used for bearings due to low friction? | Lead | Bronze | Stainless steel | Cast iron | Mild steel | B | 1 | Understand
+110 | KM-01 | KT0403 | Engineering Materials | Ferrous vs non-ferrous | TF | Ferrous metals are generally magnetic. | True | False |  |  |  | A | 1 | Remember
+111 | KM-01 | KT0501 | Engineering Tools & Equipment | Hand tools | MCQ | Which tool is used to hold components securely during filing? | Spanner | Bench vice | Hacksaw | Pliers | Mallet | B | 1 | Remember
+112 | KM-01 | KT0501 | Engineering Tools & Equipment | Hand tools | TF | A bench vice must be firmly secured to the workbench before use. | True | False |  |  |  | A | 1 | Apply
+113 | KM-01 | KT0502 | Engineering Tools & Equipment | Cutting tools | MCQ | Which tool is used to cut external threads? | Tap | Die | File | Chisel | Reamer | B | 1 | Understand
+114 | KM-01 | KT0502 | Engineering Tools & Equipment | Cutting tools | TF | A hacksaw blade must be tensioned correctly before cutting. | True | False |  |  |  | A | 1 | Apply
+115 | KM-01 | KT0503 | Engineering Tools & Equipment | Power tools | MCQ | Which tool is used for grinding metal surfaces? | Angle grinder | Power drill | Jigsaw | Heat gun | Sander | A | 1 | Remember
+116 | KM-01 | KT0503 | Engineering Tools & Equipment | Power tools | TF | Power tools must always be disconnected before changing accessories. | True | False |  |  |  | A | 1 | Apply
+117 | KM-01 | KT0504 | Engineering Tools & Equipment | Measuring tools | MCQ | Which instrument provides the most precise measurement? | Steel rule | Vernier caliper | Tape measure | Try square | Divider | B | 1 | Understand
+118 | KM-01 | KT0504 | Engineering Tools & Equipment | Measuring tools | TF | A micrometer is more accurate than a vernier caliper. | True | False |  |  |  | A | 1 | Remember
+119 | KM-01 | KT0505 | Engineering Tools & Equipment | Marking-off tools | MCQ | Which tool is used to scribe fine lines on metal? | Hammer | Scriber | Punch | Chisel | File | B | 1 | Remember
+120 | KM-01 | KT0505 | Engineering Tools & Equipment | Marking-off tools | TF | A center punch is used to create indentations for drilling. | True | False |  |  |  | A | 1 | Apply
+121 | KM-01 | KT0501 | Engineering Tools & Equipment | Hand tools | MCQ | Which tool is used to tighten or loosen nuts and bolts? | File | Spanner | Hacksaw | Punch | Chisel | B | 1 | Remember
+122 | KM-01 | KT0501 | Engineering Tools & Equipment | Hand tools | TF | Pliers are suitable for tightening nuts and bolts. | True | False |  |  |  | B | 1 | Understand
+123 | KM-01 | KT0502 | Engineering Tools & Equipment | Cutting tools | MCQ | A reamer is used to: | Cut threads | Enlarge and finish holes | Remove burrs | Cut grooves | Mark lines | B | 1 | Understand
+124 | KM-01 | KT0502 | Engineering Tools & Equipment | Cutting tools | TF | Files must be used with a handle to prevent injury. | True | False |  |  |  | A | 1 | Apply
+125 | KM-01 | KT0503 | Engineering Tools & Equipment | Power tools | MCQ | Which power tool is used for drilling holes? | Angle grinder | Bench grinder | Power drill | Heat gun | Sander | C | 1 | Remember
+126 | KM-01 | KT0503 | Engineering Tools & Equipment | Power tools | TF | A drill bit must match the material being drilled. | True | False |  |  |  | A | 1 | Apply
+127 | KM-01 | KT0504 | Engineering Tools & Equipment | Measuring tools | MCQ | Which measuring tool is used to check internal diameters? | Outside caliper | Inside caliper | Steel rule | Vernier height gauge | Feeler gauge | B | 1 | Understand
+128 | KM-01 | KT0504 | Engineering Tools & Equipment | Measuring tools | TF | Feeler gauges are used to measure small gaps. | True | False |  |  |  | A | 1 | Remember
+129 | KM-01 | KT0505 | Engineering Tools & Equipment | Marking-off tools | MCQ | Which tool is used to measure angles? | Vernier caliper | Protractor | Divider | Punch | Scriber | B | 1 | Remember
+130 | KM-01 | KT0505 | Engineering Tools & Equipment | Marking-off tools | TF | A combination set can be used for 45¯ and 90¯ marking. | True | False |  |  |  | A | 1 | Apply
+131 | KM-01 | KT0501 | Engineering Tools & Equipment | Hand tools | MCQ | Which hammer is commonly used for general workshop tasks? | Ball-peen hammer | Sledgehammer | Rubber mallet | Claw hammer | Dead-blow hammer | A | 1 | Remember
+132 | KM-01 | KT0501 | Engineering Tools & Equipment | Hand tools | TF | A ball?peen hammer is suitable for shaping metal. | True | False |  |  |  | A | 1 | Understand
+133 | KM-01 | KT0502 | Engineering Tools & Equipment | Cutting tools | MCQ | Which tool is used to cut internal threads? | Die | Tap | Reamer | File | Chisel | B | 1 | Remember
+134 | KM-01 | KT0502 | Engineering Tools & Equipment | Cutting tools | TF | Taps must be lubricated when cutting threads. | True | False |  |  |  | A | 1 | Apply
+135 | KM-01 | KT0503 | Engineering Tools & Equipment | Power tools | MCQ | Which tool is used to smooth rough metal edges? | Power drill | Angle grinder | Heat gun | Jigsaw | Sander | B | 1 | Understand
+136 | KM-01 | KT0503 | Engineering Tools & Equipment | Power tools | TF | Power tools must be inspected for damaged cords before use. | True | False |  |  |  | A | 1 | Apply
+137 | KM-01 | KT0504 | Engineering Tools & Equipment | Measuring tools | MCQ | Which tool is used to measure depth? | Vernier caliper | Steel rule | Divider | Micrometer | Try square | A | 1 | Apply
+138 | KM-01 | KT0504 | Engineering Tools & Equipment | Measuring tools | TF | A vernier caliper can measure internal, external, and depth dimensions. | True | False |  |  |  | A | 1 | Understand
+139 | KM-01 | KT0505 | Engineering Tools & Equipment | Marking-off tools | MCQ | Which marking tool is used to draw arcs and circles? | Divider | Punch | Scriber | Protractor | Steel rule | A | 1 | Remember
+140 | KM-01 | KT0505 | Engineering Tools & Equipment | Marking-off tools | TF | Marking-off must always be done before cutting or machining. | True | False |  |  |  | A | 1 | Apply
+141 | KM-01 | KT0601 | Basic Lifting Concepts | Rigging identification | MCQ | Which device is used to lift heavy loads vertically? | Chain block | Hacksaw | Bench vice | Grinder | Spanner | A | 1 | Remember
+142 | KM-01 | KT0601 | Basic Lifting Concepts | Rigging identification | TF | A chain block uses a geared mechanism to lift loads. | True | False |  |  |  | A | 1 | Understand
+143 | KM-01 | KT0601 | Basic Lifting Concepts | Rigging identification | MCQ | Which sling type is commonly used for lifting irregular loads? | Wire rope sling | Nylon webbing sling | Chain sling | All of the above | None of the above | D | 1 | Understand
+144 | KM-01 | KT0601 | Basic Lifting Concepts | Rigging identification | TF | Wire rope slings are stronger than synthetic slings of the same diameter. | True | False |  |  |  | A | 1 | Understand
+145 | KM-01 | KT0602 | Basic Lifting Concepts | Rigging concepts | MCQ | The term ?SWL? stands for: | Safe Working Load | Standard Weight Limit | Sling Weight Level | Safety Warning Label | Safe Wire Load | A | 1 | Remember
+146 | KM-01 | KT0602 | Basic Lifting Concepts | Rigging concepts | TF | SWL indicates the maximum load a lifting device can safely handle. | True | False |  |  |  | A | 1 | Understand
+147 | KM-01 | KT0602 | Basic Lifting Concepts | Rigging concepts | MCQ | What is the purpose of a block and tackle? | To cut metal | To increase mechanical advantage | To measure angles | To store tools | To reduce friction in bearings | B | 1 | Understand
+148 | KM-01 | KT0602 | Basic Lifting Concepts | Rigging concepts | TF | Mechanical advantage reduces the effort needed to lift a load. | True | False |  |  |  | A | 1 | Apply
+149 | KM-01 | KT0603 | Basic Lifting Concepts | Load selection | MCQ | Before lifting a load, you must first: | Estimate the load weight | Ignore the load weight | Assume the load is safe | Lift without checking | Ask a coworker | A | 1 | Apply
+150 | KM-01 | KT0603 | Basic Lifting Concepts | Load selection | TF | Overloading lifting equipment can cause catastrophic failure. | True | False |  |  |  | A | 1 | Understand
+151 | KM-01 | KT0603 | Basic Lifting Concepts | Load selection | MCQ | Which factor affects sling load capacity? | Colour of the sling | Angle of the lift | Temperature of the workshop | Operator?s age | Time of day | B | 1 | Understand
+152 | KM-01 | KT0603 | Basic Lifting Concepts | Load selection | TF | Sling capacity decreases as the lifting angle decreases. | True | False |  |  |  | A | 1 | Apply
+153 | KM-01 | KT0604 | Basic Lifting Concepts | Safety precautions | MCQ | Which action is unsafe during lifting operations? | Standing clear of the load | Inspecting slings before use | Walking under a suspended load | Using proper hand signals | Checking SWL | C | 1 | Remember
+154 | KM-01 | KT0604 | Basic Lifting Concepts | Safety precautions | TF | No one should stand under a suspended load at any time. | True | False |  |  |  | A | 1 | Apply
+155 | KM-01 | KT0604 | Basic Lifting Concepts | Safety precautions | MCQ | What must be done before using lifting equipment? | Paint it | Inspect it for damage | Increase its SWL | Shorten the sling | Remove labels | B | 1 | Understand
+156 | KM-01 | KT0604 | Basic Lifting Concepts | Safety precautions | TF | Damaged slings must be removed from service immediately. | True | False |  |  |  | A | 1 | Remember
+157 | KM-01 | KT0601 | Basic Lifting Concepts | Rigging identification | MCQ | Steel wire ropes are classified by: | Colour | Strand and wire count | Price | Length only | Manufacturer | B | 1 | Understand
+158 | KM-01 | KT0601 | Basic Lifting Concepts | Rigging identification | TF | Wire ropes with broken strands must not be used. | True | False |  |  |  | A | 1 | Apply
+159 | KM-01 | KT0602 | Basic Lifting Concepts | Rigging concepts | MCQ | A shackle is used to: | Cut metal | Connect lifting components | Measure load weight | Store slings | Reduce friction | B | 1 | Remember
+160 | KM-01 | KT0602 | Basic Lifting Concepts | Rigging concepts | TF | Shackles must be tightened securely before lifting. | True | False |  |  |  | A | 1 | Apply
+161 | KM-01 | KT0603 | Basic Lifting Concepts | Load selection | MCQ | The load centre of gravity must be: | Ignored | Directly under the hook | To the left of the hook | To the right of the hook | Behind the load | B | 1 | Apply
+162 | KM-01 | KT0603 | Basic Lifting Concepts | Load selection | TF | An unbalanced load can swing dangerously during lifting. | True | False |  |  |  | A | 1 | Understand
+163 | KM-01 | KT0604 | Basic Lifting Concepts | Safety precautions | MCQ | Hand signals during lifting must be: | Random | Standardized and clear | Whispered | Ignored | Improvised | B | 1 | Understand
+164 | KM-01 | KT0604 | Basic Lifting Concepts | Safety precautions | TF | Only one person should give lifting signals to the operator. | True | False |  |  |  | A | 1 | Apply
+165 | KM-01 | KT0601 | Basic Lifting Concepts | Rigging identification | MCQ | Which sling type is best for delicate surfaces? | Chain sling | Wire rope sling | Nylon webbing sling | Steel cable | Metal strap | C | 1 | Understand
+166 | KM-01 | KT0601 | Basic Lifting Concepts | Rigging identification | TF | Nylon slings can be damaged by sharp edges. | True | False |  |  |  | A | 1 | Apply
+167 | KM-01 | KT0602 | Basic Lifting Concepts | Rigging concepts | MCQ | A lifting plan must include: | Weather forecast | Load weight and lifting method | Operator?s favourite tool | Workshop temperature | Lunch schedule | B | 1 | Understand
+168 | KM-01 | KT0602 | Basic Lifting Concepts | Rigging concepts | TF | A lifting plan helps prevent accidents. | True | False |  |  |  | A | 1 | Apply
+169 | KM-01 | KT0603 | Basic Lifting Concepts | Load selection | MCQ | Sling angles less than 60¯: | Increase sling capacity | Reduce sling capacity | Have no effect | Make the load lighter | Make the load heavier | B | 1 | Apply
+170 | KM-01 | KT0603 | Basic Lifting Concepts | Load selection | TF | The smaller the sling angle, the greater the stress on the sling. | True | False |  |  |  | A | 1 | Apply
+171 | KM-01 | KT0701 | Screw Threads | Terminology | MCQ | What does the term ?pitch? refer to in screw threads? | Diameter of the thread | Distance between adjacent threads | Depth of the thread | Angle of the thread | Width of the crest | B | 1 | Remember
+172 | KM-01 | KT0701 | Screw Threads | Terminology | TF | The root diameter is the smallest diameter of a screw thread. | True | False |  |  |  | A | 1 | Understand
+173 | KM-01 | KT0701 | Screw Threads | Terminology | MCQ | The included angle of a standard metric V-thread is: | 30¯ | 45¯ | 60¯ | 90¯ | 120¯ | C | 1 | Remember
+174 | KM-01 | KT0701 | Screw Threads | Terminology | TF | Lead is the distance a screw advances in one full turn. | True | False |  |  |  | A | 1 | Understand
+175 | KM-01 | KT0702 | Screw Threads | Types | MCQ | Which thread type is commonly used for power transmission? | Metric V-thread | Square thread | Whitworth thread | Buttress thread | Fine thread | B | 1 | Understand
+176 | KM-01 | KT0702 | Screw Threads | Types | TF | Acme threads are stronger and easier to machine than square threads. | True | False |  |  |  | A | 1 | Understand
+177 | KM-01 | KT0702 | Screw Threads | Types | MCQ | Which thread type has a 29¯ included angle? | Square | Acme | Metric | Whitworth | Buttress | B | 1 | Remember
+178 | KM-01 | KT0702 | Screw Threads | Types | TF | Buttress threads are designed to handle high axial loads in one direction. | True | False |  |  |  | A | 1 | Understand
+179 | KM-01 | KT0703 | Screw Threads | Applications | MCQ | Which thread is commonly used for fastening applications? | Square thread | Acme thread | Metric V-thread | Buttress thread | Knuckle thread | C | 1 | Understand
+180 | KM-01 | KT0703 | Screw Threads | Applications | TF | Square threads are ideal for lead screws in machines. | True | False |  |  |  | A | 1 | Understand
+181 | KM-01 | KT0703 | Screw Threads | Applications | MCQ | Which thread type is used in bottle caps and light bulbs? | Square | Knuckle | Acme | Buttress | Whitworth | B | 1 | Remember
+182 | KM-01 | KT0703 | Screw Threads | Applications | TF | Fine threads provide better resistance to vibration than coarse threads. | True | False |  |  |  | A | 1 | Understand
+183 | KM-01 | KT0701 | Screw Threads | Terminology | MCQ | The helix angle of a thread depends on: | Thread colour | Thread pitch and diameter | Material hardness | Surface finish | Cutting speed | B | 1 | Understand
+184 | KM-01 | KT0701 | Screw Threads | Terminology | TF | External threads are found on bolts, while internal threads are found in nuts. | True | False |  |  |  | A | 1 | Remember
+185 | KM-01 | KT0704 | Screw Threads | Calculations | MCQ | If a single?start thread has a pitch of 2 mm, the lead is: | 1 mm | 2 mm | 4 mm | 6 mm | 8 mm | B | 1 | Apply
+186 | KM-01 | KT0704 | Screw Threads | Calculations | TF | Lead equals pitch multiplied by the number of starts. | True | False |  |  |  | A | 1 | Understand
+187 | KM-01 | KT0704 | Screw Threads | Calculations | MCQ | A double?start thread with a pitch of 3 mm has a lead of: | 3 mm | 6 mm | 9 mm | 12 mm | 1.5 mm | B | 1 | Apply
+188 | KM-01 | KT0704 | Screw Threads | Calculations | TF | Multi?start threads allow faster linear movement per rotation. | True | False |  |  |  | A | 1 | Understand
+189 | KM-01 | KT0702 | Screw Threads | Types | MCQ | Which thread form has a rounded crest and root? | Metric | Whitworth | Knuckle | Square | Acme | C | 1 | Remember
+190 | KM-01 | KT0702 | Screw Threads | Types | TF | Whitworth threads use a 55¯ included angle. | True | False |  |  |  | A | 1 | Remember
+191 | KM-01 | KT0703 | Screw Threads | Applications | MCQ | Which thread is best suited for high?load jacks and presses? | Metric | Square | Acme | Buttress | Knuckle | D | 1 | Apply
+192 | KM-01 | KT0703 | Screw Threads | Applications | TF | Acme threads are commonly used in machine tool lead screws. | True | False |  |  |  | A | 1 | Understand
+193 | KM-01 | KT0701 | Screw Threads | Terminology | MCQ | The crest of a thread is: | The bottom of the groove | The top of the thread | The side of the thread | The pitch diameter | The helix angle | B | 1 | Remember
+194 | KM-01 | KT0701 | Screw Threads | Terminology | TF | The flank is the angled surface between the crest and root. | True | False |  |  |  | A | 1 | Remember
+195 | KM-01 | KT0704 | Screw Threads | Calculations | MCQ | If a triple?start thread has a pitch of 2 mm, the lead is: | 2 mm | 4 mm | 6 mm | 8 mm | 10 mm | C | 1 | Apply
+196 | KM-01 | KT0704 | Screw Threads | Calculations | TF | Increasing the number of thread starts increases the lead. | True | False |  |  |  | A | 1 | Understand
+197 | KM-01 | KT0703 | Screw Threads | Applications | MCQ | Which thread type is best for shock?loaded applications? | Fine thread | Coarse thread | Square thread | Acme thread | Buttress thread | B | 1 | Understand
+198 | KM-01 | KT0703 | Screw Threads | Applications | TF | Coarse threads are easier to assemble and less likely to strip. | True | False |  |  |  | A | 1 | Understand
+199 | KM-01 | KT0702 | Screw Threads | Types | MCQ | Which thread type is used for quick?release mechanisms? | Square | Knuckle | Acme | Buttress | Metric | B | 1 | Understand
+200 | KM-01 | KT0702 | Screw Threads | Types | TF | Knuckle threads are suitable for applications requiring frequent engagement and disengagement. | True | False |  |  |  | A | 1 | Apply
+201 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | MCQ | Which fastener is used to prevent nuts from loosening due to vibration? | Spring washer | Plain washer | Rivet | Split pin | Circlip | A | 1 | Understand
+202 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | TF | A split pin is used to secure a castle nut. | True | False |  |  |  | A | 1 | Remember
+203 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | MCQ | Which device is used to prevent axial movement on a shaft? | Bolt | Nut | Circlip | Washer | Screw | C | 1 | Understand
+204 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | TF | Circlips can be internal or external depending on the application. | True | False |  |  |  | A | 1 | Remember
+205 | KM-01 | KT0802 | Locking Devices & Fasteners | Application | MCQ | Which fastener is best suited for permanent joints? | Bolt | Nut | Rivet | Set screw | Washer | C | 1 | Understand
+206 | KM-01 | KT0802 | Locking Devices & Fasteners | Application | TF | Rivets are commonly used in sheet metal fabrication. | True | False |  |  |  | A | 1 | Understand
+207 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | MCQ | A grub screw is used to: | Lock pulleys to shafts | Join plates | Secure nuts | Prevent corrosion | Measure torque | A | 1 | Apply
+208 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | TF | A grub screw has no head and is tightened with an Allen key. | True | False |  |  |  | A | 1 | Remember
+209 | KM-01 | KT0802 | Locking Devices & Fasteners | Application | MCQ | Which fastener is used where frequent assembly and disassembly is required? | Rivet | Bolt and nut | Weld | Adhesive | Split pin | B | 1 | Understand
+210 | KM-01 | KT0802 | Locking Devices & Fasteners | Application | TF | Bolted joints allow easier maintenance than riveted joints. | True | False |  |  |  | A | 1 | Understand
+211 | KM-01 | KT0803 | Locking Devices & Fasteners | Drawings | MCQ | Which symbol typically represents a countersunk screw? | ? | ? | ù | R | CSK | E | 1 | Remember
+212 | KM-01 | KT0803 | Locking Devices & Fasteners | Drawings | TF | A hexagonal bolt head is shown as a hexagon in plan view. | True | False |  |  |  | A | 1 | Remember
+213 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | MCQ | Which washer type distributes load over a larger area? | Spring washer | Plain washer | Lock nut | Split washer | Circlip | B | 1 | Understand
+214 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | TF | Plain washers help prevent surface damage when tightening bolts. | True | False |  |  |  | A | 1 | Understand
+215 | KM-01 | KT0802 | Locking Devices & Fasteners | Application | MCQ | Which fastener prevents rotation of a shaft component? | Key | Washer | Rivet | Nut | Screw | A | 1 | Apply
+216 | KM-01 | KT0802 | Locking Devices & Fasteners | Application | TF | Keys are used to transmit torque between shafts and components. | True | False |  |  |  | A | 1 | Understand
+217 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | MCQ | A castle nut is typically used with a: | Plain washer | Split pin | Rivet | Circlip | Spring washer | B | 1 | Remember
+218 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | TF | Castle nuts are used in applications requiring secure locking. | True | False |  |  |  | A | 1 | Understand
+219 | KM-01 | KT0803 | Locking Devices & Fasteners | Drawings | MCQ | Which drawing view best shows the shape of a bolt head? | Sectional view | Isometric view | Plan view | Side view | Hidden view | C | 1 | Understand
+220 | KM-01 | KT0803 | Locking Devices & Fasteners | Drawings | TF | Fasteners must be drawn to scale in detailed drawings. | True | False |  |  |  | A | 1 | Apply
+221 | KM-01 | KT0802 | Locking Devices & Fasteners | Application | MCQ | Which fastener is used to prevent loosening due to vibration? | Plain nut | Lock nut | Rivet | Bolt | Screw | B | 1 | Understand
+222 | KM-01 | KT0802 | Locking Devices & Fasteners | Application | TF | Lock nuts often include nylon inserts to increase friction. | True | False |  |  |  | A | 1 | Remember
+223 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | MCQ | Which fastener is used to align components during assembly? | Dowel pin | Split pin | Rivet | Bolt | Washer | A | 1 | Understand
+224 | KM-01 | KT0801 | Locking Devices & Fasteners | Identification | TF | Dowel pins ensure accurate alignment between mating parts. | True | False |  |  |  | A | 1 | Understand
+225 | KM-01 | KT0802 | Locking Devices & Fasteners | Application | MCQ | Which fastener is best suited for securing rotating components to shafts? | Bolt | Nut | Key | Washer | Rivet | C | 1 | Apply
+226 | KM-01 | KT0802 | Locking Devices & Fasteners | Application | TF | Keys prevent slippage between shafts and pulleys. | True | False |  |  |  | A | 1 | Understand
+227 | KM-01 | KT0804 | Locking Devices & Fasteners | Safety | MCQ | Which action is unsafe when working with fasteners? | Using correct tools | Applying correct torque | Using damaged fasteners | Following specifications | Inspecting threads | C | 1 | Remember
+228 | KM-01 | KT0804 | Locking Devices & Fasteners | Safety | TF | Damaged or worn fasteners must be replaced immediately. | True | False |  |  |  | A | 1 | Apply
+229 | KM-01 | KT0803 | Locking Devices & Fasteners | Drawings | MCQ | Which view shows the internal thread of a nut? | External view | Sectional view | Isometric view | Hidden view | Plan view | B | 1 | Understand
+230 | KM-01 | KT0803 | Locking Devices & Fasteners | Drawings | TF | Sectional views are used to show hidden thread details. | True | False |  |  |  | A | 1 | Apply
+231 | KM-01 | KT0901 | Welding & Cutting | Equipment | MCQ | Which power source is commonly used for arc welding? | AC/DC welding machine | Air compressor | Hydraulic pump | Milling machine | Lathe | A | 1 | Remember
+232 | KM-01 | KT0901 | Welding & Cutting | Equipment | TF | An electrode holder is used to grip the welding electrode. | True | False |  |  |  | A | 1 | Remember
+233 | KM-01 | KT0901 | Welding & Cutting | Equipment | MCQ | Which gas is commonly used for oxy?acetylene cutting? | Oxygen and nitrogen | Oxygen and acetylene | Argon and helium | CO? and nitrogen | Hydrogen and oxygen | B | 1 | Remember
+234 | KM-01 | KT0901 | Welding & Cutting | Equipment | TF | Oxygen cylinders are painted black in South Africa. | True | False |  |  |  | A | 1 | Remember
+235 | KM-01 | KT0902 | Welding & Cutting | Techniques | MCQ | Arc welding creates heat through: | Chemical reaction | Electrical arc | Friction | Compressed air | Hydraulic pressure | B | 1 | Understand
+236 | KM-01 | KT0902 | Welding & Cutting | Techniques | TF | The arc length affects weld penetration and bead quality. | True | False |  |  |  | A | 1 | Apply
+237 | KM-01 | KT0902 | Welding & Cutting | Techniques | MCQ | Which flame type is used for most cutting operations? | Carburizing flame | Neutral flame | Oxidizing flame | Cold flame | Soft flame | B | 1 | Understand
+238 | KM-01 | KT0902 | Welding & Cutting | Techniques | TF | A neutral flame has a balanced ratio of oxygen and acetylene. | True | False |  |  |  | A | 1 | Remember
+239 | KM-01 | KT0903 | Welding & Cutting | Material selection | MCQ | Brazing requires: | Melting the base metal | Melting only the filler metal | Melting both base and filler metal | No heat | High?pressure gas | B | 1 | Understand
+240 | KM-01 | KT0903 | Welding & Cutting | Material selection | TF | Silver soldering uses lower temperatures than brazing. | True | False |  |  |  | A | 1 | Remember
+241 | KM-01 | KT0904 | Welding & Cutting | Defects | MCQ | Porosity in a weld is caused by: | Excessive heat | Contaminated surfaces | Correct travel speed | Proper shielding | Good electrode angle | B | 1 | Understand
+242 | KM-01 | KT0904 | Welding & Cutting | Defects | TF | Cracks in welds can result from rapid cooling. | True | False |  |  |  | A | 1 | Understand
+243 | KM-01 | KT0904 | Welding & Cutting | Defects | MCQ | Undercut occurs when: | Too much filler is added | The weld metal fails to fuse | The base metal melts away at the toe | The bead is too wide | The arc is too short | C | 1 | Apply
+244 | KM-01 | KT0904 | Welding & Cutting | Defects | TF | Slag inclusions occur when slag is not fully removed between passes. | True | False |  |  |  | A | 1 | Apply
+245 | KM-01 | KT0905 | Welding & Cutting | Gas cylinder safety | MCQ | Gas cylinders must always be stored: | Lying flat | In direct sunlight | Upright and secured | Near heat sources | On uneven floors | C | 1 | Remember
+246 | KM-01 | KT0905 | Welding & Cutting | Gas cylinder safety | TF | Acetylene cylinders must never be used while lying horizontally. | True | False |  |  |  | A | 1 | Remember
+247 | KM-01 | KT0905 | Welding & Cutting | Gas cylinder safety | MCQ | Which tool is used to open an oxygen cylinder valve? | Hammer | Adjustable spanner | Cylinder key | Screwdriver | Pliers | C | 1 | Remember
+248 | KM-01 | KT0905 | Welding & Cutting | Gas cylinder safety | TF | Oil or grease must never be used on oxygen fittings. | True | False |  |  |  | A | 1 | Apply
+249 | KM-01 | KT0906 | Welding & Cutting | Health & safety | MCQ | Which PPE is essential for arc welding? | Safety goggles | Welding helmet | Dust mask | Ear plugs | Hard hat only | B | 1 | Remember
+250 | KM-01 | KT0906 | Welding & Cutting | Health & safety | TF | Arc welding produces ultraviolet radiation that can damage eyes and skin. | True | False |  |  |  | A | 1 | Understand
+251 | KM-01 | KT0906 | Welding & Cutting | Health & safety | MCQ | Fumes from welding can cause: | Improved breathing | Respiratory problems | Better eyesight | Reduced fatigue | No effect | B | 1 | Understand
+252 | KM-01 | KT0906 | Welding & Cutting | Health & safety | TF | Adequate ventilation is required during welding and cutting. | True | False |  |  |  | A | 1 | Apply
+253 | KM-01 | KT0902 | Welding & Cutting | Techniques | MCQ | The correct travel speed in welding results in: | Excessive spatter | Even bead shape | Porosity | Undercut | Cracking | B | 1 | Apply
+254 | KM-01 | KT0902 | Welding & Cutting | Techniques | TF | Too slow travel speed can cause excessive weld buildup. | True | False |  |  |  | A | 1 | Apply
+255 | KM-01 | KT0903 | Welding & Cutting | Material selection | MCQ | Silver soldering is commonly used for: | Heavy structural steel | High?pressure pipelines | Small precision components | Thick plate welding | Cast iron repairs | C | 1 | Understand
+256 | KM-01 | KT0903 | Welding & Cutting | Material selection | TF | Brazing requires capillary action to distribute filler metal. | True | False |  |  |  | A | 1 | Understand
+257 | KM-01 | KT0901 | Welding & Cutting | Equipment | MCQ | Which component regulates gas pressure from a cylinder? | Torch | Regulator | Hose | Nozzle | Flashback arrestor | B | 1 | Remember
+258 | KM-01 | KT0901 | Welding & Cutting | Equipment | TF | Flashback arrestors prevent flames from travelling back into hoses. | True | False |  |  |  | A | 1 | Apply
+259 | KM-01 | KT0906 | Welding & Cutting | Health & safety | MCQ | What is the main cause of flashback? | Clean hoses | Correct gas pressure | Blocked nozzle or tip | Proper flame setting | Good ventilation | C | 1 | Understand
+260 | KM-01 | KT0906 | Welding & Cutting | Health & safety | TF | A blocked cutting tip can cause backfire or flashback. | True | False |  |  |  | A | 1 | Apply
+1 | KM-02 | KT010601 | Seals & Gaskets | Definitions | MCQ | What is the purpose of a gasket? | To transmit torque | To prevent leakage between mating surfaces | To reduce noise | To increase friction | To cool components | B | 1 | Understand
+2 | KM-02 | KT010601 | Seals & Gaskets | Definitions | TF | A gasket is a compressible material placed between two surfaces to prevent leakage. | True | False |  |  |  | A | 1 | Remember
+3 | KM-02 | KT010601 | Seals & Gaskets | Definitions | MCQ | Which statement best describes a seal? | A rigid metal ring | A device that prevents fluid leakage | A tool for tightening bolts | A type of bearing | A type of lubricant | B | 1 | Understand
+4 | KM-02 | KT010601 | Seals & Gaskets | Definitions | TF | Dynamic seals are used on moving components. | True | False |  |  |  | A | 1 | Remember
+5 | KM-02 | KT010602 | Packings & Glands | Types & functions | MCQ | What is the purpose of gland packing? | To cool the shaft | To seal around a moving shaft | To lubricate bearings | To increase shaft speed | To reduce noise | B | 1 | Understand
+6 | KM-02 | KT010602 | Packings & Glands | Types & functions | TF | Gland packing is tightened using a gland follower. | True | False |  |  |  | A | 1 | Apply
+7 | KM-02 | KT010602 | Packings & Glands | Types & functions | MCQ | Which material is commonly used for gland packing? | Nylon | Graphite | PVC | Aluminium | Brass | B | 1 | Remember
+8 | KM-02 | KT010602 | Packings & Glands | Types & functions | TF | Over?tightening gland packing can cause excessive friction and heat. | True | False |  |  |  | A | 1 | Understand
+9 | KM-02 | KT010603 | Gaskets | Applications | MCQ | Which gasket type is suitable for high?temperature steam applications? | Rubber gasket | Cork gasket | Spiral wound gasket | Paper gasket | Plastic gasket | C | 1 | Apply
+10 | KM-02 | KT010603 | Gaskets | Applications | TF | Rubber gaskets are suitable for high?pressure steam systems. | True | False |  |  |  | B | 1 | Understand
+11 | KM-02 | KT010603 | Gaskets | Applications | MCQ | Which gasket material is commonly used for chemical resistance? | Paper | Cork | PTFE (Teflon) | Leather | Rubber | C | 1 | Understand
+12 | KM-02 | KT010603 | Gaskets | Applications | TF | PTFE gaskets are suitable for corrosive chemical environments. | True | False |  |  |  | A | 1 | Remember
+13 | KM-02 | KT010601 | Seals & Gaskets | Definitions | MCQ | Static seals are used when: | Both surfaces move | One surface rotates | Both surfaces are stationary | The shaft vibrates | The shaft is misaligned | C | 1 | Understand
+14 | KM-02 | KT010601 | Seals & Gaskets | Definitions | TF | O?rings can be used as both static and dynamic seals. | True | False |  |  |  | A | 1 | Apply
+15 | KM-02 | KT010601 | Seals & Gaskets | Definitions | MCQ | The cross?section of an O?ring is: | Square | Hexagonal | Circular | Triangular | Rectangular | C | 1 | Remember
+16 | KM-02 | KT010601 | Seals & Gaskets | Definitions | TF | O?rings require proper groove design to function correctly. | True | False |  |  |  | A | 1 | Apply
+17 | KM-02 | KT010602 | Packings & Glands | Packing method | MCQ | When packing a stuffing box, the rings must be installed: | In one long strip | In staggered joints | Without lubrication | Randomly | Upside down | B | 1 | Apply
+18 | KM-02 | KT010602 | Packings & Glands | Packing method | TF | Packing rings must be cut at 45¯ or 90¯ depending on the method. | True | False |  |  |  | A | 1 | Understand
+19 | KM-02 | KT010603 | Gaskets | Applications | MCQ | Which gasket is commonly used in automotive engines? | Spiral wound | Paper gasket | Rubber O?ring | Cork gasket | Leather gasket | B | 1 | Understand
+20 | KM-02 | KT010603 | Gaskets | Applications | TF | Cork gaskets are suitable for low?pressure oil applications. | True | False |  |  |  | A | 1 | Remember
+21 | KM-02 | KT010601 | Seals & Gaskets | Definitions | MCQ | Which factor is MOST important when selecting a gasket? | Colour | Thickness only | Operating temperature and pressure | Manufacturer | Shape of bolt head | C | 1 | Apply
+22 | KM-02 | KT010601 | Seals & Gaskets | Definitions | TF | Gasket failure can occur due to incorrect torque on bolts. | True | False |  |  |  | A | 1 | Understand
+23 | KM-02 | KT010602 | Packings & Glands | Types & functions | MCQ | The stuffing box is found on: | Electric motors | Pumps and valves | Gearboxes | Compressors | Bearings | B | 1 | Understand
+24 | KM-02 | KT010602 | Packings & Glands | Types & functions | TF | The purpose of a stuffing box is to prevent leakage along a rotating shaft. | True | False |  |  |  | A | 1 | Remember
+25 | KM-02 | KT010603 | Gaskets | Applications | MCQ | Spiral wound gaskets consist of: | Rubber only | Cork and rubber | Metal and filler material | Plastic layers | Paper and glue | C | 1 | Understand
+26 | KM-02 | KT010603 | Gaskets | Applications | TF | Spiral wound gaskets are suitable for high?pressure applications. | True | False |  |  |  | A | 1 | Apply
+27 | KM-02 | KT010601 | Seals & Gaskets | Definitions | MCQ | Which seal type is used on rotating shafts? | Static seal | Dynamic seal | Paper gasket | Cork gasket | Leather washer | B | 1 | Understand
+28 | KM-02 | KT010601 | Seals & Gaskets | Definitions | TF | Lip seals are commonly used on rotating shafts. | True | False |  |  |  | A | 1 | Remember
+29 | KM-02 | KT010604 | Safety | Safety precautions | MCQ | Which action is unsafe when handling gaskets? | Using correct torque | Cleaning surfaces | Reusing damaged gaskets | Checking alignment | Using correct material | C | 1 | Remember
+30 | KM-02 | KT010604 | Safety | Safety precautions | TF | Gaskets must never be reused once compressed. | True | False |  |  |  | A | 1 | Apply
+31 | KM-02 | KT0201 | Bearings | Types | MCQ | Which of the following is a type of anti-friction bearing? | Ball bearing | Plain bearing | Bush bearing | Sleeve bearing | Thrust washer | A | 1 | Remember
+32 | KM-02 | KT0201 | Bearings | Types | TF | Ball bearings reduce friction using rolling elements. | True | False |  |  |  | A | 1 | Understand
+33 | KM-02 | KT0201 | Bearings | Types | MCQ | Which bearing type is best for heavy radial loads? | Ball bearing | Taper roller bearing | Needle bearing | Thrust bearing | Sleeve bearing | B | 1 | Understand
+34 | KM-02 | KT0201 | Bearings | Types | TF | Needle roller bearings have long, thin rollers for high load capacity. | True | False |  |  |  | A | 1 | Remember
+35 | KM-02 | KT0202 | Bearings | Components | MCQ | The part of a bearing that holds the rolling elements is called the: | Cage | Race | Seal | Shield | Housing | A | 1 | Remember
+36 | KM-02 | KT0202 | Bearings | Components | TF | The inner race rotates with the shaft. | True | False |  |  |  | A | 1 | Understand
+37 | KM-02 | KT0202 | Bearings | Components | MCQ | What is the purpose of a bearing seal? | Increase speed | Prevent contamination | Reduce shaft diameter | Increase friction | Support axial load | B | 1 | Understand
+38 | KM-02 | KT0202 | Bearings | Components | TF | Shields protect bearings from dust but do not fully seal them. | True | False |  |  |  | A | 1 | Remember
+39 | KM-02 | KT0203 | Bearings | Applications | MCQ | Which bearing is best suited for axial loads? | Deep groove ball bearing | Thrust bearing | Needle bearing | Taper roller bearing | Sleeve bearing | B | 1 | Understand
+40 | KM-02 | KT0203 | Bearings | Applications | TF | Thrust bearings are designed to handle axial forces. | True | False |  |  |  | A | 1 | Remember
+41 | KM-02 | KT0203 | Bearings | Applications | MCQ | Which bearing is commonly used in electric motors? | Taper roller bearing | Deep groove ball bearing | Needle bearing | Thrust bearing | Plain bearing | B | 1 | Understand
+42 | KM-02 | KT0203 | Bearings | Applications | TF | Deep groove ball bearings can handle both radial and axial loads. | True | False |  |  |  | A | 1 | Understand
+43 | KM-02 | KT0204 | Bearings | Failures | MCQ | Which condition commonly causes bearing overheating? | Proper lubrication | Excessive load | Correct alignment | Clean environment | Correct installation | B | 1 | Understand
+44 | KM-02 | KT0204 | Bearings | Failures | TF | Misalignment can lead to premature bearing failure. | True | False |  |  |  | A | 1 | Understand
+45 | KM-02 | KT0204 | Bearings | Failures | MCQ | Contamination in bearings is usually caused by: | Clean oil | Dust and dirt | Correct seals | Proper lubrication | Correct torque | B | 1 | Remember
+46 | KM-02 | KT0204 | Bearings | Failures | TF | Lack of lubrication increases friction and causes wear. | True | False |  |  |  | A | 1 | Understand
+47 | KM-02 | KT0205 | Bearings | Installation | MCQ | When installing a bearing on a shaft, force must be applied to the: | Outer race | Inner race | Cage | Seal | Shield | B | 1 | Apply
+48 | KM-02 | KT0205 | Bearings | Installation | TF | Applying force to the wrong race can damage the bearing. | True | False |  |  |  | A | 1 | Apply
+49 | KM-02 | KT0205 | Bearings | Installation | MCQ | Heating a bearing before installation is done to: | Expand the inner race | Shrink the outer race | Increase friction | Remove lubrication | Clean the bearing | A | 1 | Understand
+50 | KM-02 | KT0205 | Bearings | Installation | TF | Bearings must be kept clean during installation to prevent contamination. | True | False |  |  |  | A | 1 | Apply
+51 | KM-02 | KT0201 | Bearings | Types | MCQ | Which bearing type has cylindrical rollers? | Ball bearing | Roller bearing | Needle bearing | Thrust bearing | Sleeve bearing | B | 1 | Remember
+52 | KM-02 | KT0201 | Bearings | Types | TF | Roller bearings can carry higher loads than ball bearings. | True | False |  |  |  | A | 1 | Understand
+53 | KM-02 | KT0204 | Bearings | Failures | MCQ | A common sign of bearing failure is: | Smooth rotation | Excessive noise | Low temperature | Clean lubricant | Proper alignment | B | 1 | Understand
+54 | KM-02 | KT0204 | Bearings | Failures | TF | Vibration can indicate bearing wear or damage. | True | False |  |  |  | A | 1 | Understand
+55 | KM-02 | KT0203 | Bearings | Applications | MCQ | Which bearing is used for very high-speed applications? | Needle bearing | Deep groove ball bearing | Taper roller bearing | Sleeve bearing | Thrust bearing | B | 1 | Understand
+56 | KM-02 | KT0203 | Bearings | Applications | TF | Sleeve bearings rely on a thin film of lubricant to reduce friction. | True | False |  |  |  | A | 1 | Understand
+57 | KM-02 | KT0205 | Bearings | Installation | MCQ | Before installing a bearing, the shaft must be: | Painted | Roughened | Clean and smooth | Heated | Bent slightly | C | 1 | Apply
+58 | KM-02 | KT0205 | Bearings | Installation | TF | Bearings should be stored in their original packaging until installation. | True | False |  |  |  | A | 1 | Remember
+59 | KM-02 | KT0204 | Bearings | Failures | MCQ | Which factor MOST reduces bearing lifespan? | Correct lubrication | Clean environment | Overloading | Proper alignment | Correct installation | C | 1 | Understand
+60 | KM-02 | KT0204 | Bearings | Failures | TF | Water contamination can cause bearing rust and pitting. | True | False |  |  |  | A | 1 | Understand
+61 | KM-02 | KT0301 | Valves | Classification | MCQ | Which of the following is a linear motion valve? | Gate valve | Ball valve | Butterfly valve | Plug valve | Quarter-turn valve | A | 1 | Remember
+62 | KM-02 | KT0301 | Valves | Classification | TF | Gate valves are used for fully open or fully closed operation. | True | False |  |  |  | A | 1 | Understand
+63 | KM-02 | KT0301 | Valves | Classification | MCQ | Which valve type is commonly used for quick shut-off? | Gate valve | Ball valve | Globe valve | Needle valve | Relief valve | B | 1 | Understand
+64 | KM-02 | KT0301 | Valves | Classification | TF | Ball valves are quarter-turn valves. | True | False |  |  |  | A | 1 | Remember
+65 | KM-02 | KT0302 | Valves | Terminology | MCQ | The term ?seat? in a valve refers to: | The handle | The sealing surface | The stem | The body | The bonnet | B | 1 | Remember
+66 | KM-02 | KT0302 | Valves | Terminology | TF | The stem connects the actuator or handle to the valve disc. | True | False |  |  |  | A | 1 | Understand
+67 | KM-02 | KT0302 | Valves | Terminology | MCQ | The bonnet of a valve is used to: | Control flow | Support the stem and internal parts | Increase pressure | Reduce vibration | Filter contaminants | B | 1 | Understand
+68 | KM-02 | KT0302 | Valves | Terminology | TF | The disc or plug is the part that blocks or allows flow. | True | False |  |  |  | A | 1 | Remember
+69 | KM-02 | KT0303 | Valves | Working principles | MCQ | Globe valves are best suited for: | On/off control only | Throttling and flow regulation | High-speed rotation | Vacuum sealing | High torque applications | B | 1 | Understand
+70 | KM-02 | KT0303 | Valves | Working principles | TF | Globe valves offer better flow control than gate valves. | True | False |  |  |  | A | 1 | Understand
+71 | KM-02 | KT0303 | Valves | Working principles | MCQ | A non-return valve allows flow: | In both directions | Only in one direction | Only when pressure is low | Only when manually opened | Only when fully closed | B | 1 | Remember
+72 | KM-02 | KT0303 | Valves | Working principles | TF | Check valves prevent backflow in pipelines. | True | False |  |  |  | A | 1 | Understand
+73 | KM-02 | KT0301 | Valves | Classification | MCQ | Which valve is commonly used for pressure relief? | Gate valve | Relief valve | Ball valve | Needle valve | Butterfly valve | B | 1 | Remember
+74 | KM-02 | KT0301 | Valves | Classification | TF | Relief valves automatically open when system pressure exceeds a set limit. | True | False |  |  |  | A | 1 | Understand
+75 | KM-02 | KT0303 | Valves | Working principles | MCQ | Needle valves are used for: | High flow | Low flow and precise control | Quick shut-off | High-pressure steam | Dirty fluids | B | 1 | Understand
+76 | KM-02 | KT0303 | Valves | Working principles | TF | Needle valves provide fine adjustment of flow. | True | False |  |  |  | A | 1 | Apply
+77 | KM-02 | KT0304 | Valves | Installation | MCQ | Before installing a valve, the pipeline must be: | Painted | Pressurized | Clean and free of debris | Heated | Bent | C | 1 | Apply
+78 | KM-02 | KT0304 | Valves | Installation | TF | Valves must be installed according to the flow direction arrow. | True | False |  |  |  | A | 1 | Apply
+79 | KM-02 | KT0304 | Valves | Installation | MCQ | When installing a check valve, it must be placed: | Upside down | In any direction | According to flow direction | Horizontally only | Vertically only | C | 1 | Understand
+80 | KM-02 | KT0304 | Valves | Installation | TF | Incorrect valve orientation can cause malfunction or failure. | True | False |  |  |  | A | 1 | Understand
+81 | KM-02 | KT0302 | Valves | Terminology | MCQ | The actuator of a valve is used to: | Filter fluid | Open or close the valve | Increase pressure | Reduce temperature | Support the pipeline | B | 1 | Understand
+82 | KM-02 | KT0302 | Valves | Terminology | TF | Manual valves use handwheels, levers, or handles. | True | False |  |  |  | A | 1 | Remember
+83 | KM-02 | KT0303 | Valves | Working principles | MCQ | Butterfly valves use a: | Sliding gate | Rotating disc | Rising stem | Floating ball | Spring-loaded plug | B | 1 | Remember
+84 | KM-02 | KT0303 | Valves | Working principles | TF | Butterfly valves are suitable for large-diameter pipelines. | True | False |  |  |  | A | 1 | Understand
+85 | KM-02 | KT0301 | Valves | Classification | MCQ | Which valve type is NOT a quarter-turn valve? | Ball valve | Butterfly valve | Plug valve | Gate valve | None of the above | D | 1 | Remember
+86 | KM-02 | KT0301 | Valves | Classification | TF | Gate valves require multiple turns to open or close. | True | False |  |  |  | A | 1 | Understand
+87 | KM-02 | KT0304 | Valves | Installation | MCQ | Before removing a valve from a system, you must: | Increase pressure | Close isolation valves | Heat the valve | Add lubrication | Remove the actuator | B | 1 | Apply
+88 | KM-02 | KT0304 | Valves | Installation | TF | Pressure must be released before removing a valve. | True | False |  |  |  | A | 1 | Apply
+89 | KM-02 | KT0304 | Valves | Installation | MCQ | Valve gaskets must be replaced when: | They look clean | They have been compressed | The valve is painted | The pipeline is empty | The valve is new | B | 1 | Understand
+90 | KM-02 | KT0304 | Valves | Installation | TF | Reusing old gaskets can cause leaks. | True | False |  |  |  | A | 1 | Apply
+91 | KM-02 | KT0401 | Drives | Belt drives | MCQ | Which belt type is commonly used for high?speed, low?torque applications? | V?belt | Flat belt | Timing belt | Chain belt | Rope belt | B | 1 | Understand
+92 | KM-02 | KT0401 | Drives | Belt drives | TF | Flat belts are suitable for long?distance power transmission. | True | False |  |  |  | A | 1 | Remember
+93 | KM-02 | KT0401 | Drives | Belt drives | MCQ | V?belts provide better grip because of their: | Colour | Shape | Friction angle | Length | Width | C | 1 | Understand
+94 | KM-02 | KT0401 | Drives | Belt drives | TF | V?belts operate using the wedge principle. | True | False |  |  |  | A | 1 | Understand
+95 | KM-02 | KT0402 | Drives | Chain drives | MCQ | Chain drives are preferred when: | No lubrication is desired | Slip must be avoided | High noise is required | Low torque is needed | Belts are cheaper | B | 1 | Understand
+96 | KM-02 | KT0402 | Drives | Chain drives | TF | Chain drives do not slip under load. | True | False |  |  |  | A | 1 | Remember
+97 | KM-02 | KT0402 | Drives | Chain drives | MCQ | Which component engages with the chain? | Pulley | Sprocket | Gear | Coupling | Sheave | B | 1 | Remember
+98 | KM-02 | KT0402 | Drives | Chain drives | TF | Chain drives require regular lubrication to reduce wear. | True | False |  |  |  | A | 1 | Apply
+99 | KM-02 | KT0403 | Drives | Gear drives | MCQ | Spur gears are used for: | Parallel shafts | Intersecting shafts | Non?parallel shafts | Flexible shafts | Vertical shafts | A | 1 | Understand
+100 | KM-02 | KT0403 | Drives | Gear drives | TF | Spur gears produce more noise than helical gears. | True | False |  |  |  | A | 1 | Understand
+101 | KM-02 | KT0403 | Drives | Gear drives | MCQ | Bevel gears are used to transmit motion between shafts at: | 0¯ | 45¯ | 90¯ | 180¯ | Any angle | C | 1 | Remember
+102 | KM-02 | KT0403 | Drives | Gear drives | TF | Helical gears run more quietly than spur gears. | True | False |  |  |  | A | 1 | Understand
+103 | KM-02 | KT0404 | Drives | Couplings | MCQ | Which coupling type accommodates slight misalignment? | Rigid coupling | Flange coupling | Flexible coupling | Gear coupling | Sleeve coupling | C | 1 | Understand
+104 | KM-02 | KT0404 | Drives | Couplings | TF | Flexible couplings help reduce vibration. | True | False |  |  |  | A | 1 | Apply
+105 | KM-02 | KT0404 | Drives | Couplings | MCQ | A rigid coupling is used when shafts are: | Misaligned | Flexible | Perfectly aligned | Bent | Vibrating | C | 1 | Understand
+106 | KM-02 | KT0404 | Drives | Couplings | TF | Rigid couplings cannot compensate for shaft misalignment. | True | False |  |  |  | A | 1 | Remember
+107 | KM-02 | KT0401 | Drives | Belt drives | MCQ | Belt slip occurs when: | Belt tension is correct | Belt is too tight | Belt is too loose | Pulley is oversized | Pulley is lubricated | C | 1 | Apply
+108 | KM-02 | KT0401 | Drives | Belt drives | TF | Excessive belt tension can damage bearings. | True | False |  |  |  | A | 1 | Understand
+109 | KM-02 | KT0402 | Drives | Chain drives | MCQ | Chain elongation is mainly caused by: | Proper lubrication | Wear between pins and bushings | Clean environment | Correct tension | New sprockets | B | 1 | Understand
+110 | KM-02 | KT0402 | Drives | Chain drives | TF | Worn chains can jump off sprockets. | True | False |  |  |  | A | 1 | Apply
+111 | KM-02 | KT0403 | Drives | Gear drives | MCQ | Which gear type is used for high?speed, low?noise applications? | Spur gear | Helical gear | Bevel gear | Worm gear | Rack gear | B | 1 | Understand
+112 | KM-02 | KT0403 | Drives | Gear drives | TF | Worm gears provide high reduction ratios. | True | False |  |  |  | A | 1 | Remember
+113 | KM-02 | KT0403 | Drives | Gear drives | MCQ | A rack and pinion system converts: | Linear to rotary motion | Rotary to linear motion | Heat to motion | Torque to pressure | Pressure to flow | B | 1 | Understand
+114 | KM-02 | KT0403 | Drives | Gear drives | TF | Rack and pinion systems are used in steering mechanisms. | True | False |  |  |  | A | 1 | Apply
+115 | KM-02 | KT0404 | Drives | Couplings | MCQ | Which coupling is commonly used for pumps? | Rigid coupling | Jaw coupling | Gear coupling | Sleeve coupling | Chain coupling | B | 1 | Understand
+116 | KM-02 | KT0404 | Drives | Couplings | TF | Jaw couplings use an elastomer insert to absorb shock. | True | False |  |  |  | A | 1 | Remember
+117 | KM-02 | KT0405 | Drives | Safety | MCQ | Guards must be installed on: | Belts only | Chains only | Gears only | All rotating equipment | None of the above | D | 1 | Apply
+118 | KM-02 | KT0405 | Drives | Safety | TF | Loose clothing is a hazard around rotating drives. | True | False |  |  |  | A | 1 | Remember
+119 | KM-02 | KT0405 | Drives | Safety | MCQ | Before working on drive systems, you must: | Increase speed | Remove guards | Lockout and tagout | Add lubrication | Rotate by hand | C | 1 | Apply
+120 | KM-02 | KT0405 | Drives | Safety | TF | Lockout/Tagout prevents accidental start?up during maintenance. | True | False |  |  |  | A | 1 | Understand
+121 | KM-02 | KT0501 | Pumps | Types | MCQ | Which pump type uses an impeller to move fluid? | Gear pump | Centrifugal pump | Piston pump | Diaphragm pump | Screw pump | B | 1 | Understand
+122 | KM-02 | KT0501 | Pumps | Types | TF | Centrifugal pumps are classified as dynamic pumps. | True | False |  |  |  | A | 1 | Remember
+123 | KM-02 | KT0501 | Pumps | Types | MCQ | Which pump type is best for high?viscosity fluids? | Centrifugal pump | Gear pump | Jet pump | Submersible pump | Axial pump | B | 1 | Understand
+124 | KM-02 | KT0501 | Pumps | Types | TF | Positive displacement pumps deliver a fixed volume per cycle. | True | False |  |  |  | A | 1 | Remember
+125 | KM-02 | KT0502 | Pumps | Components | MCQ | The rotating component of a centrifugal pump is called the: | Rotor | Impeller | Stator | Piston | Plunger | B | 1 | Remember
+126 | KM-02 | KT0502 | Pumps | Components | TF | The pump casing directs fluid flow and increases pressure. | True | False |  |  |  | A | 1 | Understand
+127 | KM-02 | KT0502 | Pumps | Components | MCQ | Mechanical seals are used to: | Increase flow | Prevent leakage | Reduce noise | Increase speed | Filter contaminants | B | 1 | Understand
+128 | KM-02 | KT0502 | Pumps | Components | TF | Mechanical seals replace traditional gland packing in many pumps. | True | False |  |  |  | A | 1 | Remember
+129 | KM-02 | KT0503 | Pumps | Working principles | MCQ | Centrifugal pumps increase fluid velocity using: | Reciprocating motion | Rotational energy | Compressed air | Hydraulic pressure | Magnetic force | B | 1 | Understand
+130 | KM-02 | KT0503 | Pumps | Working principles | TF | In centrifugal pumps, pressure increases as fluid moves through the volute. | True | False |  |  |  | A | 1 | Understand
+131 | KM-02 | KT0503 | Pumps | Working principles | MCQ | Positive displacement pumps move fluid by: | Creating centrifugal force | Trapping and forcing fluid | Using magnetic fields | Heating the fluid | Reducing friction | B | 1 | Understand
+132 | KM-02 | KT0503 | Pumps | Working principles | TF | Gear pumps use meshing gears to move fluid. | True | False |  |  |  | A | 1 | Remember
+133 | KM-02 | KT0504 | Pumps | Installation | MCQ | Before starting a centrifugal pump, it must be: | Heated | Primed | Overfilled | Pressurized | Disassembled | B | 1 | Apply
+134 | KM-02 | KT0504 | Pumps | Installation | TF | Running a centrifugal pump dry can cause severe damage. | True | False |  |  |  | A | 1 | Apply
+135 | KM-02 | KT0504 | Pumps | Installation | MCQ | Pump alignment is important because it: | Increases noise | Reduces efficiency | Prevents bearing and seal failure | Increases vibration | Reduces flow | C | 1 | Understand
+136 | KM-02 | KT0504 | Pumps | Installation | TF | Misalignment can cause overheating and premature wear. | True | False |  |  |  | A | 1 | Understand
+137 | KM-02 | KT0505 | Pumps | Troubleshooting | MCQ | Cavitation in pumps is caused by: | High discharge pressure | Low suction pressure | Excessive lubrication | Clean water | High viscosity | B | 1 | Understand
+138 | KM-02 | KT0505 | Pumps | Troubleshooting | TF | Cavitation can damage the impeller. | True | False |  |  |  | A | 1 | Apply
+139 | KM-02 | KT0505 | Pumps | Troubleshooting | MCQ | A pump that fails to deliver flow may have: | Correct priming | Blocked suction line | Proper alignment | Clean filters | Correct rotation | B | 1 | Apply
+140 | KM-02 | KT0505 | Pumps | Troubleshooting | TF | Incorrect pump rotation can prevent fluid flow. | True | False |  |  |  | A | 1 | Apply
+141 | KM-02 | KT0501 | Pumps | Types | MCQ | Which pump type is commonly used for domestic water supply? | Centrifugal pump | Gear pump | Screw pump | Piston pump | Vane pump | A | 1 | Understand
+142 | KM-02 | KT0501 | Pumps | Types | TF | Submersible pumps operate underwater. | True | False |  |  |  | A | 1 | Remember
+143 | KM-02 | KT0503 | Pumps | Working principles | MCQ | In a gear pump, fluid is carried between: | Vanes | Gear teeth | Pistons | Impeller blades | Diaphragms | B | 1 | Understand
+144 | KM-02 | KT0503 | Pumps | Working principles | TF | Gear pumps provide a smooth, pulseless flow. | True | False |  |  |  | B | 1 | Understand
+145 | KM-02 | KT0504 | Pumps | Installation | MCQ | Suction strainers are used to: | Increase pressure | Remove debris | Reduce flow | Increase temperature | Lubricate seals | B | 1 | Understand
+146 | KM-02 | KT0504 | Pumps | Installation | TF | A clogged suction strainer reduces pump performance. | True | False |  |  |  | A | 1 | Apply
+147 | KM-02 | KT0505 | Pumps | Troubleshooting | MCQ | Excessive pump vibration may be caused by: | Correct alignment | Balanced impeller | Worn bearings | Clean suction line | Proper lubrication | C | 1 | Understand
+148 | KM-02 | KT0505 | Pumps | Troubleshooting | TF | Air leaks on the suction side can cause loss of prime. | True | False |  |  |  | A | 1 | Apply
+149 | KM-02 | KT0506 | Pumps | Safety | MCQ | Before working on a pump, you must: | Increase speed | Remove guards | Lockout and tagout | Add water | Open discharge valve fully | C | 1 | Apply
+150 | KM-02 | KT0506 | Pumps | Safety | TF | Pump casings may become hot during operation. | True | False |  |  |  | A | 1 | Understand
+151 | KM-02 | KT0601 | Compressors | Types | MCQ | Which compressor type uses a piston to compress air? | Rotary vane | Screw compressor | Reciprocating compressor | Centrifugal compressor | Axial compressor | C | 1 | Remember
+152 | KM-02 | KT0601 | Compressors | Types | TF | Reciprocating compressors are positive displacement compressors. | True | False |  |  |  | A | 1 | Understand
+153 | KM-02 | KT0601 | Compressors | Types | MCQ | Which compressor type is best for continuous, high?volume air supply? | Reciprocating | Screw | Diaphragm | Axial | Vane | B | 1 | Understand
+154 | KM-02 | KT0601 | Compressors | Types | TF | Screw compressors operate using two meshing rotors. | True | False |  |  |  | A | 1 | Remember
+155 | KM-02 | KT0602 | Compressors | Components | MCQ | The component that stores compressed air is called the: | Cylinder | Receiver | Impeller | Rotor | Separator | B | 1 | Remember
+156 | KM-02 | KT0602 | Compressors | Components | TF | Air receivers help reduce pressure fluctuations. | True | False |  |  |  | A | 1 | Understand
+157 | KM-02 | KT0602 | Compressors | Components | MCQ | The purpose of an air filter is to: | Increase pressure | Remove contaminants | Reduce temperature | Increase flow | Lubricate bearings | B | 1 | Understand
+158 | KM-02 | KT0602 | Compressors | Components | TF | Dirty air filters reduce compressor efficiency. | True | False |  |  |  | A | 1 | Apply
+159 | KM-02 | KT0603 | Compressors | Working principles | MCQ | Positive displacement compressors work by: | Accelerating air | Trapping and compressing air | Using centrifugal force | Using magnetic fields | Cooling air | B | 1 | Understand
+160 | KM-02 | KT0603 | Compressors | Working principles | TF | Centrifugal compressors increase air pressure using high?speed rotation. | True | False |  |  |  | A | 1 | Understand
+161 | KM-02 | KT0603 | Compressors | Working principles | MCQ | In a screw compressor, air is compressed by: | Pistons | Rotating vanes | Two helical rotors | A diaphragm | A turbine | C | 1 | Understand
+162 | KM-02 | KT0603 | Compressors | Working principles | TF | Screw compressors provide a smooth, pulse?free airflow. | True | False |  |  |  | A | 1 | Remember
+163 | KM-02 | KT0604 | Compressors | Installation | MCQ | Compressors must be installed in areas with: | Poor ventilation | High humidity | Good airflow | Direct sunlight | No drainage | C | 1 | Apply
+164 | KM-02 | KT0604 | Compressors | Installation | TF | Proper ventilation prevents overheating of compressors. | True | False |  |  |  | A | 1 | Understand
+165 | KM-02 | KT0604 | Compressors | Installation | MCQ | Before starting a compressor, you must check: | Paint colour | Belt tension | Noise level | Air receiver size | Pipe colour | B | 1 | Apply
+166 | KM-02 | KT0604 | Compressors | Installation | TF | Incorrect belt tension can cause slippage and overheating. | True | False |  |  |  | A | 1 | Apply
+167 | KM-02 | KT0605 | Compressors | Troubleshooting | MCQ | Excessive compressor noise may indicate: | Clean filters | Worn bearings | Correct lubrication | Proper alignment | Normal operation | B | 1 | Understand
+168 | KM-02 | KT0605 | Compressors | Troubleshooting | TF | Air leaks reduce system efficiency and increase running time. | True | False |  |  |  | A | 1 | Understand
+169 | KM-02 | KT0605 | Compressors | Troubleshooting | MCQ | Overheating in compressors is often caused by: | Clean oil | Low oil level | Proper ventilation | Correct pressure | New filters | B | 1 | Apply
+170 | KM-02 | KT0605 | Compressors | Troubleshooting | TF | Low oil level can cause compressor seizure. | True | False |  |  |  | A | 1 | Apply
+171 | KM-02 | KT0601 | Compressors | Types | MCQ | Diaphragm compressors are used for: | Dirty air | Toxic or hazardous gases | High?volume supply | High?temperature air | Vacuum only | B | 1 | Understand
+172 | KM-02 | KT0601 | Compressors | Types | TF | Diaphragm compressors prevent gas contamination. | True | False |  |  |  | A | 1 | Remember
+173 | KM-02 | KT0603 | Compressors | Working principles | MCQ | In a reciprocating compressor, air is compressed during the: | Intake stroke | Compression stroke | Exhaust stroke | Cooling stroke | Idle stroke | B | 1 | Understand
+174 | KM-02 | KT0603 | Compressors | Working principles | TF | Reciprocating compressors have valves that control air intake and discharge. | True | False |  |  |  | A | 1 | Remember
+175 | KM-02 | KT0605 | Compressors | Troubleshooting | MCQ | Moisture in compressed air is removed using a: | Receiver | Dryer | Filter only | Separator | Valve | B | 1 | Understand
+176 | KM-02 | KT0605 | Compressors | Troubleshooting | TF | Water in compressed air can damage pneumatic tools. | True | False |  |  |  | A | 1 | Apply
+177 | KM-02 | KT0606 | Compressors | Safety | MCQ | Before servicing a compressor, you must: | Increase pressure | Lockout and tagout | Remove guards | Open all valves | Disconnect hoses only | B | 1 | Apply
+178 | KM-02 | KT0606 | Compressors | Safety | TF | Air receivers must be drained regularly to remove water. | True | False |  |  |  | A | 1 | Apply
+179 | KM-02 | KT0606 | Compressors | Safety | MCQ | Over?pressurization of air receivers can cause: | Noise | Vibration | Explosion | Low flow | Oil leaks | C | 1 | Understand
+180 | KM-02 | KT0606 | Compressors | Safety | TF | Safety valves protect air receivers from over?pressure. | True | False |  |  |  | A | 1 | Remember
+181 | KM-02 | KT0701 | Hydraulics | Fluid principles | MCQ | Which principle states that pressure applied to a confined fluid is transmitted equally in all directions? | Bernoulli?s principle | Pascal?s law | Boyle?s law | Newton?s law | Archimedes? principle | B | 1 | Remember
+182 | KM-02 | KT0701 | Hydraulics | Fluid principles | TF | Pascal?s law forms the basis of hydraulic systems. | True | False |  |  |  | A | 1 | Understand
+183 | KM-02 | KT0701 | Hydraulics | Fluid principles | MCQ | Hydraulic systems use: | Gases | Liquids | Vapours | Air only | Steam | B | 1 | Remember
+184 | KM-02 | KT0701 | Hydraulics | Fluid principles | TF | Liquids are considered incompressible in hydraulic systems. | True | False |  |  |  | A | 1 | Understand
+185 | KM-02 | KT0702 | Hydraulics | Components | MCQ | Which component converts hydraulic energy into mechanical motion? | Pump | Actuator | Reservoir | Filter | Valve | B | 1 | Understand
+186 | KM-02 | KT0702 | Hydraulics | Components | TF | Hydraulic cylinders are linear actuators. | True | False |  |  |  | A | 1 | Remember
+187 | KM-02 | KT0702 | Hydraulics | Components | MCQ | The purpose of a hydraulic reservoir is to: | Increase pressure | Store and cool fluid | Filter contaminants | Reduce flow | Increase speed | B | 1 | Understand
+188 | KM-02 | KT0702 | Hydraulics | Components | TF | Hydraulic filters remove dirt and particles from the fluid. | True | False |  |  |  | A | 1 | Remember
+189 | KM-02 | KT0703 | Hydraulics | Pumps | MCQ | Which pump type is commonly used in hydraulic systems? | Centrifugal pump | Gear pump | Jet pump | Axial pump | Screw pump | B | 1 | Understand
+190 | KM-02 | KT0703 | Hydraulics | Pumps | TF | Gear pumps are positive displacement pumps. | True | False |  |  |  | A | 1 | Remember
+191 | KM-02 | KT0703 | Hydraulics | Pumps | MCQ | A vane pump uses: | Pistons | Sliding vanes | Rotating gears | Diaphragms | Impellers | B | 1 | Understand
+192 | KM-02 | KT0703 | Hydraulics | Pumps | TF | Vane pumps provide smooth flow with low noise. | True | False |  |  |  | A | 1 | Understand
+193 | KM-02 | KT0704 | Hydraulics | Valves | MCQ | A pressure relief valve is used to: | Increase pressure | Limit maximum system pressure | Change flow direction | Filter fluid | Reduce temperature | B | 1 | Understand
+194 | KM-02 | KT0704 | Hydraulics | Valves | TF | Directional control valves determine the path of fluid flow. | True | False |  |  |  | A | 1 | Remember
+195 | KM-02 | KT0704 | Hydraulics | Valves | MCQ | A check valve allows flow: | In both directions | In one direction only | Only when pressure is low | Only when manually opened | Only when the pump is off | B | 1 | Remember
+196 | KM-02 | KT0704 | Hydraulics | Valves | TF | Check valves prevent backflow in hydraulic circuits. | True | False |  |  |  | A | 1 | Understand
+197 | KM-02 | KT0705 | Hydraulics | Actuators | MCQ | A double?acting cylinder can: | Extend only | Retract only | Extend and retract using hydraulic pressure | Rotate continuously | Store fluid | C | 1 | Understand
+198 | KM-02 | KT0705 | Hydraulics | Actuators | TF | Single?acting cylinders use hydraulic pressure in one direction only. | True | False |  |  |  | A | 1 | Remember
+199 | KM-02 | KT0705 | Hydraulics | Actuators | MCQ | Rotary actuators convert hydraulic energy into: | Linear motion | Heat | Rotary motion | Pressure | Filtration | C | 1 | Understand
+200 | KM-02 | KT0705 | Hydraulics | Actuators | TF | Hydraulic motors are rotary actuators. | True | False |  |  |  | A | 1 | Remember
+201 | KM-02 | KT0706 | Hydraulics | Circuits | MCQ | A hydraulic symbol for a pump is usually shown as: | A circle with an arrow | A square | A triangle | A diamond | A rectangle | A | 1 | Remember
+202 | KM-02 | KT0706 | Hydraulics | Circuits | TF | Hydraulic circuit diagrams use standardized ISO symbols. | True | False |  |  |  | A | 1 | Understand
+203 | KM-02 | KT0706 | Hydraulics | Circuits | MCQ | Flow control valves are used to: | Change direction | Regulate speed | Increase pressure | Reduce temperature | Filter fluid | B | 1 | Understand
+204 | KM-02 | KT0706 | Hydraulics | Circuits | TF | Flow rate affects the speed of actuators. | True | False |  |  |  | A | 1 | Apply
+205 | KM-02 | KT0707 | Hydraulics | Troubleshooting | MCQ | Slow actuator movement may be caused by: | High flow | Low flow | Clean filters | Correct pressure | New seals | B | 1 | Apply
+206 | KM-02 | KT0707 | Hydraulics | Troubleshooting | TF | Air in a hydraulic system can cause spongy or jerky movement. | True | False |  |  |  | A | 1 | Understand
+207 | KM-02 | KT0707 | Hydraulics | Troubleshooting | MCQ | Excessive heat in a hydraulic system is often caused by: | Clean oil | Low oil level | Correct pressure | Proper filtration | New pump | B | 1 | Apply
+208 | KM-02 | KT0707 | Hydraulics | Troubleshooting | TF | Overheating can damage seals and reduce system efficiency. | True | False |  |  |  | A | 1 | Understand
+209 | KM-02 | KT0708 | Hydraulics | Safety | MCQ | Before working on a hydraulic system, you must: | Increase pressure | Release stored pressure | Add more oil | Remove filters | Open all valves | B | 1 | Apply
+210 | KM-02 | KT0708 | Hydraulics | Safety | TF | Hydraulic fluid under pressure can penetrate the skin. | True | False |  |  |  | A | 1 | Understand
+211 | KM-02 | KT0801 | Pneumatics | Fluid principles | MCQ | Pneumatic systems use which medium to transmit power? | Liquids | Gases | Steam | Oil | Water | B | 1 | Remember
+212 | KM-02 | KT0801 | Pneumatics | Fluid principles | TF | Air is compressible, which affects pneumatic system behaviour. | True | False |  |  |  | A | 1 | Understand
+213 | KM-02 | KT0801 | Pneumatics | Fluid principles | MCQ | Pneumatic systems typically operate at: | Very high pressure | Low to medium pressure | Vacuum only | Hydraulic pressure levels | Zero pressure | B | 1 | Understand
+214 | KM-02 | KT0801 | Pneumatics | Fluid principles | TF | Pneumatic systems are generally faster than hydraulic systems. | True | False |  |  |  | A | 1 | Understand
+215 | KM-02 | KT0802 | Pneumatics | FRL units | MCQ | The ?F? in FRL stands for: | Filter | Flow | Force | Feed | Fuse | A | 1 | Remember
+216 | KM-02 | KT0802 | Pneumatics | FRL units | TF | The filter in an FRL unit removes moisture and contaminants. | True | False |  |  |  | A | 1 | Understand
+217 | KM-02 | KT0802 | Pneumatics | FRL units | MCQ | The regulator in an FRL unit is used to: | Increase flow | Control pressure | Remove water | Add lubrication | Reduce noise | B | 1 | Understand
+218 | KM-02 | KT0802 | Pneumatics | FRL units | TF | The lubricator adds a fine mist of oil to the air supply. | True | False |  |  |  | A | 1 | Remember
+219 | KM-02 | KT0803 | Pneumatics | Valves | MCQ | A 5/2 directional control valve has: | 5 ports, 2 positions | 5 positions, 2 ports | 2 ports, 5 positions | 5 inlets, 2 outlets | 2 inlets, 5 outlets | A | 1 | Understand
+220 | KM-02 | KT0803 | Pneumatics | Valves | TF | Directional control valves determine the path of airflow. | True | False |  |  |  | A | 1 | Remember
+221 | KM-02 | KT0803 | Pneumatics | Valves | MCQ | A non?return valve allows air to flow: | In both directions | In one direction only | Only when pressure is zero | Only when manually opened | Only when lubricated | B | 1 | Remember
+222 | KM-02 | KT0803 | Pneumatics | Valves | TF | Non?return valves prevent backflow in pneumatic circuits. | True | False |  |  |  | A | 1 | Understand
+223 | KM-02 | KT0804 | Pneumatics | Actuators | MCQ | A single?acting pneumatic cylinder uses air pressure to: | Extend only | Retract only | Extend and retract | Rotate continuously | Increase pressure | A | 1 | Understand
+224 | KM-02 | KT0804 | Pneumatics | Actuators | TF | Double?acting cylinders use air pressure in both directions. | True | False |  |  |  | A | 1 | Remember
+225 | KM-02 | KT0804 | Pneumatics | Actuators | MCQ | Rotary actuators convert air pressure into: | Linear motion | Heat | Rotary motion | Vacuum | Filtration | C | 1 | Understand
+226 | KM-02 | KT0804 | Pneumatics | Actuators | TF | Pneumatic motors are rotary actuators. | True | False |  |  |  | A | 1 | Remember
+227 | KM-02 | KT0805 | Pneumatics | Circuits | MCQ | A flow control valve is used to: | Increase pressure | Regulate actuator speed | Change direction | Remove moisture | Filter air | B | 1 | Understand
+228 | KM-02 | KT0805 | Pneumatics | Circuits | TF | Flow rate determines the speed of a pneumatic cylinder. | True | False |  |  |  | A | 1 | Apply
+229 | KM-02 | KT0805 | Pneumatics | Circuits | MCQ | A shuttle valve performs a: | Logical AND function | Logical OR function | Pressure relief | Speed control | Direction change | B | 1 | Understand
+230 | KM-02 | KT0805 | Pneumatics | Circuits | TF | A shuttle valve allows the higher of two signals to pass through. | True | False |  |  |  | A | 1 | Understand
+231 | KM-02 | KT0806 | Pneumatics | Troubleshooting | MCQ | Slow cylinder movement may be caused by: | High flow | Low flow | Clean filters | Correct lubrication | New seals | B | 1 | Apply
+232 | KM-02 | KT0806 | Pneumatics | Troubleshooting | TF | Air leaks reduce system efficiency and speed. | True | False |  |  |  | A | 1 | Understand
+233 | KM-02 | KT0806 | Pneumatics | Troubleshooting | MCQ | Excessive moisture in air lines can cause: | Smooth operation | Corrosion and sticking | Increased speed | Higher pressure | Cleaner air | B | 1 | Understand
+234 | KM-02 | KT0806 | Pneumatics | Troubleshooting | TF | Water traps must be drained regularly. | True | False |  |  |  | A | 1 | Apply
+235 | KM-02 | KT0807 | Pneumatics | Safety | MCQ | Before working on a pneumatic system, you must: | Increase pressure | Release stored air pressure | Add lubrication | Remove filters | Open all valves | B | 1 | Apply
+236 | KM-02 | KT0807 | Pneumatics | Safety | TF | Pneumatic systems can store residual pressure even when switched off. | True | False |  |  |  | A | 1 | Understand
+237 | KM-02 | KT0807 | Pneumatics | Safety | MCQ | Air hoses must be checked for: | Colour | Length | Cracks and wear | Temperature | Weight | C | 1 | Understand
+238 | KM-02 | KT0807 | Pneumatics | Safety | TF | Damaged hoses can burst and cause injury. | True | False |  |  |  | A | 1 | Apply
+239 | KM-02 | KT0807 | Pneumatics | Safety | MCQ | Blowing compressed air onto the skin can cause: | Cooling | No effect | Serious injury | Cleaning | Relaxation | C | 1 | Understand
+240 | KM-02 | KT0807 | Pneumatics | Safety | TF | Compressed air must never be used to clean clothing. | True | False |  |  |  | A | 1 | Apply
+241 | KM-02 | KT0901 | Lubrication | Types | MCQ | Which of the following is a type of lubrication system? | Gravity feed | Splash system | Pressure system | All of the above | None of the above | D | 1 | Remember
+242 | KM-02 | KT0901 | Lubrication | Types | TF | Splash lubrication relies on rotating parts to distribute oil. | True | False |  |  |  | A | 1 | Understand
+243 | KM-02 | KT0901 | Lubrication | Types | MCQ | Pressure lubrication is commonly used in: | Small engines | High?speed machinery | Manual tools | Bicycle chains | Low?load bearings | B | 1 | Understand
+244 | KM-02 | KT0901 | Lubrication | Types | TF | Pressure lubrication provides continuous oil flow to components. | True | False |  |  |  | A | 1 | Remember
+245 | KM-02 | KT0902 | Lubrication | Lubricants | MCQ | Viscosity refers to a lubricant?s: | Colour | Thickness or resistance to flow | Temperature | Chemical smell | Density | B | 1 | Understand
+246 | KM-02 | KT0902 | Lubrication | Lubricants | TF | High?viscosity oils are thicker than low?viscosity oils. | True | False |  |  |  | A | 1 | Remember
+247 | KM-02 | KT0902 | Lubrication | Lubricants | MCQ | Grease is made from oil and: | Water | Soap thickener | Diesel | Alcohol | Air | B | 1 | Remember
+248 | KM-02 | KT0902 | Lubrication | Lubricants | TF | Grease is suitable for slow?moving or heavily loaded components. | True | False |  |  |  | A | 1 | Understand
+249 | KM-02 | KT0903 | Lubrication | Applications | MCQ | Which lubricant is best for high?temperature applications? | Light oil | Water?based oil | Synthetic oil | Vegetable oil | Diesel oil | C | 1 | Apply
+250 | KM-02 | KT0903 | Lubrication | Applications | TF | Synthetic oils offer better stability at extreme temperatures. | True | False |  |  |  | A | 1 | Understand
+251 | KM-02 | KT0903 | Lubrication | Applications | MCQ | Boundary lubrication occurs when: | Surfaces are fully separated by oil | Metal surfaces make partial contact | No lubrication is present | Only grease is used | Oil is overheated | B | 1 | Understand
+252 | KM-02 | KT0903 | Lubrication | Applications | TF | Hydrodynamic lubrication forms a full oil film between surfaces. | True | False |  |  |  | A | 1 | Remember
+253 | KM-02 | KT0904 | Lubrication | Contamination | MCQ | The MOST common cause of lubricant contamination is: | Clean storage | Dirt and moisture | Correct handling | New containers | Proper sealing | B | 1 | Understand
+254 | KM-02 | KT0904 | Lubrication | Contamination | TF | Water contamination can cause oil to appear milky. | True | False |  |  |  | A | 1 | Remember
+255 | KM-02 | KT0904 | Lubrication | Contamination | MCQ | Metal particles in oil indicate: | Normal operation | Wear of components | Clean system | Correct lubrication | Low temperature | B | 1 | Apply
+256 | KM-02 | KT0904 | Lubrication | Contamination | TF | Oil filters help remove contaminants from lubrication systems. | True | False |  |  |  | A | 1 | Understand
+257 | KM-02 | KT0905 | Lubrication | Storage & handling | MCQ | Lubricants must be stored in: | Open containers | Dirty areas | Clean, dry environments | Direct sunlight | Near heat sources | C | 1 | Understand
+258 | KM-02 | KT0905 | Lubrication | Storage & handling | TF | Mixing different lubricant types can cause chemical incompatibility. | True | False |  |  |  | A | 1 | Remember
+259 | KM-02 | KT0905 | Lubrication | Storage & handling | MCQ | Colour?coding lubrication containers helps to: | Decorate the workshop | Prevent cross?contamination | Increase viscosity | Reduce temperature | Improve smell | B | 1 | Apply
+260 | KM-02 | KT0905 | Lubrication | Storage & handling | TF | Lubricants must always be kept in sealed containers. | True | False |  |  |  | A | 1 | Apply
+261 | KM-02 | KT0906 | Lubrication | Safety | MCQ | Oil spills on floors create a risk of: | Fire only | Slipping hazards | Noise | Overheating | Electrical faults | B | 1 | Understand
+262 | KM-02 | KT0906 | Lubrication | Safety | TF | Spilled oil must be cleaned immediately. | True | False |  |  |  | A | 1 | Apply
+263 | KM-02 | KT0906 | Lubrication | Safety | MCQ | Used oil must be disposed of: | Down the drain | In general waste | According to environmental regulations | On the ground | In open containers | C | 1 | Understand
+264 | KM-02 | KT0906 | Lubrication | Safety | TF | Used oil can be harmful to the environment. | True | False |  |  |  | A | 1 | Remember
+265 | KM-02 | KT0902 | Lubrication | Lubricants | MCQ | The SAE rating on oil refers to: | Temperature | Viscosity grade | Chemical composition | Colour | Pressure rating | B | 1 | Remember
+266 | KM-02 | KT0902 | Lubrication | Lubricants | TF | Multi?grade oils can operate effectively over a wide temperature range. | True | False |  |  |  | A | 1 | Understand
+267 | KM-02 | KT0903 | Lubrication | Applications | MCQ | Which lubrication method is used in gearboxes? | Splash lubrication | Gravity feed | Manual oiling | Mist lubrication | Dry lubrication | A | 1 | Understand
+268 | KM-02 | KT0903 | Lubrication | Applications | TF | Gearbox oil must be checked regularly for contamination. | True | False |  |  |  | A | 1 | Apply
+269 | KM-02 | KT0904 | Lubrication | Contamination | MCQ | Oxidation of oil is caused by: | Clean environment | Exposure to oxygen and heat | Low temperature | Proper sealing | New filters | B | 1 | Understand
+270 | KM-02 | KT0904 | Lubrication | Contamination | TF | Oxidized oil can form sludge and varnish. | True | False |  |  |  | A | 1 | Apply
+1 | KM-03 | KT0101 | Lathe Operations | Components | MCQ | Which component holds the workpiece on a lathe? | Toolpost | Tailstock | Chuck | Carriage | Apron | C | 1 | Remember
+2 | KM-03 | KT0101 | Lathe Operations | Components | TF | The chuck is used to clamp and rotate the workpiece. | True | False |  |  |  | A | 1 | Understand
+3 | KM-03 | KT0101 | Lathe Operations | Components | MCQ | The tailstock is mainly used for: | Supporting long workpieces | Holding cutting tools | Changing spindle speed | Lubricating the machine | Storing tools | A | 1 | Understand
+4 | KM-03 | KT0101 | Lathe Operations | Components | TF | The tailstock can hold drills for drilling operations. | True | False |  |  |  | A | 1 | Apply
+5 | KM-03 | KT0102 | Lathe Operations | Tooling | MCQ | The part of a cutting tool that contacts the workpiece is the: | Shank | Flank | Cutting edge | Heel | Base | C | 1 | Remember
+6 | KM-03 | KT0102 | Lathe Operations | Tooling | TF | High-speed steel (HSS) tools are commonly used for general turning. | True | False |  |  |  | A | 1 | Remember
+7 | KM-03 | KT0102 | Lathe Operations | Tooling | MCQ | Carbide inserts are preferred because they: | Are cheaper | Can cut at higher speeds | Are softer | Require no coolant | Are flexible | B | 1 | Understand
+8 | KM-03 | KT0102 | Lathe Operations | Tooling | TF | Carbide tools can withstand higher temperatures than HSS tools. | True | False |  |  |  | A | 1 | Understand
+9 | KM-03 | KT0103 | Lathe Operations | Operations | MCQ | Facing is performed to: | Reduce diameter | Produce a flat surface | Cut threads | Create a taper | Drill a hole | B | 1 | Understand
+10 | KM-03 | KT0103 | Lathe Operations | Operations | TF | Facing is done by feeding the tool perpendicular to the workpiece axis. | True | False |  |  |  | A | 1 | Apply
+11 | KM-03 | KT0103 | Lathe Operations | Operations | MCQ | Turning reduces the workpiece: | Length | Diameter | Hardness | Surface finish | Weight only | B | 1 | Understand
+12 | KM-03 | KT0103 | Lathe Operations | Operations | TF | Turning is performed parallel to the workpiece axis. | True | False |  |  |  | A | 1 | Apply
+13 | KM-03 | KT0103 | Lathe Operations | Operations | MCQ | Taper turning can be done using: | Tailstock offset | Compound slide | Taper attachment | All of the above | None of the above | D | 1 | Understand
+14 | KM-03 | KT0103 | Lathe Operations | Operations | TF | The compound slide is commonly used for short, steep tapers. | True | False |  |  |  | A | 1 | Apply
+15 | KM-03 | KT0103 | Lathe Operations | Operations | MCQ | Knurling is used to: | Reduce diameter | Create a textured grip | Improve accuracy | Cut threads | Remove burrs | B | 1 | Understand
+16 | KM-03 | KT0103 | Lathe Operations | Operations | TF | Knurling displaces material rather than cutting it. | True | False |  |  |  | A | 1 | Understand
+17 | KM-03 | KT0104 | Lathe Operations | Thread cutting | MCQ | Thread cutting on a lathe requires engagement of the: | Lead screw | Feed rod | Tailstock | Chuck key | Coolant pump | A | 1 | Remember
+18 | KM-03 | KT0104 | Lathe Operations | Thread cutting | TF | The half?nut lever engages the carriage with the lead screw. | True | False |  |  |  | A | 1 | Understand
+19 | KM-03 | KT0104 | Lathe Operations | Thread cutting | MCQ | The pitch of a thread is the: | Depth of thread | Angle of thread | Distance between adjacent threads | Diameter of thread | Root radius | C | 1 | Remember
+20 | KM-03 | KT0104 | Lathe Operations | Thread cutting | TF | Thread depth increases with each successive pass. | True | False |  |  |  | A | 1 | Apply
+21 | KM-03 | KT0105 | Lathe Operations | Speeds & feeds | MCQ | Cutting speed depends mainly on: | Tool colour | Workpiece material | Operator skill | Coolant type | Machine age | B | 1 | Understand
+22 | KM-03 | KT0105 | Lathe Operations | Speeds & feeds | TF | Higher cutting speeds generate more heat. | True | False |  |  |  | A | 1 | Understand
+23 | KM-03 | KT0105 | Lathe Operations | Speeds & feeds | MCQ | Feed rate refers to: | Tool rotation | Workpiece speed | Tool movement per revolution | Coolant flow | Chip thickness | C | 1 | Remember
+24 | KM-03 | KT0105 | Lathe Operations | Speeds & feeds | TF | Too high a feed rate can cause poor surface finish. | True | False |  |  |  | A | 1 | Apply
+25 | KM-03 | KT0106 | Lathe Operations | Safety | MCQ | Which action is unsafe when operating a lathe? | Wearing safety glasses | Removing swarf with a brush | Wearing loose clothing | Using correct speeds | Checking tool height | C | 1 | Remember
+26 | KM-03 | KT0106 | Lathe Operations | Safety | TF | Loose clothing can get caught in rotating parts. | True | False |  |  |  | A | 1 | Understand
+27 | KM-03 | KT0106 | Lathe Operations | Safety | MCQ | Swarf should be removed using: | Hands | Compressed air | A brush or hook | Gloves | A rag | C | 1 | Apply
+28 | KM-03 | KT0106 | Lathe Operations | Safety | TF | Compressed air must not be used to remove swarf. | True | False |  |  |  | A | 1 | Remember
+29 | KM-03 | KT0101 | Lathe Operations | Components | MCQ | The carriage assembly includes the: | Chuck | Tailstock | Saddle and apron | Toolpost only | Lead screw | C | 1 | Understand
+30 | KM-03 | KT0101 | Lathe Operations | Components | TF | The cross?slide allows movement perpendicular to the spindle axis. | True | False |  |  |  | A | 1 | Understand
+31 | KM-03 | KT0201 | Milling Operations | Machine types | MCQ | Which machine has a vertically oriented spindle? | Horizontal mill | Vertical mill | Universal lathe | Surface grinder | Radial drill | B | 1 | Remember
+32 | KM-03 | KT0201 | Milling Operations | Machine types | TF | A vertical milling machine is ideal for face milling operations. | True | False |  |  |  | A | 1 | Understand
+33 | KM-03 | KT0201 | Milling Operations | Machine types | MCQ | A universal milling machine allows: | Only vertical movement | Only horizontal movement | Both horizontal and vertical spindle positions | No table movement | Only drilling | C | 1 | Understand
+34 | KM-03 | KT0201 | Milling Operations | Machine types | TF | Horizontal mills are commonly used for heavy material removal. | True | False |  |  |  | A | 1 | Understand
+35 | KM-03 | KT0202 | Milling Operations | Cutters | MCQ | A slab mill is used for: | Slotting | Heavy surface milling | Thread cutting | Keyway cutting | Drilling | B | 1 | Remember
+36 | KM-03 | KT0202 | Milling Operations | Cutters | TF | End mills can cut in both axial and radial directions. | True | False |  |  |  | A | 1 | Understand
+37 | KM-03 | KT0202 | Milling Operations | Cutters | MCQ | A side?and?face cutter is used for: | Drilling | Slotting and deep cutting | Facing | Knurling | Taper turning | B | 1 | Apply
+38 | KM-03 | KT0202 | Milling Operations | Cutters | TF | Ball?nose end mills are used for contouring and 3D surfaces. | True | False |  |  |  | A | 1 | Understand
+39 | KM-03 | KT0203 | Milling Operations | Operations | MCQ | Face milling produces: | Flat surfaces | Keyways | Slots | Threads | Tapers | A | 1 | Understand
+40 | KM-03 | KT0203 | Milling Operations | Operations | TF | In face milling, the cutter axis is perpendicular to the workpiece surface. | True | False |  |  |  | A | 1 | Apply
+41 | KM-03 | KT0203 | Milling Operations | Operations | MCQ | Slot milling is performed using: | Slab mill | Fly cutter | End mill | Reamer | Drill bit | C | 1 | Remember
+42 | KM-03 | KT0203 | Milling Operations | Operations | TF | Climb milling feeds the workpiece in the same direction as cutter rotation. | True | False |  |  |  | A | 1 | Understand
+43 | KM-03 | KT0203 | Milling Operations | Operations | MCQ | Conventional milling is preferred when: | Machine backlash is high | Machine is new | Cutter is dull | Workpiece is soft | Coolant is unavailable | A | 1 | Apply
+44 | KM-03 | KT0203 | Milling Operations | Operations | TF | Climb milling generally provides a better surface finish. | True | False |  |  |  | A | 1 | Understand
+45 | KM-03 | KT0204 | Milling Operations | Feeds & speeds | MCQ | Cutting speed in milling depends mainly on: | Cutter diameter | Machine age | Operator skill | Coolant colour | Table size | A | 1 | Understand
+46 | KM-03 | KT0204 | Milling Operations | Feeds & speeds | TF | Larger cutter diameters require lower spindle speeds. | True | False |  |  |  | A | 1 | Understand
+47 | KM-03 | KT0204 | Milling Operations | Feeds & speeds | MCQ | Feed rate is measured in: | mm/min | mm/rev | m/s | rpm | N/mm˝ | A | 1 | Remember
+48 | KM-03 | KT0204 | Milling Operations | Feeds & speeds | TF | Too high a feed rate can cause tool breakage. | True | False |  |  |  | A | 1 | Apply
+49 | KM-03 | KT0205 | Milling Operations | Workholding | MCQ | A machine vice is commonly used to: | Hold cutters | Hold workpieces | Hold coolant | Hold measuring tools | Hold inserts | B | 1 | Remember
+50 | KM-03 | KT0205 | Milling Operations | Workholding | TF | Workpieces must be clamped securely to prevent vibration. | True | False |  |  |  | A | 1 | Apply
+51 | KM-03 | KT0205 | Milling Operations | Workholding | MCQ | T?slots on the milling table are used for: | Coolant drainage | Mounting clamps and fixtures | Tool storage | Chip removal | Lubrication | B | 1 | Understand
+52 | KM-03 | KT0205 | Milling Operations | Workholding | TF | Parallels are used to raise the workpiece in a vice. | True | False |  |  |  | A | 1 | Apply
+53 | KM-03 | KT0206 | Milling Operations | Safety | MCQ | Which action is unsafe during milling? | Using guards | Wearing safety glasses | Removing chips by hand | Using correct speeds | Clamping securely | C | 1 | Remember
+54 | KM-03 | KT0206 | Milling Operations | Safety | TF | Chips must be removed with a brush, not hands. | True | False |  |  |  | A | 1 | Remember
+55 | KM-03 | KT0206 | Milling Operations | Safety | MCQ | Before changing a cutter, the operator must: | Increase speed | Stop the spindle | Remove coolant | Loosen the table | Raise the knee | B | 1 | Apply
+56 | KM-03 | KT0206 | Milling Operations | Safety | TF | Loose clothing is dangerous around rotating cutters. | True | False |  |  |  | A | 1 | Understand
+57 | KM-03 | KT0203 | Milling Operations | Operations | MCQ | A fly cutter is used for: | Deep slotting | Wide surface finishing | Thread cutting | Keyway cutting | Drilling | B | 1 | Understand
+58 | KM-03 | KT0203 | Milling Operations | Operations | TF | Fly cutters produce a single?point cutting action. | True | False |  |  |  | A | 1 | Remember
+59 | KM-03 | KT0202 | Milling Operations | Cutters | MCQ | A form cutter is used to: | Drill holes | Produce complex profiles | Face surfaces | Cut threads | Remove burrs | B | 1 | Understand
+60 | KM-03 | KT0202 | Milling Operations | Cutters | TF | Form cutters are designed to create specific shapes in one pass. | True | False |  |  |  | A | 1 | Apply
+241 | KM-02 | KT0901 | Lubrication | Types | MCQ | Which of the following is a type of lubrication system? | Gravity feed | Splash system | Pressure system | All of the above | None of the above | D | 1 | Remember
+242 | KM-02 | KT0901 | Lubrication | Types | TF | Splash lubrication relies on rotating parts to distribute oil. | True | False |  |  |  | A | 1 | Understand
+243 | KM-02 | KT0901 | Lubrication | Types | MCQ | Pressure lubrication is commonly used in: | Small engines | High?speed machinery | Manual tools | Bicycle chains | Low?load bearings | B | 1 | Understand
+244 | KM-02 | KT0901 | Lubrication | Types | TF | Pressure lubrication provides continuous oil flow to components. | True | False |  |  |  | A | 1 | Remember
+245 | KM-02 | KT0902 | Lubrication | Lubricants | MCQ | Viscosity refers to a lubricant?s: | Colour | Thickness or resistance to flow | Temperature | Chemical smell | Density | B | 1 | Understand
+246 | KM-02 | KT0902 | Lubrication | Lubricants | TF | High?viscosity oils are thicker than low?viscosity oils. | True | False |  |  |  | A | 1 | Remember
+247 | KM-02 | KT0902 | Lubrication | Lubricants | MCQ | Grease is made from oil and: | Water | Soap thickener | Diesel | Alcohol | Air | B | 1 | Remember
+248 | KM-02 | KT0902 | Lubrication | Lubricants | TF | Grease is suitable for slow?moving or heavily loaded components. | True | False |  |  |  | A | 1 | Understand
+249 | KM-02 | KT0903 | Lubrication | Applications | MCQ | Which lubricant is best for high?temperature applications? | Light oil | Water?based oil | Synthetic oil | Vegetable oil | Diesel oil | C | 1 | Apply
+250 | KM-02 | KT0903 | Lubrication | Applications | TF | Synthetic oils offer better stability at extreme temperatures. | True | False |  |  |  | A | 1 | Understand
+251 | KM-02 | KT0903 | Lubrication | Applications | MCQ | Boundary lubrication occurs when: | Surfaces are fully separated by oil | Metal surfaces make partial contact | No lubrication is present | Only grease is used | Oil is overheated | B | 1 | Understand
+252 | KM-02 | KT0903 | Lubrication | Applications | TF | Hydrodynamic lubrication forms a full oil film between surfaces. | True | False |  |  |  | A | 1 | Remember
+253 | KM-02 | KT0904 | Lubrication | Contamination | MCQ | The MOST common cause of lubricant contamination is: | Clean storage | Dirt and moisture | Correct handling | New containers | Proper sealing | B | 1 | Understand
+254 | KM-02 | KT0904 | Lubrication | Contamination | TF | Water contamination can cause oil to appear milky. | True | False |  |  |  | A | 1 | Remember
+255 | KM-02 | KT0904 | Lubrication | Contamination | MCQ | Metal particles in oil indicate: | Normal operation | Wear of components | Clean system | Correct lubrication | Low temperature | B | 1 | Apply
+256 | KM-02 | KT0904 | Lubrication | Contamination | TF | Oil filters help remove contaminants from lubrication systems. | True | False |  |  |  | A | 1 | Understand
+257 | KM-02 | KT0905 | Lubrication | Storage & handling | MCQ | Lubricants must be stored in: | Open containers | Dirty areas | Clean, dry environments | Direct sunlight | Near heat sources | C | 1 | Understand
+258 | KM-02 | KT0905 | Lubrication | Storage & handling | TF | Mixing different lubricant types can cause chemical incompatibility. | True | False |  |  |  | A | 1 | Remember
+259 | KM-02 | KT0905 | Lubrication | Storage & handling | MCQ | Colour?coding lubrication containers helps to: | Decorate the workshop | Prevent cross?contamination | Increase viscosity | Reduce temperature | Improve smell | B | 1 | Apply
+260 | KM-02 | KT0905 | Lubrication | Storage & handling | TF | Lubricants must always be kept in sealed containers. | True | False |  |  |  | A | 1 | Apply
+261 | KM-02 | KT0906 | Lubrication | Safety | MCQ | Oil spills on floors create a risk of: | Fire only | Slipping hazards | Noise | Overheating | Electrical faults | B | 1 | Understand
+262 | KM-02 | KT0906 | Lubrication | Safety | TF | Spilled oil must be cleaned immediately. | True | False |  |  |  | A | 1 | Apply
+263 | KM-02 | KT0906 | Lubrication | Safety | MCQ | Used oil must be disposed of: | Down the drain | In general waste | According to environmental regulations | On the ground | In open containers | C | 1 | Understand
+264 | KM-02 | KT0906 | Lubrication | Safety | TF | Used oil can be harmful to the environment. | True | False |  |  |  | A | 1 | Remember
+265 | KM-02 | KT0902 | Lubrication | Lubricants | MCQ | The SAE rating on oil refers to: | Temperature | Viscosity grade | Chemical composition | Colour | Pressure rating | B | 1 | Remember
+266 | KM-02 | KT0902 | Lubrication | Lubricants | TF | Multi?grade oils can operate effectively over a wide temperature range. | True | False |  |  |  | A | 1 | Understand
+267 | KM-02 | KT0903 | Lubrication | Applications | MCQ | Which lubrication method is used in gearboxes? | Splash lubrication | Gravity feed | Manual oiling | Mist lubrication | Dry lubrication | A | 1 | Understand
+268 | KM-02 | KT0903 | Lubrication | Applications | TF | Gearbox oil must be checked regularly for contamination. | True | False |  |  |  | A | 1 | Apply
+269 | KM-02 | KT0904 | Lubrication | Contamination | MCQ | Oxidation of oil is caused by: | Clean environment | Exposure to oxygen and heat | Low temperature | Proper sealing | New filters | B | 1 | Understand
+270 | KM-02 | KT0904 | Lubrication | Contamination | TF | Oxidized oil can form sludge and varnish. | True | False |  |  |  | A | 1 | Apply
+61 | KM-03 | KT0301 | Grinding Operations | Machine types | MCQ | Which machine is used to produce flat surfaces? | Cylindrical grinder | Surface grinder | Tool and cutter grinder | Bench grinder | Centreless grinder | B | 1 | Remember
+62 | KM-03 | KT0301 | Grinding Operations | Machine types | TF | A surface grinder uses a rotating abrasive wheel to produce flat surfaces. | True | False |  |  |  | A | 1 | Understand
+63 | KM-03 | KT0301 | Grinding Operations | Machine types | MCQ | A cylindrical grinder is used to grind: | Flat surfaces | Internal threads | External round surfaces | Keyways | Slots | C | 1 | Understand
+64 | KM-03 | KT0301 | Grinding Operations | Machine types | TF | Centreless grinding does not require workpiece mounting between centres. | True | False |  |  |  | A | 1 | Remember
+65 | KM-03 | KT0302 | Grinding Operations | Abrasives | MCQ | Aluminium oxide wheels are best suited for grinding: | Carbide | Glass | Steel | Brass | Plastic | C | 1 | Understand
+66 | KM-03 | KT0302 | Grinding Operations | Abrasives | TF | Silicon carbide wheels are used for grinding non?ferrous metals. | True | False |  |  |  | A | 1 | Remember
+67 | KM-03 | KT0302 | Grinding Operations | Abrasives | MCQ | The grade of a grinding wheel refers to its: | Colour | Hardness | Diameter | Bond type | Speed rating | B | 1 | Understand
+68 | KM-03 | KT0302 | Grinding Operations | Abrasives | TF | A soft?grade wheel releases dull grains more easily. | True | False |  |  |  | A | 1 | Understand
+69 | KM-03 | KT0303 | Grinding Operations | Wheel selection | MCQ | A coarse grit wheel is used for: | Fine finishing | Heavy stock removal | Polishing | Precision grinding | Sharpening drills | B | 1 | Apply
+70 | KM-03 | KT0303 | Grinding Operations | Wheel selection | TF | Fine grit wheels produce smoother surface finishes. | True | False |  |  |  | A | 1 | Understand
+71 | KM-03 | KT0303 | Grinding Operations | Wheel selection | MCQ | The bond of a grinding wheel refers to: | The abrasive material | The material holding grains together | The wheel diameter | The wheel speed | The coolant used | B | 1 | Remember
+72 | KM-03 | KT0303 | Grinding Operations | Wheel selection | TF | Vitrified bonds are commonly used for general grinding. | True | False |  |  |  | A | 1 | Understand
+73 | KM-03 | KT0304 | Grinding Operations | Dressing & truing | MCQ | Dressing a grinding wheel means: | Changing the wheel | Cleaning and sharpening the wheel | Increasing wheel speed | Cooling the wheel | Balancing the wheel | B | 1 | Understand
+74 | KM-03 | KT0304 | Grinding Operations | Dressing & truing | TF | Dressing exposes new, sharp abrasive grains. | True | False |  |  |  | A | 1 | Remember
+75 | KM-03 | KT0304 | Grinding Operations | Dressing & truing | MCQ | Truing a wheel corrects its: | Colour | Shape and concentricity | Bond strength | Grit size | Coolant flow | B | 1 | Understand
+76 | KM-03 | KT0304 | Grinding Operations | Dressing & truing | TF | A diamond dresser is commonly used for truing wheels. | True | False |  |  |  | A | 1 | Remember
+77 | KM-03 | KT0305 | Grinding Operations | Operations | MCQ | Plunge grinding is used when: | Grinding long shafts | Grinding shoulders or grooves | Grinding flat surfaces | Polishing | Sharpening tools | B | 1 | Apply
+78 | KM-03 | KT0305 | Grinding Operations | Operations | TF | Surface grinding uses either a reciprocating table or a rotary table. | True | False |  |  |  | A | 1 | Understand
+79 | KM-03 | KT0305 | Grinding Operations | Operations | MCQ | In cylindrical grinding, the workpiece rotates: | Opposite to wheel direction | Same direction as wheel | Randomly | Not at all | Only during dressing | A | 1 | Understand
+80 | KM-03 | KT0305 | Grinding Operations | Operations | TF | Centreless grinding uses a regulating wheel to control workpiece speed. | True | False |  |  |  | A | 1 | Remember
+81 | KM-03 | KT0306 | Grinding Operations | Safety | MCQ | Before mounting a grinding wheel, it must be: | Painted | Ring?tested | Heated | Soaked in oil | Filed | B | 1 | Remember
+82 | KM-03 | KT0306 | Grinding Operations | Safety | TF | A cracked wheel must never be used. | True | False |  |  |  | A | 1 | Remember
+83 | KM-03 | KT0306 | Grinding Operations | Safety | MCQ | The tool rest on a bench grinder must be set: | Far from the wheel | Touching the wheel | Within 3 mm of the wheel | At any distance | Above wheel centre | C | 1 | Apply
+84 | KM-03 | KT0306 | Grinding Operations | Safety | TF | Safety glasses and a face shield should be worn during grinding. | True | False |  |  |  | A | 1 | Understand
+85 | KM-03 | KT0306 | Grinding Operations | Safety | MCQ | Grinding sparks should be directed: | Toward the operator | Toward flammable materials | Away from the operator | Upwards | Into coolant | C | 1 | Apply
+86 | KM-03 | KT0306 | Grinding Operations | Safety | TF | Gloves must not be worn when using a bench grinder. | True | False |  |  |  | A | 1 | Remember
+87 | KM-03 | KT0305 | Grinding Operations | Operations | MCQ | Excessive heat during grinding may cause: | Better finish | Burn marks | Faster cutting | Wheel balancing | Increased accuracy | B | 1 | Understand
+88 | KM-03 | KT0305 | Grinding Operations | Operations | TF | Coolant helps reduce heat and improve surface finish. | True | False |  |  |  | A | 1 | Understand
+89 | KM-03 | KT0303 | Grinding Operations | Wheel selection | MCQ | A soft wheel is preferred when grinding: | Hard materials | Soft materials | Plastic | Rubber | Wood | A | 1 | Apply
+90 | KM-03 | KT0303 | Grinding Operations | Wheel selection | TF | Hard wheels are used for grinding soft materials. | True | False |  |  |  | A | 1 | Understand
+121 | KM-03 | KT0501 | Feeds & Speeds | Cutting speed | MCQ | Cutting speed refers to: | Tool rotation | Workpiece rotation | Surface speed of the cutting edge | Feed per revolution | Chip thickness | C | 1 | Understand
+122 | KM-03 | KT0501 | Feeds & Speeds | Cutting speed | TF | Cutting speed is measured in metres per minute (m/min). | True | False |  |  |  | A | 1 | Remember
+123 | KM-03 | KT0501 | Feeds & Speeds | Cutting speed | MCQ | Increasing cutting speed generally: | Reduces heat | Increases heat | Reduces tool wear | Stops chip formation | Increases coolant flow | B | 1 | Understand
+124 | KM-03 | KT0501 | Feeds & Speeds | Cutting speed | TF | Harder materials require lower cutting speeds. | True | False |  |  |  | A | 1 | Understand
+125 | KM-03 | KT0502 | Feeds & Speeds | Feed rate | MCQ | Feed rate is defined as: | Tool movement per minute | Tool movement per revolution | Workpiece diameter | Chip thickness | Tool angle | B | 1 | Remember
+126 | KM-03 | KT0502 | Feeds & Speeds | Feed rate | TF | Too high a feed rate can cause poor surface finish. | True | False |  |  |  | A | 1 | Apply
+127 | KM-03 | KT0502 | Feeds & Speeds | Feed rate | MCQ | Feed rate is measured in: | mm/min | mm/rev | rpm | m/s | N/mm˝ | B | 1 | Remember
+128 | KM-03 | KT0502 | Feeds & Speeds | Feed rate | TF | Low feed rates produce thinner chips. | True | False |  |  |  | A | 1 | Understand
+129 | KM-03 | KT0503 | Feeds & Speeds | Depth of cut | MCQ | Depth of cut refers to: | Width of chip | Thickness of chip | Amount of material removed per pass | Tool angle | Tool radius | C | 1 | Understand
+130 | KM-03 | KT0503 | Feeds & Speeds | Depth of cut | TF | Increasing depth of cut increases cutting forces. | True | False |  |  |  | A | 1 | Understand
+131 | KM-03 | KT0503 | Feeds & Speeds | Depth of cut | MCQ | Roughing cuts generally use: | Low feed, low depth | High feed, high depth | Low feed, high depth | High feed, low depth | No feed | B | 1 | Apply
+132 | KM-03 | KT0503 | Feeds & Speeds | Depth of cut | TF | Finishing cuts use small depths of cut. | True | False |  |  |  | A | 1 | Remember
+133 | KM-03 | KT0504 | Feeds & Speeds | Chip formation | MCQ | Continuous chips are produced when: | Feed is too high | Cutting speed is too low | Cutting conditions are ideal | Tool is blunt | Coolant is absent | C | 1 | Understand
+134 | KM-03 | KT0504 | Feeds & Speeds | Chip formation | TF | Built?up edge forms at low cutting speeds. | True | False |  |  |  | A | 1 | Understand
+135 | KM-03 | KT0504 | Feeds & Speeds | Chip formation | MCQ | Discontinuous chips are common when machining: | Soft materials | Ductile materials | Brittle materials | Plastics | Aluminium | C | 1 | Understand
+136 | KM-03 | KT0504 | Feeds & Speeds | Chip formation | TF | Chip breakers help control long, continuous chips. | True | False |  |  |  | A | 1 | Apply
+137 | KM-03 | KT0505 | Feeds & Speeds | Cutting forces | MCQ | Cutting forces increase when: | Feed decreases | Depth of cut increases | Tool is sharp | Coolant is used | Speed increases | B | 1 | Understand
+138 | KM-03 | KT0505 | Feeds & Speeds | Cutting forces | TF | Blunt tools increase cutting forces. | True | False |  |  |  | A | 1 | Understand
+139 | KM-03 | KT0505 | Feeds & Speeds | Cutting forces | MCQ | Excessive cutting forces may cause: | Better finish | Tool breakage | Lower temperature | Reduced vibration | Increased accuracy | B | 1 | Apply
+140 | KM-03 | KT0505 | Feeds & Speeds | Cutting forces | TF | High cutting forces can damage machine bearings. | True | False |  |  |  | A | 1 | Understand
+141 | KM-03 | KT0506 | Feeds & Speeds | Speed formulas | MCQ | Spindle speed (rpm) depends on cutting speed and: | Tool angle | Workpiece hardness | Workpiece diameter | Coolant type | Machine size | C | 1 | Remember
+142 | KM-03 | KT0506 | Feeds & Speeds | Speed formulas | TF | Larger diameters require lower spindle speeds. | True | False |  |  |  | A | 1 | Understand
+143 | KM-03 | KT0506 | Feeds & Speeds | Speed formulas | MCQ | Cutting speed increases when: | Diameter decreases | Diameter increases | Feed increases | Coolant increases | Tool height changes | A | 1 | Understand
+144 | KM-03 | KT0506 | Feeds & Speeds | Speed formulas | TF | Spindle speed is inversely proportional to workpiece diameter. | True | False |  |  |  | A | 1 | Understand
+145 | KM-03 | KT0507 | Feeds & Speeds | Efficiency | MCQ | Machining efficiency improves when: | Using blunt tools | Using incorrect speeds | Using optimal cutting parameters | Removing coolant | Reducing feed to zero | C | 1 | Apply
+146 | KM-03 | KT0507 | Feeds & Speeds | Efficiency | TF | Correct cutting parameters reduce tool wear. | True | False |  |  |  | A | 1 | Understand
+147 | KM-03 | KT0507 | Feeds & Speeds | Efficiency | MCQ | Poor surface finish is often caused by: | Correct feed | Correct speed | Excessive feed | Sharp tools | Proper coolant | C | 1 | Apply
+148 | KM-03 | KT0507 | Feeds & Speeds | Efficiency | TF | Excessive spindle speed can cause burning of the workpiece. | True | False |  |  |  | A | 1 | Understand
+149 | KM-03 | KT0507 | Feeds & Speeds | Efficiency | MCQ | Tool life is MOST affected by: | Cutting speed | Machine colour | Operator height | Coolant smell | Workpiece paint | A | 1 | Understand
+150 | KM-03 | KT0507 | Feeds & Speeds | Efficiency | TF | Lower cutting speeds generally increase tool life. | True | False |  |  |  | A | 1 | Remember
+151 | KM-03 | KT0601 | Workholding & Toolholding | Workholding | MCQ | Which device is commonly used to hold workpieces on a milling machine? | Lathe chuck | Machine vice | Magnetic chuck | Collet | Tailstock | B | 1 | Remember
+152 | KM-03 | KT0601 | Workholding & Toolholding | Workholding | TF | A machine vice must be securely clamped to the table before machining. | True | False |  |  |  | A | 1 | Apply
+153 | KM-03 | KT0601 | Workholding & Toolholding | Workholding | MCQ | T?slots on a milling table are used for: | Coolant drainage | Mounting clamps and fixtures | Tool storage | Chip removal | Lubrication | B | 1 | Understand
+154 | KM-03 | KT0601 | Workholding & Toolholding | Workholding | TF | Clamps and step blocks are used to secure irregular workpieces. | True | False |  |  |  | A | 1 | Apply
+155 | KM-03 | KT0601 | Workholding & Toolholding | Workholding | MCQ | A magnetic chuck is commonly used on: | Milling machines | Surface grinders | Lathes | Drilling machines | Band saws | B | 1 | Remember
+156 | KM-03 | KT0601 | Workholding & Toolholding | Workholding | TF | Magnetic chucks are suitable for holding ferrous materials only. | True | False |  |  |  | A | 1 | Understand
+157 | KM-03 | KT0601 | Workholding & Toolholding | Workholding | MCQ | Soft jaws are used in a chuck to: | Increase speed | Improve accuracy on irregular shapes | Reduce coolant usage | Increase vibration | Hold tools | B | 1 | Apply
+158 | KM-03 | KT0601 | Workholding & Toolholding | Workholding | TF | Soft jaws can be machined to match the workpiece profile. | True | False |  |  |  | A | 1 | Apply
+159 | KM-03 | KT0602 | Workholding & Toolholding | Toolholding | MCQ | A collet is used to: | Hold large workpieces | Hold small round tools or workpieces | Hold coolant | Hold clamps | Hold parallels | B | 1 | Remember
+160 | KM-03 | KT0602 | Workholding & Toolholding | Toolholding | TF | Collets provide better concentricity than standard chucks. | True | False |  |  |  | A | 1 | Understand
+161 | KM-03 | KT0602 | Workholding & Toolholding | Toolholding | MCQ | The toolpost on a lathe is used to: | Hold the workpiece | Hold the cutting tool | Hold the chuck | Hold the tailstock | Hold the coolant hose | B | 1 | Remember
+162 | KM-03 | KT0602 | Workholding & Toolholding | Toolholding | TF | A quick?change toolpost allows fast tool changes. | True | False |  |  |  | A | 1 | Apply
+163 | KM-03 | KT0602 | Workholding & Toolholding | Toolholding | MCQ | End mill holders are used on: | Lathes | Milling machines | Grinders | Drills | Shapers | B | 1 | Remember
+164 | KM-03 | KT0602 | Workholding & Toolholding | Toolholding | TF | End mill holders use a set screw to secure the tool. | True | False |  |  |  | A | 1 | Understand
+165 | KM-03 | KT0603 | Workholding & Toolholding | Alignment | MCQ | Workpiece alignment in a vice is checked using a: | Hammer | Vernier caliper | Dial indicator | Feeler gauge | Micrometer | C | 1 | Apply
+166 | KM-03 | KT0603 | Workholding & Toolholding | Alignment | TF | A dial indicator can be used to ensure a vice is square to the table. | True | False |  |  |  | A | 1 | Apply
+167 | KM-03 | KT0603 | Workholding & Toolholding | Alignment | MCQ | Parallels are used to: | Increase cutting speed | Raise the workpiece in the vice | Reduce vibration | Hold tools | Measure depth | B | 1 | Understand
+168 | KM-03 | KT0603 | Workholding & Toolholding | Alignment | TF | Parallels ensure the workpiece sits level and clear of the vice jaws. | True | False |  |  |  | A | 1 | Apply
+169 | KM-03 | KT0604 | Workholding & Toolholding | Fixtures | MCQ | A jig differs from a fixture because it: | Holds the tool | Guides the tool | Holds the workpiece only | Reduces speed | Controls coolant | B | 1 | Understand
+170 | KM-03 | KT0604 | Workholding & Toolholding | Fixtures | TF | Fixtures are used to hold workpieces in a fixed position. | True | False |  |  |  | A | 1 | Remember
+171 | KM-03 | KT0604 | Workholding & Toolholding | Fixtures | MCQ | A drill jig is used to: | Hold drills | Guide drills for accurate hole placement | Increase spindle speed | Reduce chip load | Hold coolant | B | 1 | Apply
+172 | KM-03 | KT0604 | Workholding & Toolholding | Fixtures | TF | Jigs improve accuracy and repeatability. | True | False |  |  |  | A | 1 | Understand
+173 | KM-03 | KT0605 | Workholding & Toolholding | Safety | MCQ | Which action is unsafe when clamping a workpiece? | Using parallels | Tightening clamps securely | Leaving workpiece loose | Using step blocks | Checking alignment | C | 1 | Remember
+174 | KM-03 | KT0605 | Workholding & Toolholding | Safety | TF | A loose workpiece can be thrown from the machine. | True | False |  |  |  | A | 1 | Understand
+175 | KM-03 | KT0605 | Workholding & Toolholding | Safety | MCQ | Before adjusting a toolholder, the operator must: | Increase speed | Stop the machine | Add coolant | Remove parallels | Raise the table | B | 1 | Apply
+176 | KM-03 | KT0605 | Workholding & Toolholding | Safety | TF | Tools must be tightened securely to prevent slipping. | True | False |  |  |  | A | 1 | Apply
+177 | KM-03 | KT0605 | Workholding & Toolholding | Safety | MCQ | When using a magnetic chuck, the operator must: | Wear gloves | Ensure the magnet is fully engaged | Use coolant only | Tap the workpiece with a hammer | Increase spindle speed | B | 1 | Apply
+178 | KM-03 | KT0605 | Workholding & Toolholding | Safety | TF | Workpieces must be demagnetized after grinding. | True | False |  |  |  | A | 1 | Understand
+179 | KM-03 | KT0601 | Workholding & Toolholding | Workholding | MCQ | A four?jaw chuck is ideal for: | Perfectly round workpieces | Irregular or square workpieces | Only soft materials | Only high?speed turning | Grinding operations | B | 1 | Apply
+180 | KM-03 | KT0601 | Workholding & Toolholding | Workholding | TF | A four?jaw chuck allows independent adjustment of each jaw. | True | False |  |  |  | A | 1 | Remember
+181 | KM-03 | KT0701 | Surface Finish & Tolerances | Surface finish | MCQ | Surface roughness is measured in: | Micrometres (Êm) | Millimetres | Degrees | Newtons | RPM | A | 1 | Remember
+182 | KM-03 | KT0701 | Surface Finish & Tolerances | Surface finish | TF | A lower Ra value indicates a smoother surface. | True | False |  |  |  | A | 1 | Understand
+183 | KM-03 | KT0701 | Surface Finish & Tolerances | Surface finish | MCQ | A roughing cut typically produces: | Very smooth finish | Medium finish | Rough finish | Mirror finish | No finish | C | 1 | Understand
+184 | KM-03 | KT0701 | Surface Finish & Tolerances | Surface finish | TF | Finishing cuts use low feed and shallow depth of cut. | True | False |  |  |  | A | 1 | Apply
+185 | KM-03 | KT0702 | Surface Finish & Tolerances | Measurement | MCQ | A surface roughness tester is called a: | Micrometer | Profilometer | Vernier | Comparator | Indicator | B | 1 | Remember
+186 | KM-03 | KT0702 | Surface Finish & Tolerances | Measurement | TF | Surface finish can be compared using surface roughness comparison plates. | True | False |  |  |  | A | 1 | Understand
+187 | KM-03 | KT0702 | Surface Finish & Tolerances | Measurement | MCQ | A profilometer measures: | Diameter | Surface texture | Hardness | Length | Angle | B | 1 | Understand
+188 | KM-03 | KT0702 | Surface Finish & Tolerances | Measurement | TF | Surface finish affects friction and wear. | True | False |  |  |  | A | 1 | Understand
+189 | KM-03 | KT0703 | Surface Finish & Tolerances | Tolerances | MCQ | Tolerance refers to: | Exact size | Allowable variation in size | Surface roughness | Material hardness | Tool angle | B | 1 | Remember
+190 | KM-03 | KT0703 | Surface Finish & Tolerances | Tolerances | TF | A smaller tolerance range means higher accuracy. | True | False |  |  |  | A | 1 | Understand
+191 | KM-03 | KT0703 | Surface Finish & Tolerances | Tolerances | MCQ | A fit where the shaft is always smaller than the hole is a: | Interference fit | Clearance fit | Transition fit | Press fit | Shrink fit | B | 1 | Understand
+192 | KM-03 | KT0703 | Surface Finish & Tolerances | Tolerances | TF | Clearance fits allow free movement between parts. | True | False |  |  |  | A | 1 | Remember
+193 | KM-03 | KT0703 | Surface Finish & Tolerances | Tolerances | MCQ | A fit where the shaft is always larger than the hole is a: | Clearance fit | Transition fit | Interference fit | Loose fit | Running fit | C | 1 | Understand
+194 | KM-03 | KT0703 | Surface Finish & Tolerances | Tolerances | TF | Interference fits require force or heat to assemble. | True | False |  |  |  | A | 1 | Apply
+195 | KM-03 | KT0704 | Surface Finish & Tolerances | Limits & allowances | MCQ | Allowance refers to: | Unintentional error | Planned difference between mating parts | Surface roughness | Tool wear | Feed rate | B | 1 | Understand
+196 | KM-03 | KT0704 | Surface Finish & Tolerances | Limits & allowances | TF | Allowance is the intentional difference between shaft and hole sizes. | True | False |  |  |  | A | 1 | Remember
+197 | KM-03 | KT0704 | Surface Finish & Tolerances | Limits & allowances | MCQ | Upper and lower limits define: | Exact size | Maximum and minimum acceptable size | Surface finish | Hardness | Tool angle | B | 1 | Understand
+198 | KM-03 | KT0704 | Surface Finish & Tolerances | Limits & allowances | TF | Limits determine the acceptable size range of a part. | True | False |  |  |  | A | 1 | Understand
+199 | KM-03 | KT0705 | Surface Finish & Tolerances | Accuracy | MCQ | Accuracy refers to: | Repeatability | Closeness to the true value | Surface finish | Tool sharpness | Machine speed | B | 1 | Understand
+200 | KM-03 | KT0705 | Surface Finish & Tolerances | Accuracy | TF | Precision refers to repeatability of measurements. | True | False |  |  |  | A | 1 | Remember
+201 | KM-03 | KT0705 | Surface Finish & Tolerances | Accuracy | MCQ | A part that is precise but not accurate is: | Close to true value | Consistently wrong | Rough | Oversized | Undersized | B | 1 | Understand
+202 | KM-03 | KT0705 | Surface Finish & Tolerances | Accuracy | TF | A part can be accurate but not precise. | True | False |  |  |  | A | 1 | Understand
+203 | KM-03 | KT0706 | Surface Finish & Tolerances | Symbols | MCQ | Surface finish symbols are shown on: | Electrical diagrams | Machining drawings | Hydraulic circuits | Welding symbols | Safety posters | B | 1 | Remember
+204 | KM-03 | KT0706 | Surface Finish & Tolerances | Symbols | TF | A surface finish symbol may specify machining processes. | True | False |  |  |  | A | 1 | Understand
+205 | KM-03 | KT0706 | Surface Finish & Tolerances | Symbols | MCQ | A finish mark without numbers indicates: | No machining required | Rough finish | Uncontrolled finish | Smooth finish | Polished surface | C | 1 | Understand
+206 | KM-03 | KT0706 | Surface Finish & Tolerances | Symbols | TF | Additional numbers on a finish symbol indicate roughness value. | True | False |  |  |  | A | 1 | Remember
+207 | KM-03 | KT0707 | Surface Finish & Tolerances | Applications | MCQ | A bearing surface requires: | Rough finish | Medium finish | Fine finish | No finish | Random finish | C | 1 | Apply
+208 | KM-03 | KT0707 | Surface Finish & Tolerances | Applications | TF | Poor surface finish can cause excessive wear. | True | False |  |  |  | A | 1 | Understand
+209 | KM-03 | KT0707 | Surface Finish & Tolerances | Applications | MCQ | A sliding fit requires: | Rough surface | Smooth surface | No tolerance | Large clearance | Interference | B | 1 | Apply
+210 | KM-03 | KT0707 | Surface Finish & Tolerances | Applications | TF | Surface finish affects lubrication performance. | True | False |  |  |  | A | 1 | Understand
+211 | KM-03 | KT0801 | Safety in Machining | PPE | MCQ | Which PPE is essential when operating any machine tool? | Safety glasses | Sandals | Loose gloves | Earphones | No PPE | A | 1 | Remember
+212 | KM-03 | KT0801 | Safety in Machining | PPE | TF | Safety glasses must be worn at all times in the workshop. | True | False |  |  |  | A | 1 | Understand
+213 | KM-03 | KT0801 | Safety in Machining | PPE | MCQ | Hearing protection is required when: | Machines are off | Noise exceeds safe levels | Only during grinding | Only during milling | Only during drilling | B | 1 | Understand
+214 | KM-03 | KT0801 | Safety in Machining | PPE | TF | Ear protection reduces long-term hearing damage. | True | False |  |  |  | A | 1 | Understand
+215 | KM-03 | KT0802 | Safety in Machining | Clothing | MCQ | Which clothing item is unsafe in machining? | Overalls | Safety boots | Loose sleeves | Hair net | Apron | C | 1 | Remember
+216 | KM-03 | KT0802 | Safety in Machining | Clothing | TF | Long hair must be tied back or covered. | True | False |  |  |  | A | 1 | Apply
+217 | KM-03 | KT0802 | Safety in Machining | Clothing | MCQ | Gloves must NOT be worn when: | Handling coolant | Handling sharp swarf | Operating rotating machinery | Cleaning machines | Carrying tools | C | 1 | Understand
+218 | KM-03 | KT0802 | Safety in Machining | Clothing | TF | Gloves can get caught in rotating parts. | True | False |  |  |  | A | 1 | Understand
+219 | KM-03 | KT0803 | Safety in Machining | Machine hazards | MCQ | The MOST common cause of workshop injuries is: | Sharp tools | Poor lighting | Human error | Machine colour | Clean floors | C | 1 | Understand
+220 | KM-03 | KT0803 | Safety in Machining | Machine hazards | TF | Distractions increase the risk of accidents. | True | False |  |  |  | A | 1 | Understand
+221 | KM-03 | KT0803 | Safety in Machining | Machine hazards | MCQ | Guards on machines are designed to: | Increase speed | Protect the operator | Reduce accuracy | Store tools | Improve finish | B | 1 | Remember
+222 | KM-03 | KT0803 | Safety in Machining | Machine hazards | TF | Machine guards must always be in place during operation. | True | False |  |  |  | A | 1 | Apply
+223 | KM-03 | KT0804 | Safety in Machining | Lockout/Tagout | MCQ | Lockout/Tagout is used to: | Increase machine speed | Prevent accidental start-up | Reduce coolant use | Improve finish | Change tools faster | B | 1 | Understand
+224 | KM-03 | KT0804 | Safety in Machining | Lockout/Tagout | TF | Machines must be isolated before maintenance. | True | False |  |  |  | A | 1 | Apply
+225 | KM-03 | KT0804 | Safety in Machining | Lockout/Tagout | MCQ | A lockout device is placed on: | The toolpost | The power switch | The coolant tank | The chuck | The vice | B | 1 | Remember
+226 | KM-03 | KT0804 | Safety in Machining | Lockout/Tagout | TF | Only authorised personnel may remove lockout devices. | True | False |  |  |  | A | 1 | Understand
+227 | KM-03 | KT0805 | Safety in Machining | Safe practices | MCQ | Swarf must be removed using: | Hands | Compressed air | A brush or hook | Gloves | A rag | C | 1 | Apply
+228 | KM-03 | KT0805 | Safety in Machining | Safe practices | TF | Compressed air must NOT be used to clean clothing. | True | False |  |  |  | A | 1 | Remember
+229 | KM-03 | KT0805 | Safety in Machining | Safe practices | MCQ | Before adjusting a machine, the operator must: | Increase speed | Stop the machine | Remove PPE | Add coolant | Change the tool | B | 1 | Apply
+230 | KM-03 | KT0805 | Safety in Machining | Safe practices | TF | Machines must come to a complete stop before measurements are taken. | True | False |  |  |  | A | 1 | Apply
+231 | KM-03 | KT0806 | Safety in Machining | Environment | MCQ | Slippery floors in a workshop are caused by: | Clean coolant | Oil spills | Good ventilation | PPE | Correct lighting | B | 1 | Understand
+232 | KM-03 | KT0806 | Safety in Machining | Environment | TF | Oil spills must be cleaned immediately. | True | False |  |  |  | A | 1 | Apply
+233 | KM-03 | KT0806 | Safety in Machining | Environment | MCQ | Good workshop lighting improves: | Tool wear | Accuracy and safety | Machine speed | Coolant flow | Noise levels | B | 1 | Understand
+234 | KM-03 | KT0806 | Safety in Machining | Environment | TF | Poor lighting increases the risk of mistakes. | True | False |  |  |  | A | 1 | Understand
+235 | KM-03 | KT0807 | Safety in Machining | Fire safety | MCQ | The correct extinguisher for electrical fires is: | Water | Foam | CO? | Sand | Oil | C | 1 | Remember
+236 | KM-03 | KT0807 | Safety in Machining | Fire safety | TF | Water must never be used on electrical fires. | True | False |  |  |  | A | 1 | Remember
+237 | KM-03 | KT0807 | Safety in Machining | Fire safety | MCQ | Flammable liquids must be stored in: | Open containers | Any cupboard | Approved safety cabinets | Plastic bags | On the floor | C | 1 | Understand
+238 | KM-03 | KT0807 | Safety in Machining | Fire safety | TF | Sparks from grinding can ignite flammable materials. | True | False |  |  |  | A | 1 | Apply
+239 | KM-03 | KT0808 | Safety in Machining | Behaviour | MCQ | Running or horseplay in the workshop is: | Acceptable | Sometimes allowed | Strictly prohibited | Encouraged | Safe | C | 1 | Remember
+240 | KM-03 | KT0808 | Safety in Machining | Behaviour | TF | Only trained operators may use machine tools. | True | False |  |  |  | A | 1 | Understand
+1 | KM-04 | KT0101 | Hand Tools | Identification | MCQ | Which tool is used for tightening and loosening nuts and bolts? | File | Hammer | Spanner | Chisel | Hacksaw | C | 1 | Remember
+2 | KM-04 | KT0101 | Hand Tools | Identification | TF | A combination spanner has an open end and a ring end. | True | False |  |  |  | A | 1 | Understand
+3 | KM-04 | KT0101 | Hand Tools | Identification | MCQ | A ball?peen hammer is mainly used for: | Woodworking | Metalworking | Cutting | Measuring | Welding | B | 1 | Understand
+4 | KM-04 | KT0101 | Hand Tools | Identification | TF | A ball?peen hammer is commonly used for riveting. | True | False |  |  |  | A | 1 | Apply
+5 | KM-04 | KT0102 | Hand Tools | Files | MCQ | A flat file is used for: | Internal holes | Curved surfaces | General metal filing | Cutting threads | Measuring | C | 1 | Understand
+6 | KM-04 | KT0102 | Hand Tools | Files | TF | A half?round file can be used on both flat and curved surfaces. | True | False |  |  |  | A | 1 | Understand
+7 | KM-04 | KT0102 | Hand Tools | Files | MCQ | The coarseness of a file is called its: | Pitch | Cut | Grade | Angle | Pattern | B | 1 | Remember
+8 | KM-04 | KT0102 | Hand Tools | Files | TF | A bastard cut file is coarser than a second cut file. | True | False |  |  |  | A | 1 | Understand
+9 | KM-04 | KT0103 | Hand Tools | Saws | MCQ | A hacksaw is used for cutting: | Wood | Plastic only | Metal | Rubber | Glass | C | 1 | Remember
+10 | KM-04 | KT0103 | Hand Tools | Saws | TF | Hacksaw blades with more teeth per inch are used for thin materials. | True | False |  |  |  | A | 1 | Apply
+11 | KM-04 | KT0103 | Hand Tools | Saws | MCQ | The correct hacksaw blade tension should be: | Loose | Very tight | Slightly tight | No tension | Random | B | 1 | Understand
+12 | KM-04 | KT0103 | Hand Tools | Saws | TF | A loose hacksaw blade can break easily. | True | False |  |  |  | A | 1 | Understand
+13 | KM-04 | KT0104 | Hand Tools | Chisels | MCQ | A cold chisel is used for: | Wood | Plastic | Cutting metal | Cutting glass | Measuring | C | 1 | Remember
+14 | KM-04 | KT0104 | Hand Tools | Chisels | TF | The cutting edge of a cold chisel must be kept sharp. | True | False |  |  |  | A | 1 | Apply
+15 | KM-04 | KT0104 | Hand Tools | Chisels | MCQ | The angle of a cold chisel cutting edge is typically: | 10¯ | 30¯ | 60¯ | 90¯ | 120¯ | C | 1 | Understand
+16 | KM-04 | KT0104 | Hand Tools | Chisels | TF | A mushroomed chisel head is dangerous and must be ground smooth. | True | False |  |  |  | A | 1 | Apply
+17 | KM-04 | KT0105 | Hand Tools | Pliers | MCQ | Combination pliers are used for: | Cutting only | Gripping and cutting | Measuring | Filing | Drilling | B | 1 | Understand
+18 | KM-04 | KT0105 | Hand Tools | Pliers | TF | Side cutters are designed for cutting wire. | True | False |  |  |  | A | 1 | Remember
+19 | KM-04 | KT0105 | Hand Tools | Pliers | MCQ | Long?nose pliers are ideal for: | Heavy cutting | Reaching into tight spaces | Hammering | Filing | Drilling | B | 1 | Understand
+20 | KM-04 | KT0105 | Hand Tools | Pliers | TF | Pliers should not be used as a substitute for spanners. | True | False |  |  |  | A | 1 | Apply
+21 | KM-04 | KT0106 | Hand Tools | Wrenches | MCQ | An adjustable wrench is also known as a: | Monkey wrench | Pipe wrench | Torque wrench | Allen key | Socket | A | 1 | Remember
+22 | KM-04 | KT0106 | Hand Tools | Wrenches | TF | Adjustable wrenches must be tightened properly to avoid slipping. | True | False |  |  |  | A | 1 | Apply
+23 | KM-04 | KT0106 | Hand Tools | Wrenches | MCQ | A torque wrench is used to: | Measure length | Apply specific torque | Cut threads | Remove rust | Measure angles | B | 1 | Understand
+24 | KM-04 | KT0106 | Hand Tools | Wrenches | TF | Over?tightening bolts can cause thread damage. | True | False |  |  |  | A | 1 | Understand
+25 | KM-04 | KT0107 | Hand Tools | Safety | MCQ | Which action is unsafe when using hand tools? | Using correct tool | Keeping tools clean | Using damaged tools | Wearing PPE | Storing tools properly | C | 1 | Remember
+26 | KM-04 | KT0107 | Hand Tools | Safety | TF | Damaged tools must be repaired or removed from service. | True | False |  |  |  | A | 1 | Apply
+27 | KM-04 | KT0107 | Hand Tools | Safety | MCQ | Tools must be passed to another person: | By throwing | By sliding | Handle first | Sharp end first | Any method | C | 1 | Understand
+28 | KM-04 | KT0107 | Hand Tools | Safety | TF | Using the wrong tool for a job increases the risk of injury. | True | False |  |  |  | A | 1 | Understand
+29 | KM-04 | KT0108 | Hand Tools | Maintenance | MCQ | Files should be cleaned using a: | Wire brush | File card | Cloth | Screwdriver | Sandpaper | B | 1 | Remember
+30 | KM-04 | KT0108 | Hand Tools | Maintenance | TF | Tools must be stored in a dry place to prevent rust. | True | False |  |  |  | A | 1 | Apply
+31 | KM-04 | KT0201 | Measuring Tools | Steel rule | MCQ | A steel rule is used to measure: | Internal diameters | External diameters | Straight lengths | Depth only | Angles | C | 1 | Remember
+32 | KM-04 | KT0201 | Measuring Tools | Steel rule | TF | A steel rule must be read with the eye directly above the scale to avoid parallax error. | True | False |  |  |  | A | 1 | Understand
+33 | KM-04 | KT0201 | Measuring Tools | Steel rule | MCQ | The smallest division on a standard metric steel rule is: | 10 mm | 5 mm | 1 mm | 0.5 mm | 0.1 mm | C | 1 | Remember
+34 | KM-04 | KT0201 | Measuring Tools | Steel rule | TF | A steel rule can be used as a straightedge. | True | False |  |  |  | A | 1 | Apply
+35 | KM-04 | KT0202 | Measuring Tools | Vernier caliper | MCQ | A vernier caliper can measure: | Only outside diameters | Only inside diameters | Inside, outside and depth | Only depth | Only length | C | 1 | Understand
+36 | KM-04 | KT0202 | Measuring Tools | Vernier caliper | TF | Vernier calipers provide more accuracy than steel rules. | True | False |  |  |  | A | 1 | Understand
+37 | KM-04 | KT0202 | Measuring Tools | Vernier caliper | MCQ | The accuracy of a standard vernier caliper is typically: | 1 mm | 0.5 mm | 0.1 mm | 0.02 mm | 0.001 mm | D | 1 | Remember
+38 | KM-04 | KT0202 | Measuring Tools | Vernier caliper | TF | Vernier calipers must be zeroed before use. | True | False |  |  |  | A | 1 | Apply
+39 | KM-04 | KT0203 | Measuring Tools | Micrometer | MCQ | A micrometer screw gauge is used for: | Rough measurements | High?precision measurements | Measuring angles | Measuring weight | Measuring hardness | B | 1 | Understand
+40 | KM-04 | KT0203 | Measuring Tools | Micrometer | TF | A micrometer typically has an accuracy of 0.01 mm. | True | False |  |  |  | A | 1 | Remember
+41 | KM-04 | KT0203 | Measuring Tools | Micrometer | MCQ | The ratchet stop on a micrometer is used to: | Lock the spindle | Apply consistent measuring force | Increase accuracy automatically | Change units | Adjust the anvil | B | 1 | Understand
+42 | KM-04 | KT0203 | Measuring Tools | Micrometer | TF | Excessive force when using a micrometer can damage the tool. | True | False |  |  |  | A | 1 | Apply
+43 | KM-04 | KT0204 | Measuring Tools | Feeler gauges | MCQ | Feeler gauges are used to measure: | Length | Diameter | Small gaps or clearances | Angles | Depth | C | 1 | Remember
+44 | KM-04 | KT0204 | Measuring Tools | Feeler gauges | TF | Feeler gauges consist of thin metal blades of known thickness. | True | False |  |  |  | A | 1 | Understand
+45 | KM-04 | KT0204 | Measuring Tools | Feeler gauges | MCQ | Feeler gauges are commonly used when setting: | Speeds | Feeds | Valve clearances | Cutting angles | Tool height | C | 1 | Apply
+46 | KM-04 | KT0204 | Measuring Tools | Feeler gauges | TF | Feeler gauges must be kept clean and free of rust. | True | False |  |  |  | A | 1 | Apply
+47 | KM-04 | KT0205 | Measuring Tools | Dial indicators | MCQ | A dial indicator is used to measure: | Weight | Pressure | Small linear deviations | Temperature | Hardness | C | 1 | Understand
+48 | KM-04 | KT0205 | Measuring Tools | Dial indicators | TF | Dial indicators are often used for alignment tasks. | True | False |  |  |  | A | 1 | Apply
+49 | KM-04 | KT0205 | Measuring Tools | Dial indicators | MCQ | A dial indicator must be mounted on a: | Hammer | Magnetic stand | File | Spanner | Drill chuck | B | 1 | Remember
+50 | KM-04 | KT0205 | Measuring Tools | Dial indicators | TF | The plunger of a dial indicator must move smoothly without sticking. | True | False |  |  |  | A | 1 | Understand
+51 | KM-04 | KT0206 | Measuring Tools | Gauges | MCQ | A go/no?go gauge is used to check: | Exact size | Acceptable limits | Surface finish | Hardness | Angle | B | 1 | Understand
+52 | KM-04 | KT0206 | Measuring Tools | Gauges | TF | A go/no?go gauge provides a quick pass/fail result. | True | False |  |  |  | A | 1 | Remember
+53 | KM-04 | KT0206 | Measuring Tools | Gauges | MCQ | A thread gauge is used to measure: | Thread pitch | Diameter only | Surface finish | Hardness | Length | A | 1 | Understand
+54 | KM-04 | KT0206 | Measuring Tools | Gauges | TF | Thread gauges help identify the correct bolt or nut. | True | False |  |  |  | A | 1 | Apply
+55 | KM-04 | KT0207 | Measuring Tools | Safety | MCQ | Measuring tools must be handled: | Roughly | With care | With oil | With gloves only | Without cleaning | B | 1 | Remember
+56 | KM-04 | KT0207 | Measuring Tools | Safety | TF | Dropping precision tools can affect their accuracy. | True | False |  |  |  | A | 1 | Understand
+57 | KM-04 | KT0207 | Measuring Tools | Safety | MCQ | Precision tools should be stored in: | Open boxes | Damp areas | Protective cases | On the floor | In coolant | C | 1 | Apply
+58 | KM-04 | KT0207 | Measuring Tools | Safety | TF | Measuring tools must be kept clean and free from oil and dirt. | True | False |  |  |  | A | 1 | Apply
+59 | KM-04 | KT0208 | Measuring Tools | Calibration | MCQ | Calibration ensures that a measuring tool: | Looks new | Measures accurately | Is easier to use | Is cheaper | Is faster | B | 1 | Understand
+60 | KM-04 | KT0208 | Measuring Tools | Calibration | TF | Precision tools must be calibrated regularly to maintain accuracy. | True | False |  |  |  | A | 1 | Remember
+61 | KM-04 | KT0301 | Power Tools | Drills | MCQ | A portable electric drill is mainly used for: | Filing | Drilling holes | Cutting metal | Measuring | Sanding | B | 1 | Remember
+62 | KM-04 | KT0301 | Power Tools | Drills | TF | Drill bits must be tightened securely in the chuck. | True | False |  |  |  | A | 1 | Apply
+63 | KM-04 | KT0301 | Power Tools | Drills | MCQ | The correct drill bit for metal is: | Wood bit | Masonry bit | HSS bit | Spade bit | Tile bit | C | 1 | Understand
+64 | KM-04 | KT0301 | Power Tools | Drills | TF | A pilot hole helps prevent drill wandering. | True | False |  |  |  | A | 1 | Apply
+65 | KM-04 | KT0302 | Power Tools | Grinders | MCQ | An angle grinder is commonly used for: | Measuring | Cutting and grinding | Painting | Drilling | Filing | B | 1 | Remember
+66 | KM-04 | KT0302 | Power Tools | Grinders | TF | Grinding discs must match the grinder?s speed rating. | True | False |  |  |  | A | 1 | Understand
+67 | KM-04 | KT0302 | Power Tools | Grinders | MCQ | A cutting disc is: | Thick and strong | Thin and brittle | Used for polishing | Used for drilling | Used for sanding | B | 1 | Understand
+68 | KM-04 | KT0302 | Power Tools | Grinders | TF | Cutting discs must never be used for side grinding. | True | False |  |  |  | A | 1 | Apply
+69 | KM-04 | KT0303 | Power Tools | Sanders | MCQ | A belt sander is used for: | Drilling | Heavy material removal | Cutting steel | Measuring | Threading | B | 1 | Understand
+70 | KM-04 | KT0303 | Power Tools | Sanders | TF | Orbital sanders are used for fine finishing. | True | False |  |  |  | A | 1 | Understand
+71 | KM-04 | KT0303 | Power Tools | Sanders | MCQ | Sandpaper grit number indicates: | Colour | Thickness | Coarseness | Weight | Temperature | C | 1 | Remember
+72 | KM-04 | KT0303 | Power Tools | Sanders | TF | Higher grit numbers produce smoother finishes. | True | False |  |  |  | A | 1 | Understand
+73 | KM-04 | KT0304 | Power Tools | Saws | MCQ | A jigsaw is used for: | Straight cuts only | Curved and irregular cuts | Grinding | Drilling | Polishing | B | 1 | Understand
+74 | KM-04 | KT0304 | Power Tools | Saws | TF | Jigsaw blades must match the material being cut. | True | False |  |  |  | A | 1 | Apply
+75 | KM-04 | KT0304 | Power Tools | Saws | MCQ | A circular saw is mainly used for: | Cutting straight lines | Cutting curves | Grinding | Polishing | Drilling | A | 1 | Remember
+76 | KM-04 | KT0304 | Power Tools | Saws | TF | Circular saw blades must be installed with the teeth facing the correct direction. | True | False |  |  |  | A | 1 | Apply
+77 | KM-04 | KT0305 | Power Tools | Safety | MCQ | Before changing a power tool accessory, the operator must: | Increase speed | Switch off and unplug the tool | Add coolant | Wear gloves only | Tap the tool | B | 1 | Apply
+78 | KM-04 | KT0305 | Power Tools | Safety | TF | Power tools must never be adjusted while running. | True | False |  |  |  | A | 1 | Remember
+79 | KM-04 | KT0305 | Power Tools | Safety | MCQ | Loose clothing around power tools is: | Safe | Sometimes acceptable | Dangerous | Recommended | Required | C | 1 | Understand
+80 | KM-04 | KT0305 | Power Tools | Safety | TF | Sparks from grinders can ignite flammable materials. | True | False |  |  |  | A | 1 | Apply
+81 | KM-04 | KT0306 | Power Tools | Maintenance | MCQ | Power tool vents must be kept clean to prevent: | Noise | Overheating | Rust | Vibration | Speed loss | B | 1 | Understand
+82 | KM-04 | KT0306 | Power Tools | Maintenance | TF | Brushes in electric motors wear out over time. | True | False |  |  |  | A | 1 | Remember
+83 | KM-04 | KT0306 | Power Tools | Maintenance | MCQ | Damaged power tool cords must be: | Taped | Ignored | Replaced immediately | Painted | Bent | C | 1 | Apply
+84 | KM-04 | KT0306 | Power Tools | Maintenance | TF | Tools must be disconnected before maintenance. | True | False |  |  |  | A | 1 | Apply
+85 | KM-04 | KT0307 | Power Tools | Operation | MCQ | When drilling metal, the correct speed is generally: | High | Medium | Low | Random | Maximum | C | 1 | Understand
+86 | KM-04 | KT0307 | Power Tools | Operation | TF | Using too high a speed when drilling metal can burn the drill bit. | True | False |  |  |  | A | 1 | Apply
+87 | KM-04 | KT0307 | Power Tools | Operation | MCQ | When grinding, the operator should stand: | Directly in line with the wheel | Slightly to the side | Behind the grinder | On top of the grinder | Far away | B | 1 | Understand
+88 | KM-04 | KT0307 | Power Tools | Operation | TF | A grinder must reach full speed before contacting the workpiece. | True | False |  |  |  | A | 1 | Apply
+89 | KM-04 | KT0307 | Power Tools | Operation | MCQ | When using a jigsaw, the workpiece must be: | Held loosely | Unsupported | Clamped securely | Held by hand | Suspended | C | 1 | Apply
+90 | KM-04 | KT0307 | Power Tools | Operation | TF | Power tools must always be used with both hands when required by design. | True | False |  |  |  | A | 1 | Understand
+91 | KM-04 | KT0401 | Workshop Practice & Safety | Housekeeping | MCQ | Good workshop housekeeping helps to: | Increase noise | Reduce accidents | Slow production | Damage tools | Increase heat | B | 1 | Understand
+92 | KM-04 | KT0401 | Workshop Practice & Safety | Housekeeping | TF | Tools must be returned to their proper storage place after use. | True | False |  |  |  | A | 1 | Apply
+93 | KM-04 | KT0401 | Workshop Practice & Safety | Housekeeping | MCQ | Spilled oil on the floor creates a: | Fire hazard only | Slip hazard | Noise hazard | Lighting hazard | None | B | 1 | Understand
+94 | KM-04 | KT0401 | Workshop Practice & Safety | Housekeeping | TF | Floors must be kept clean and free of obstacles. | True | False |  |  |  | A | 1 | Apply
+95 | KM-04 | KT0402 | Workshop Practice & Safety | Behaviour | MCQ | Running in the workshop is: | Allowed | Sometimes allowed | Strictly prohibited | Encouraged | Safe | C | 1 | Remember
+96 | KM-04 | KT0402 | Workshop Practice & Safety | Behaviour | TF | Horseplay can lead to serious injuries. | True | False |  |  |  | A | 1 | Understand
+97 | KM-04 | KT0402 | Workshop Practice & Safety | Behaviour | MCQ | Eating or drinking in the workshop is: | Allowed | Safe | Not allowed | Encouraged | Required | C | 1 | Understand
+98 | KM-04 | KT0402 | Workshop Practice & Safety | Behaviour | TF | Only trained operators may use workshop machinery. | True | False |  |  |  | A | 1 | Remember
+99 | KM-04 | KT0403 | Workshop Practice & Safety | Emergency procedures | MCQ | The first action in case of fire is to: | Run away | Panic | Raise the alarm | Ignore it | Add water | C | 1 | Understand
+100 | KM-04 | KT0403 | Workshop Practice & Safety | Emergency procedures | TF | Fire extinguishers must be used only if it is safe to do so. | True | False |  |  |  | A | 1 | Apply
+101 | KM-04 | KT0403 | Workshop Practice & Safety | Emergency procedures | MCQ | The correct extinguisher for electrical fires is: | Water | Foam | CO? | Sand | Oil | C | 1 | Remember
+102 | KM-04 | KT0403 | Workshop Practice & Safety | Emergency procedures | TF | Water must never be used on electrical fires. | True | False |  |  |  | A | 1 | Remember
+103 | KM-04 | KT0404 | Workshop Practice & Safety | Tool care | MCQ | Tools must be stored in: | Damp areas | Dirty boxes | Clean, dry places | On the floor | In coolant | C | 1 | Understand
+104 | KM-04 | KT0404 | Workshop Practice & Safety | Tool care | TF | Rust can damage hand tools and reduce accuracy. | True | False |  |  |  | A | 1 | Understand
+105 | KM-04 | KT0404 | Workshop Practice & Safety | Tool care | MCQ | Damaged tools must be: | Repaired or removed from service | Used anyway | Painted | Ignored | Hidden | A | 1 | Apply
+106 | KM-04 | KT0404 | Workshop Practice & Safety | Tool care | TF | Tools must be inspected before use. | True | False |  |  |  | A | 1 | Apply
+107 | KM-04 | KT0405 | Workshop Practice & Safety | Safe handling | MCQ | Heavy objects must be lifted using: | Back muscles only | Proper lifting techniques | One hand | Fast movements | Twisting motions | B | 1 | Understand
+108 | KM-04 | KT0405 | Workshop Practice & Safety | Safe handling | TF | Bending your knees helps prevent back injuries. | True | False |  |  |  | A | 1 | Apply
+109 | KM-04 | KT0405 | Workshop Practice & Safety | Safe handling | MCQ | Sharp tools must be carried: | Pointing forward | Pointing upward | Pointing downward | In pockets | In hands loosely | C | 1 | Understand
+110 | KM-04 | KT0405 | Workshop Practice & Safety | Safe handling | TF | Tools must never be thrown to another person. | True | False |  |  |  | A | 1 | Remember
+111 | KM-04 | KT0406 | Workshop Practice & Safety | Environment | MCQ | Good workshop ventilation helps reduce: | Noise | Dust and fumes | Tool wear | Lighting | Accuracy | B | 1 | Understand
+112 | KM-04 | KT0406 | Workshop Practice & Safety | Environment | TF | Poor ventilation can cause breathing problems. | True | False |  |  |  | A | 1 | Understand
+113 | KM-04 | KT0406 | Workshop Practice & Safety | Environment | MCQ | Adequate lighting improves: | Accuracy and safety | Noise levels | Machine speed | Coolant flow | Tool colour | A | 1 | Understand
+114 | KM-04 | KT0406 | Workshop Practice & Safety | Environment | TF | Poor lighting increases the risk of mistakes. | True | False |  |  |  | A | 1 | Understand
+115 | KM-04 | KT0407 | Workshop Practice & Safety | Electrical safety | MCQ | Damaged electrical cords must be: | Taped | Ignored | Replaced immediately | Painted | Bent | C | 1 | Apply
+116 | KM-04 | KT0407 | Workshop Practice & Safety | Electrical safety | TF | Machines must be switched off before plugging or unplugging tools. | True | False |  |  |  | A | 1 | Apply
+117 | KM-04 | KT0407 | Workshop Practice & Safety | Electrical safety | MCQ | Water near electrical equipment is: | Safe | Acceptable | Dangerous | Recommended | Required | C | 1 | Understand
+118 | KM-04 | KT0407 | Workshop Practice & Safety | Electrical safety | TF | Electrical panels must only be opened by authorised personnel. | True | False |  |  |  | A | 1 | Remember
+119 | KM-04 | KT0408 | Workshop Practice & Safety | General rules | MCQ | The MOST important workshop rule is: | Work fast | Ignore PPE | Follow safety procedures | Use any tool | Leave tools lying around | C | 1 | Understand
+120 | KM-04 | KT0408 | Workshop Practice & Safety | General rules | TF | Safety rules protect both the operator and others in the workshop. | True | False |  |  |  | A | 1 | Understand
+121 | KM-04 | KT0501 | Tool Sharpening & Maintenance | Files | MCQ | A file is sharpened by: | Grinding | Filing | Using a file card | Replacing it | Heating it | C | 1 | Remember
+122 | KM-04 | KT0501 | Tool Sharpening & Maintenance | Files | TF | Files cannot be sharpened once worn out. | True | False |  |  |  | A | 1 | Understand
+123 | KM-04 | KT0501 | Tool Sharpening & Maintenance | Files | MCQ | A clogged file is cleaned using a: | Wire brush | File card | Cloth | Sandpaper | Screwdriver | B | 1 | Apply
+124 | KM-04 | KT0501 | Tool Sharpening & Maintenance | Files | TF | A file should never be used without a handle. | True | False |  |  |  | A | 1 | Apply
+125 | KM-04 | KT0502 | Tool Sharpening & Maintenance | Chisels | MCQ | The correct grinding angle for a cold chisel is approximately: | 10¯ | 30¯ | 60¯ | 90¯ | 120¯ | C | 1 | Remember
+126 | KM-04 | KT0502 | Tool Sharpening & Maintenance | Chisels | TF | A chisel edge must be cooled frequently during grinding. | True | False |  |  |  | A | 1 | Apply
+127 | KM-04 | KT0502 | Tool Sharpening & Maintenance | Chisels | MCQ | Overheating a chisel edge causes: | Hardening | Softening | Sharpening | Straightening | No effect | B | 1 | Understand
+128 | KM-04 | KT0502 | Tool Sharpening & Maintenance | Chisels | TF | A blue colour on a chisel edge indicates overheating. | True | False |  |  |  | A | 1 | Understand
+129 | KM-04 | KT0503 | Tool Sharpening & Maintenance | Drill bits | MCQ | A drill bit is sharpened on a: | Bench grinder | Belt sander | Hacksaw | File | Lathe | A | 1 | Remember
+130 | KM-04 | KT0503 | Tool Sharpening & Maintenance | Drill bits | TF | Drill bits must be sharpened symmetrically on both sides. | True | False |  |  |  | A | 1 | Apply
+131 | KM-04 | KT0503 | Tool Sharpening & Maintenance | Drill bits | MCQ | The point angle of a standard twist drill is: | 59¯ | 90¯ | 118¯ | 135¯ | 150¯ | C | 1 | Understand
+132 | KM-04 | KT0503 | Tool Sharpening & Maintenance | Drill bits | TF | A poorly sharpened drill bit can cause wandering and overheating. | True | False |  |  |  | A | 1 | Apply
+133 | KM-04 | KT0504 | Tool Sharpening & Maintenance | Grinding | MCQ | A grinding wheel must be: | Loose | Unbalanced | Ring-tested | Painted | Heated | C | 1 | Remember
+134 | KM-04 | KT0504 | Tool Sharpening & Maintenance | Grinding | TF | A cracked grinding wheel must never be used. | True | False |  |  |  | A | 1 | Remember
+135 | KM-04 | KT0504 | Tool Sharpening & Maintenance | Grinding | MCQ | Dressing a grinding wheel: | Sharpens tools | Cleans and reshapes the wheel | Cools the wheel | Removes rust | Changes colour | B | 1 | Understand
+136 | KM-04 | KT0504 | Tool Sharpening & Maintenance | Grinding | TF | A diamond dresser is commonly used for wheel dressing. | True | False |  |  |  | A | 1 | Remember
+137 | KM-04 | KT0505 | Tool Sharpening & Maintenance | Maintenance | MCQ | Tools must be stored in: | Damp areas | Dirty boxes | Clean, dry places | On the floor | In coolant | C | 1 | Understand
+138 | KM-04 | KT0505 | Tool Sharpening & Maintenance | Maintenance | TF | Rust can damage tools and reduce accuracy. | True | False |  |  |  | A | 1 | Understand
+139 | KM-04 | KT0505 | Tool Sharpening & Maintenance | Maintenance | MCQ | Wooden handles must be checked for: | Colour | Cracks and looseness | Weight | Temperature | Length | B | 1 | Apply
+140 | KM-04 | KT0505 | Tool Sharpening & Maintenance | Maintenance | TF | Loose hammer handles must be repaired or replaced immediately. | True | False |  |  |  | A | 1 | Apply
+141 | KM-04 | KT0506 | Tool Sharpening & Maintenance | Safe handling | MCQ | When grinding, the operator should stand: | Directly in front of the wheel | Slightly to the side | Behind the grinder | On top of the grinder | Far away | B | 1 | Understand
+142 | KM-04 | KT0506 | Tool Sharpening & Maintenance | Safe handling | TF | A grinder must reach full speed before contacting the tool. | True | False |  |  |  | A | 1 | Apply
+143 | KM-04 | KT0506 | Tool Sharpening & Maintenance | Safe handling | MCQ | Sparks from grinding must be directed: | Toward operator | Toward flammable materials | Away from operator | Upwards | Into coolant | C | 1 | Apply
+144 | KM-04 | KT0506 | Tool Sharpening & Maintenance | Safe handling | TF | Gloves must NOT be worn when using a grinder. | True | False |  |  |  | A | 1 | Remember
+145 | KM-04 | KT0507 | Tool Sharpening & Maintenance | Tool care | MCQ | Cutting tools must be lubricated to prevent: | Rust | Overheating | Wear | All of the above | None | D | 1 | Understand
+146 | KM-04 | KT0507 | Tool Sharpening & Maintenance | Tool care | TF | Oil stones are used for fine sharpening. | True | False |  |  |  | A | 1 | Remember
+147 | KM-04 | KT0507 | Tool Sharpening & Maintenance | Tool care | MCQ | A blunt tool increases: | Accuracy | Safety | Cutting force | Tool life | Surface finish | C | 1 | Understand
+148 | KM-04 | KT0507 | Tool Sharpening & Maintenance | Tool care | TF | Sharp tools reduce the risk of slipping and injury. | True | False |  |  |  | A | 1 | Apply
+149 | KM-04 | KT0508 | Tool Sharpening & Maintenance | Inspection | MCQ | Tools must be inspected: | Only when broken | Before and after use | Once a year | Only by supervisors | Never | B | 1 | Apply
+150 | KM-04 | KT0508 | Tool Sharpening & Maintenance | Inspection | TF | Regular inspection helps prevent accidents and tool failure. | True | False |  |  |  | A | 1 | Understand
+151 | KM-04 | KT0601 | Practical Skills | Marking-off | MCQ | A scriber is used to: | Measure angles | Mark lines on metal | Cut metal | Drill holes | Remove burrs | B | 1 | Remember
+152 | KM-04 | KT0601 | Practical Skills | Marking-off | TF | A scriber produces fine, accurate lines on metal surfaces. | True | False |  |  |  | A | 1 | Understand
+153 | KM-04 | KT0601 | Practical Skills | Marking-off | MCQ | A centre punch is used to: | Remove rust | Mark drill starting points | Measure depth | Cut threads | File edges | B | 1 | Apply
+154 | KM-04 | KT0601 | Practical Skills | Marking-off | TF | Centre punch marks help prevent drill wandering. | True | False |  |  |  | A | 1 | Apply
+155 | KM-04 | KT0602 | Practical Skills | Cutting | MCQ | A hacksaw should be used with: | Fast, short strokes | Slow, long strokes | Random strokes | No pressure | Circular motion | B | 1 | Understand
+156 | KM-04 | KT0602 | Practical Skills | Cutting | TF | The correct cutting action with a hacksaw is to apply pressure on the forward stroke only. | True | False |  |  |  | A | 1 | Apply
+157 | KM-04 | KT0602 | Practical Skills | Cutting | MCQ | When cutting metal, the workpiece must be: | Held by hand | Clamped securely | Suspended freely | Placed on the floor | Held loosely | B | 1 | Apply
+158 | KM-04 | KT0602 | Practical Skills | Cutting | TF | Loose workpieces can cause blade breakage. | True | False |  |  |  | A | 1 | Understand
+159 | KM-04 | KT0603 | Practical Skills | Drilling | MCQ | Before drilling, the operator must: | Increase speed | Secure the workpiece | Remove PPE | Use maximum feed | Tap the drill | B | 1 | Apply
+160 | KM-04 | KT0603 | Practical Skills | Drilling | TF | Drilling metal requires lower speeds than drilling wood. | True | False |  |  |  | A | 1 | Understand
+161 | KM-04 | KT0603 | Practical Skills | Drilling | MCQ | Cutting fluid is used during drilling to: | Increase friction | Reduce heat and wear | Increase noise | Reduce accuracy | Harden the drill | B | 1 | Understand
+162 | KM-04 | KT0603 | Practical Skills | Drilling | TF | A blunt drill bit can cause overheating and poor accuracy. | True | False |  |  |  | A | 1 | Apply
+163 | KM-04 | KT0604 | Practical Skills | Tapping | MCQ | A tap is used to: | Cut external threads | Cut internal threads | Drill holes | Measure pitch | Remove burrs | B | 1 | Remember
+164 | KM-04 | KT0604 | Practical Skills | Tapping | TF | Tapping requires frequent reversing to break chips. | True | False |  |  |  | A | 1 | Apply
+165 | KM-04 | KT0604 | Practical Skills | Tapping | MCQ | The correct tool for holding a tap is a: | Spanner | Tap wrench | Pliers | Hammer | Drill chuck | B | 1 | Understand
+166 | KM-04 | KT0604 | Practical Skills | Tapping | TF | Using oil during tapping reduces friction and tool breakage. | True | False |  |  |  | A | 1 | Apply
+167 | KM-04 | KT0605 | Practical Skills | Assembly | MCQ | When assembling components, bolts should be tightened: | Randomly | Evenly and in sequence | As tight as possible | Without washers | With pliers | B | 1 | Apply
+168 | KM-04 | KT0605 | Practical Skills | Assembly | TF | Over?tightening bolts can strip threads. | True | False |  |  |  | A | 1 | Understand
+169 | KM-04 | KT0605 | Practical Skills | Assembly | MCQ | Washers are used to: | Increase friction | Distribute load | Reduce bolt length | Increase torque | Replace nuts | B | 1 | Understand
+170 | KM-04 | KT0605 | Practical Skills | Assembly | TF | Spring washers help prevent nuts from loosening. | True | False |  |  |  | A | 1 | Remember
+171 | KM-04 | KT0606 | Practical Skills | Accuracy | MCQ | Accuracy in practical work depends on: | Correct tools | Proper technique | Good measurement | All of the above | None | D | 1 | Understand
+172 | KM-04 | KT0606 | Practical Skills | Accuracy | TF | Accurate marking-off improves final assembly quality. | True | False |  |  |  | A | 1 | Understand
+173 | KM-04 | KT0606 | Practical Skills | Accuracy | MCQ | Burrs on a workpiece should be removed using a: | Hammer | File | Spanner | Drill | Punch | B | 1 | Apply
+174 | KM-04 | KT0606 | Practical Skills | Accuracy | TF | Burrs can affect measurement accuracy. | True | False |  |  |  | A | 1 | Understand
+175 | KM-04 | KT0607 | Practical Skills | Safe practice | MCQ | Before using any tool, the operator must: | Ignore defects | Inspect the tool | Throw it | Use maximum force | Remove PPE | B | 1 | Apply
+176 | KM-04 | KT0607 | Practical Skills | Safe practice | TF | Damaged tools increase the risk of accidents. | True | False |  |  |  | A | 1 | Understand
+177 | KM-04 | KT0607 | Practical Skills | Safe practice | MCQ | When cutting or drilling, safety glasses must be worn to protect: | Hands | Feet | Eyes | Ears | Clothing | C | 1 | Remember
+178 | KM-04 | KT0607 | Practical Skills | Safe practice | TF | PPE must be worn according to workshop rules. | True | False |  |  |  | A | 1 | Remember
+179 | KM-04 | KT0608 | Practical Skills | Applications | MCQ | Marking-off blue is used to: | Cool metal | Improve visibility of lines | Remove rust | Harden surfaces | Reduce friction | B | 1 | Understand
+180 | KM-04 | KT0608 | Practical Skills | Applications | TF | Marking-off blue helps produce more accurate layout lines. | True | False |  |  |  | A | 1 | Apply
+181 | KM-04 | KT0701 | Power Tool Safety | Regulations | MCQ | Power tools must comply with: | Personal preference | National safety standards | Workshop rules only | Operator judgement | No regulations | B | 1 | Understand
+182 | KM-04 | KT0701 | Power Tool Safety | Regulations | TF | Only approved and certified power tools may be used in training workshops. | True | False |  |  |  | A | 1 | Remember
+183 | KM-04 | KT0701 | Power Tool Safety | Regulations | MCQ | The purpose of safety regulations is to: | Slow work | Increase risk | Protect operators | Reduce accuracy | Increase noise | C | 1 | Understand
+184 | KM-04 | KT0701 | Power Tool Safety | Regulations | TF | Operators must follow manufacturer instructions at all times. | True | False |  |  |  | A | 1 | Apply
+185 | KM-04 | KT0702 | Power Tool Safety | Inspections | MCQ | Power tools must be inspected: | Once a year | Before each use | Only when broken | Only by supervisors | Never | B | 1 | Apply
+186 | KM-04 | KT0702 | Power Tool Safety | Inspections | TF | Damaged tools must be removed from service immediately. | True | False |  |  |  | A | 1 | Apply
+187 | KM-04 | KT0702 | Power Tool Safety | Inspections | MCQ | A frayed power cord is a: | Minor issue | Cosmetic defect | Serious electrical hazard | Normal condition | Acceptable risk | C | 1 | Understand
+188 | KM-04 | KT0702 | Power Tool Safety | Inspections | TF | Tools with missing guards must not be used. | True | False |  |  |  | A | 1 | Remember
+189 | KM-04 | KT0703 | Power Tool Safety | Risk control | MCQ | The MOST effective risk control measure is: | PPE | Training | Elimination of hazards | Warning signs | Slowing down | C | 1 | Understand
+190 | KM-04 | KT0703 | Power Tool Safety | Risk control | TF | PPE is the last line of defence against hazards. | True | False |  |  |  | A | 1 | Understand
+191 | KM-04 | KT0703 | Power Tool Safety | Risk control | MCQ | Guards on power tools are used to: | Increase speed | Protect the operator | Reduce accuracy | Store tools | Improve finish | B | 1 | Remember
+192 | KM-04 | KT0703 | Power Tool Safety | Risk control | TF | Guards must always be in place during operation. | True | False |  |  |  | A | 1 | Apply
+193 | KM-04 | KT0704 | Power Tool Safety | Electrical safety | MCQ | Electrical tools must be connected to: | Damaged sockets | Approved outlets | Loose wires | Extension cords only | Any available source | B | 1 | Understand
+194 | KM-04 | KT0704 | Power Tool Safety | Electrical safety | TF | Water near electrical tools increases the risk of shock. | True | False |  |  |  | A | 1 | Understand
+195 | KM-04 | KT0704 | Power Tool Safety | Electrical safety | MCQ | Before cleaning a power tool, it must be: | Running slowly | Unplugged | Heated | Oiled | Switched to maximum speed | B | 1 | Apply
+196 | KM-04 | KT0704 | Power Tool Safety | Electrical safety | TF | Only authorised personnel may repair electrical tools. | True | False |  |  |  | A | 1 | Remember
+197 | KM-04 | KT0705 | Power Tool Safety | Safe operation | MCQ | When using a grinder, the operator must stand: | Directly in line with the wheel | Slightly to the side | Behind the grinder | On top of the grinder | Far away | B | 1 | Apply
+198 | KM-04 | KT0705 | Power Tool Safety | Safe operation | TF | A grinder must reach full speed before contacting the workpiece. | True | False |  |  |  | A | 1 | Apply
+199 | KM-04 | KT0705 | Power Tool Safety | Safe operation | MCQ | Sparks from grinding must be directed: | Toward operator | Toward flammable materials | Away from operator | Upwards | Into coolant | C | 1 | Apply
+200 | KM-04 | KT0705 | Power Tool Safety | Safe operation | TF | Cutting discs must never be used for side grinding. | True | False |  |  |  | A | 1 | Remember
+201 | KM-04 | KT0706 | Power Tool Safety | PPE | MCQ | The MOST important PPE when grinding is: | Gloves | Safety glasses and face shield | Earplugs only | Apron | Hard hat | B | 1 | Understand
+202 | KM-04 | KT0706 | Power Tool Safety | PPE | TF | Eye protection is mandatory when using any power tool. | True | False |  |  |  | A | 1 | Remember
+203 | KM-04 | KT0706 | Power Tool Safety | PPE | MCQ | Hearing protection is required when noise levels: | Are low | Are comfortable | Exceed safe limits | Are unknown | Are ignored | C | 1 | Understand
+204 | KM-04 | KT0706 | Power Tool Safety | PPE | TF | PPE reduces but does not eliminate risk. | True | False |  |  |  | A | 1 | Understand
+205 | KM-04 | KT0707 | Power Tool Safety | Legal compliance | MCQ | Training records must be: | Ignored | Updated regularly | Destroyed | Hidden | Random | B | 1 | Understand
+206 | KM-04 | KT0707 | Power Tool Safety | Legal compliance | TF | Only trained and authorised persons may operate power tools. | True | False |  |  |  | A | 1 | Remember
+207 | KM-04 | KT0707 | Power Tool Safety | Legal compliance | MCQ | Safety signage must be: | Removed | Ignored | Clearly visible | Hidden | Optional | C | 1 | Understand
+208 | KM-04 | KT0707 | Power Tool Safety | Legal compliance | TF | Employers must provide safe equipment and training. | True | False |  |  |  | A | 1 | Understand
+209 | KM-04 | KT0708 | Power Tool Safety | Emergency response | MCQ | In case of an accident, the first step is to: | Panic | Continue working | Stop the machine | Ignore it | Remove PPE | C | 1 | Apply
+210 | KM-04 | KT0708 | Power Tool Safety | Emergency response | TF | All accidents must be reported, even minor ones. | True | False |  |  |  | A | 1 | Remember

@@ -1,0 +1,36 @@
+{
+  "name": "ETDP Walkthrough Part 1 - Foundations",
+  "initialDelayMs": 1200,
+  "steps": [
+    {
+      "title": "Dashboard Home",
+      "note": "Landing page with workflow cards and main navigation.",
+      "path": "/",
+      "waitMs": 2600
+    },
+    {
+      "title": "Qualifications",
+      "note": "Select or review qualification records.",
+      "path": "/qualifications",
+      "waitMs": 2400
+    },
+    {
+      "title": "Main Page",
+      "note": "Capture qualification metadata and save canonical details.",
+      "path": "/main",
+      "waitMs": 2600
+    },
+    {
+      "title": "Quality Council Curricula",
+      "note": "Upload and structure curriculum specification content.",
+      "path": "/quality-council-curricula",
+      "waitMs": 2400
+    },
+    {
+      "title": "Curriculum Phases",
+      "note": "Map phases to the selected qualification.",
+      "path": "/phases",
+      "waitMs": 2600
+    }
+  ]
+}

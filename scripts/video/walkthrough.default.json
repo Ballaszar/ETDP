@@ -1,0 +1,94 @@
+{
+  "name": "ETDP End-to-End Walkthrough",
+  "initialDelayMs": 1200,
+  "steps": [
+    {
+      "title": "Dashboard Home",
+      "note": "Landing page with workflow cards and main navigation.",
+      "path": "/",
+      "waitMs": 2500
+    },
+    {
+      "title": "Qualifications",
+      "note": "Select or review qualification records.",
+      "path": "/qualifications",
+      "waitMs": 2200
+    },
+    {
+      "title": "Main Page",
+      "note": "Capture qualification metadata and save canonical details.",
+      "path": "/main",
+      "waitMs": 2400
+    },
+    {
+      "title": "Quality Council Curricula",
+      "note": "Upload and structure curriculum specification content.",
+      "path": "/quality-council-curricula",
+      "waitMs": 2200
+    },
+    {
+      "title": "Curriculum Phases",
+      "note": "Map phases to the selected qualification.",
+      "path": "/phases",
+      "waitMs": 2200
+    },
+    {
+      "title": "Subjects",
+      "note": "Capture subjects or import from template.",
+      "path": "/subjects",
+      "waitMs": 2200
+    },
+    {
+      "title": "Topics",
+      "note": "Define topic-level learning structure and criteria links.",
+      "path": "/topics",
+      "waitMs": 2200
+    },
+    {
+      "title": "Lecturer Toolkit",
+      "note": "Prepare LPN data for content assembly.",
+      "path": "/lecturer-toolkit",
+      "waitMs": 2200
+    },
+    {
+      "title": "Exports",
+      "note": "Generate learner and delivery outputs.",
+      "path": "/exports",
+      "waitMs": 2200
+    },
+    {
+      "title": "Project Rollout Plan",
+      "note": "Set date window, preview semester flow, export workbook.",
+      "path": "/project-rollout-plan",
+      "waitMs": 2600
+    },
+    {
+      "title": "Automation Jobs",
+      "note": "Queue and monitor scheduled automation runs.",
+      "path": "/automation-jobs",
+      "waitMs": 2200
+    },
+    {
+      "title": "System Diagnostics",
+      "note": "Inspect logs with correlation IDs for support.",
+      "path": "/system-diagnostics",
+      "waitMs": 2200
+    },
+    {
+      "title": "User Guide",
+      "note": "In-app operational manual and troubleshooting guidance.",
+      "path": "/user-guide",
+      "waitMs": 2200
+    },
+    {
+      "title": "Dashboard Summary",
+      "note": "Close on dashboard overview and workflow cards.",
+      "path": "/",
+      "waitMs": 2600,
+      "actions": [
+        "scroll-menu-down",
+        "scroll-menu-top"
+      ]
+    }
+  ]
+}

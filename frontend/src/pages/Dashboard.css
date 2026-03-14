@@ -1,0 +1,350 @@
+/* App shell */
+.dashboard-root {
+  display: grid;
+  grid-template-columns: 290px 1fr;
+  min-height: 100vh;
+  background: transparent;
+  color: var(--text-main);
+}
+
+/* AI Agent (Right Column) - Only show when expanded */
+.dashboard-root > .ai-agent {
+  display: block;
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  width: min(320px, calc(100vw - 28px));
+  z-index: 35;
+}
+
+.dashboard-root > .ai-agent.collapsed {
+  grid-column: auto;
+  padding: 0;
+  background: transparent;
+  border-left: 0;
+  height: auto;
+  overflow: visible;
+  box-shadow: none;
+  animation: none;
+}
+
+.dashboard-root > .ai-agent.expanded {
+  display: block;
+  position: sticky;
+  right: auto;
+  bottom: auto;
+  grid-column: 3;
+  padding: 1.2rem 1rem;
+  background: #f8fbff;
+  border-left: 1px solid #cad9e8;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.05);
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Main content area - expands to full width when AI Agent is collapsed */
+.dashboard-main {
+  grid-column: 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* When AI Agent is expanded, adjust grid to make room */
+.dashboard-root.ai-agent-expanded {
+  grid-template-columns: 290px 1fr 320px;
+}
+
+/* Sidebar */
+.dashboard-menu {
+  width: 290px;
+  flex: 0 0 290px;
+  padding: 1.1rem 0.9rem;
+  border-right: 1px solid #2a6f53;
+  background: linear-gradient(180deg, #1d6348 0%, #174f39 100%);
+  color: #f3fbf7;
+  box-shadow: 3px 0 18px rgba(15, 45, 32, 0.2);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.dashboard-menu h2 {
+  margin: 0 0 0.85rem 0.2rem;
+  color: #ffffff;
+  font-size: 1.45rem;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.dashboard-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-menu li {
+  margin-bottom: 0.32rem;
+}
+
+.dashboard-menu a {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.55rem 0.68rem;
+  border-radius: 9px;
+  color: #f2fcf5;
+  text-decoration: none;
+  font-size: 0.9rem;
+  line-height: 1.25;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.dashboard-menu a:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.dashboard-menu li.active a {
+  background: rgba(16, 38, 61, 0.9);
+  color: #fff7cf;
+  font-weight: 700;
+}
+
+.menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.95;
+}
+
+/* Main */
+.dashboard-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-header {
+  padding: 1.2rem clamp(1rem, 2vw, 1.8rem);
+  border-bottom: 1px solid #cad9e8;
+  background:
+    radial-gradient(circle at 88% 10%, rgba(112, 178, 149, 0.28) 0%, transparent 35%),
+    linear-gradient(180deg, #f8fbff 0%, #eef5fb 100%);
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  max-width: 1020px;
+  font-size: clamp(1.18rem, 2.2vw, 1.58rem);
+  line-height: 1.3;
+  color: #19395d;
+}
+
+.dashboard-header .button-row {
+  margin-top: 0.7rem;
+}
+
+.import-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-left: 0.35rem;
+  color: #1b6347;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.import-status-errors {
+  color: #9a1e1e;
+  font-weight: 700;
+}
+
+/* Workflow cards on root page */
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  gap: 1rem;
+  padding: 1rem clamp(0.8rem, 2vw, 1.6rem);
+}
+
+.workflow-card {
+  text-decoration: none;
+  color: var(--text-main);
+  border-radius: 14px;
+  border: 1px solid #d9e5f0;
+  padding: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  box-shadow: 0 8px 18px rgba(20, 45, 73, 0.08);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.workflow-card:hover {
+  transform: translateY(-2px);
+  border-color: #c5d9ea;
+  box-shadow: 0 12px 22px rgba(20, 45, 73, 0.12);
+}
+
+.workflow-card-inner {
+  text-align: left;
+}
+
+.workflow-icon {
+  margin-bottom: 0.4rem;
+  color: #1f5e45;
+}
+
+.workflow-card h3 {
+  margin: 0 0 0.35rem 0;
+  color: #1d4f80;
+  font-size: 1.05rem;
+}
+
+.workflow-card p {
+  margin: 0;
+  color: #47617a;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+/* Routed content */
+.dashboard-content {
+  width: 100%;
+  padding: 0.55rem 0 1rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.dashboard-content > .page-container,
+.dashboard-content > .mainpage-root {
+  width: min(1180px, calc(100% - 1.8rem));
+}
+
+.codex-attribution-note {
+  width: calc(100% - 1.8rem);
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid #d6c897;
+  border-left: 5px solid #9f7e1f;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fffdf5 0%, #fff9e8 100%);
+  color: #3d2f0f;
+}
+
+.codex-attribution-note h3 {
+  margin: 0 0 0.45rem 0;
+  font-size: 0.98rem;
+  color: #6a5112;
+}
+
+.codex-attribution-note p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.codex-attribution-note p + p {
+  margin-top: 0.38rem;
+}
+
+/* Responsive */
+@media (max-width: 1240px) {
+  .workflow-grid {
+    grid-template-columns: repeat(2, minmax(230px, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .dashboard-root {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-menu {
+    width: 100%;
+    height: auto;
+    max-height: 44vh;
+    position: static;
+    border-right: 0;
+    border-bottom: 1px solid #2a6f53;
+    box-shadow: 0 4px 14px rgba(15, 45, 32, 0.14);
+  }
+
+  .dashboard-menu ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.28rem;
+  }
+
+  .dashboard-menu li {
+    margin-bottom: 0;
+  }
+
+  .workflow-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+
+  .dashboard-main {
+    grid-column: 1;
+  }
+
+  .dashboard-root.ai-agent-expanded {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-root > .ai-agent.expanded {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    height: 100vh;
+    width: min(360px, 92vw);
+    border-left: 1px solid #cad9e8;
+    box-shadow: -8px 0 20px rgba(0, 0, 0, 0.12);
+  }
+}
+
+@media (max-width: 680px) {
+  .dashboard-menu {
+    max-height: 52vh;
+  }
+
+  .dashboard-header {
+    padding: 1rem 0.85rem;
+  }
+
+  .workflow-grid {
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+    padding: 0.8rem;
+  }
+
+  .dashboard-content > .page-container,
+  .dashboard-content > .mainpage-root {
+    width: calc(100% - 0.9rem);
+  }
+
+  .codex-attribution-note {
+    width: calc(100% - 0.9rem);
+  }
+
+  .import-status {
+    margin-left: 0;
+  }
+}

@@ -1,0 +1,2745 @@
+{
+  "source": "Developers-KnowledgeBase-4.0.xlsx",
+  "sheet": "Sheet1",
+  "generatedAtUtc": "2026-02-25T15:36:59+00:00",
+  "rowCount": 125,
+  "items": [
+    {
+      "excelRow": 2,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KG0101",
+      "topicName": "Professional conduct of a technician or tradesman in the workplace",
+      "assessmentCriterionCode": "KG 1",
+      "assessmentCriterion": "Explain the professional conduct necessary for a technician or tradesman in the  workplace",
+      "lpn": "LPN 1",
+      "lessonPlanTitle": "As a tadesman behave responsibly and professionally in the workplace",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/2yQzH1YxR0E"
+      ],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 3,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KG0102",
+      "topicName": "Onboarding, induction of a technical apprentice learner",
+      "assessmentCriterionCode": "KG 2",
+      "assessmentCriterion": "Activities and task necessary to succesfull onboard a student technical Apprentice",
+      "lpn": "LPN 2",
+      "lessonPlanTitle": "Induction and orientation to the technical apprentice learning program",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/8p0Vf4KJz0Q"
+      ],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 4,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KG0103",
+      "topicName": "Ethical behavior and communication by a technical apprentice or tradesman",
+      "assessmentCriterionCode": "KG 3",
+      "assessmentCriterion": "Effective communication within a technical workshop",
+      "lpn": "LPN 3",
+      "lessonPlanTitle": "As a tehnical tradesman behave ethically and communicate professionally in the workplace",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/2zKX5CjJk0E"
+      ],
+      "openSourceUrls": [
+        "https://openstax.org/subjects/science"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 5,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KG0104",
+      "topicName": "Manage personal finances",
+      "assessmentCriterionCode": "KG 4",
+      "assessmentCriterion": "How to manage your personal finance within the South African Context",
+      "lpn": "LPN 4",
+      "lessonPlanTitle": "How to manage personal finances in the South African context",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/8Zxk0u3x2lE"
+      ],
+      "openSourceUrls": [
+        "https://learn.saylor.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 6,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KG0105",
+      "topicName": "Time management",
+      "assessmentCriterionCode": "KG 5",
+      "assessmentCriterion": "How to conduct time management",
+      "lpn": "LPN 5",
+      "lessonPlanTitle": "Plan for work activities and manage time effectively",
+      "bloomLevel": "manage",
+      "youtubeUrls": [
+        "https://youtu.be/1nZz0sQ7j5E"
+      ],
+      "openSourceUrls": [
+        "https://ocw.mit.edu"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 7,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KG0106",
+      "topicName": "How to use a personal computer",
+      "assessmentCriterionCode": "KG 6",
+      "assessmentCriterion": "Identify and explain the computer skills necessary for a technician",
+      "lpn": "LPN 6",
+      "lessonPlanTitle": "Use a personal computer, applications and peripherals",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/9n3VQ3Gx0xE"
+      ],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 8,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KG0107",
+      "topicName": "Quality assurance activities",
+      "assessmentCriterionCode": "KG 7",
+      "assessmentCriterion": "Indentify and explain the quality assurance activities necessary for a mechanical engineer with emphasis on the job role of a fitter and turner or machinists",
+      "lpn": "LPN 7",
+      "lessonPlanTitle": "Conduct Quality Assurance activities applicable to a technical tradesman",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/0pK8t3d9F8E"
+      ],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 9,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0101",
+      "topicName": "Career opportunities for a qualified fitter and turner",
+      "assessmentCriterionCode": "AC 1",
+      "assessmentCriterion": "The job environment and roles of a fitter and turner is accurately described and explained",
+      "lpn": "LPN 8",
+      "lessonPlanTitle": "Career opportunities for a qualified fitter and turner",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/3mZz4cQ2p0E"
+      ],
+      "openSourceUrls": [
+        "https://openlibrary.org/subjects/mechanical_engineering"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 10,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0102",
+      "topicName": "Occupational profile of a fitter and turner",
+      "assessmentCriterionCode": "AC 2",
+      "assessmentCriterion": "The profile of a fitter and turner is described with respect to industry description and requirements",
+      "lpn": "LPN 9",
+      "lessonPlanTitle": "Occupational profile of a fitter and turner",
+      "bloomLevel": "describe",
+      "youtubeUrls": [
+        "https://youtu.be/4fQ0xJ8m2kE"
+      ],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 11,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0103",
+      "topicName": "Legislation related to apprentices in the fitting and turning trade",
+      "assessmentCriterionCode": "AC 3",
+      "assessmentCriterion": "Legal aspects pertaining to apprentices are explained",
+      "lpn": "LPN 10",
+      "lessonPlanTitle": "Legislation related to apprentices in the fitting and turning trade",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/7Yp8d0Qw1lE"
+      ],
+      "openSourceUrls": [
+        "https://www.gov.za"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 12,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0201",
+      "topicName": "General overview of occupational health and safety legislation",
+      "assessmentCriterionCode": "AC 4",
+      "assessmentCriterion": "Explain the South African occupational health and safety legislation",
+      "lpn": "LPN 11",
+      "lessonPlanTitle": "General overview of occupational health and safety legislation",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/1p1nQ0s3m0E"
+      ],
+      "openSourceUrls": [
+        "https://www.labour.gov.za"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 13,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0202",
+      "topicName": "General workshop safety rules",
+      "assessmentCriterionCode": "AC 5",
+      "assessmentCriterion": "Explain technician workshop safety rules and precautions",
+      "lpn": "LPN 12",
+      "lessonPlanTitle": "General workshop safety rules",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/6u8Qx0m2p9E"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Safety"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 14,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0204",
+      "topicName": "Safety symbols and coding",
+      "assessmentCriterionCode": "AC 6",
+      "assessmentCriterion": "Safety signs are recognised and described in terms of associated risk and safe conduct",
+      "lpn": "LPN 13",
+      "lessonPlanTitle": "Safety symbols and coding",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/5pQ9m0x1z8E"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Safety_signs"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 15,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0205",
+      "topicName": "Types of personal protective equipment",
+      "assessmentCriterionCode": "AC 7",
+      "assessmentCriterion": "Identidy and list tne personal potective equimpment that must be used by a technical apprentice",
+      "lpn": "LPN 14",
+      "lessonPlanTitle": "Types of personal protective equipment",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/2mQ8x0p3l7E"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Personal_protective_equipment"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 16,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0206",
+      "topicName": "Hazard identification and risk assessment principles",
+      "assessmentCriterionCode": "AC 8",
+      "assessmentCriterion": "Identify the hazards applicable to technical apprentices within a technical workshop",
+      "lpn": "LPN 15",
+      "lessonPlanTitle": "Hazard identification and risk assessment principles",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 17,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0207",
+      "topicName": "Fundamentals of securing worksites",
+      "assessmentCriterionCode": "AC 9",
+      "assessmentCriterion": "The inter-relationship between workplace safety and a productive work environment is demonstrated through responses to questions",
+      "lpn": "LPN 16",
+      "lessonPlanTitle": "Fundamentals of securing worksites",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/3pQ7x0n1l5E"
+      ],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 18,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0208",
+      "topicName": "Environmental protection and pollution concepts",
+      "assessmentCriterionCode": "AC 10",
+      "assessmentCriterion": "Environmental regulations concerning disposal of hazardous wastes are described",
+      "lpn": "LPN 17",
+      "lessonPlanTitle": "Environmental protection and pollution concepts",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/4mQ6x0p2k4E"
+      ],
+      "openSourceUrls": [
+        "https://www.environment.gov.za"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 19,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0301",
+      "topicName": "Mechanical Engineering Freehand Drawing",
+      "assessmentCriterionCode": "AC 11",
+      "assessmentCriterion": "Freehand drawings demonstrate accurate resemblance to original object in terms of dimensions, shape and size",
+      "lpn": "LPN 18",
+      "lessonPlanTitle": "Mechanical Engineering Freehand Drawing",
+      "bloomLevel": "demonstrate",
+      "youtubeUrls": [
+        "https://youtu.be/8pQ5x0m3l3E"
+      ],
+      "openSourceUrls": [
+        "https://eng.libretexts.org/Bookshelves/Mechanical_Engineering/Graphics"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 20,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0302",
+      "topicName": "Code of practice for engineering drawing (symbols and abbreviations)",
+      "assessmentCriterionCode": "AC 12",
+      "assessmentCriterion": "Indentify, list and explain the symbols and abbreviations used in engineering drawings",
+      "lpn": "LPN 19",
+      "lessonPlanTitle": "Code of practice for engineering drawing (symbols and abbreviations)",
+      "bloomLevel": "explain",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://en.wikibooks.org/wiki/Engineering_Drawing"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 21,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0303",
+      "topicName": "Drawing instruments and equipment",
+      "assessmentCriterionCode": "AC 13",
+      "assessmentCriterion": "Accurate drawings indicate instruments are used correctly",
+      "lpn": "LPN 20",
+      "lessonPlanTitle": "Drawing instruments and equipment",
+      "bloomLevel": "explain",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Technical_drawing_tools"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 22,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0304",
+      "topicName": "Dimensioning Methods",
+      "assessmentCriterionCode": "AC 14",
+      "assessmentCriterion": "First and third angle orthographic projections are read and interpreted accurately",
+      "lpn": "LPN 21",
+      "lessonPlanTitle": "Dimensioning Methods",
+      "bloomLevel": "explain",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org/Bookshelves/Mechanical_Engineering/Graphics"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 23,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0305",
+      "topicName": "Isometric Drawings",
+      "assessmentCriterionCode": "AC 15",
+      "assessmentCriterion": "Isometric drawings are read and interpreted accurately",
+      "lpn": "LPN 22",
+      "lessonPlanTitle": "Isometric Drawings",
+      "bloomLevel": "explain",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://en.wikibooks.org/wiki/Engineering_Drawing/Isometric"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 24,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0306",
+      "topicName": "Assembly and detailed drawings",
+      "assessmentCriterionCode": "AC 16",
+      "assessmentCriterion": "Assemblies, sectional drawings and detailed drawings are read and interpreted accurately",
+      "lpn": "LPN 23",
+      "lessonPlanTitle": "Assembly and detailed drawings",
+      "bloomLevel": "explain",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org/Bookshelves/Mechanical_Engineering/Graphics"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 25,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0401",
+      "topicName": "Basic metallurgy and heat concepts",
+      "assessmentCriterionCode": "AC 17",
+      "assessmentCriterion": "Basic metallurgy and heat concepts are explained",
+      "lpn": "LPN 24",
+      "lessonPlanTitle": "Basic metallurgy and heat concepts",
+      "bloomLevel": "identify, explain",
+      "youtubeUrls": [
+        "https://youtu.be/8Zxk0u3x2lE"
+      ],
+      "openSourceUrls": [
+        "https://eng.libretexts.org/Bookshelves/Materials_Science"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 26,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0402",
+      "topicName": "Properties of base metals, alloys and synthetic materials",
+      "assessmentCriterionCode": "AC 18",
+      "assessmentCriterion": "Properties of base metals, alloys, and synthetic materials are described",
+      "lpn": "LPN 25",
+      "lessonPlanTitle": "Properties of base metals, alloys and synthetic materials",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://openstax.org/details/books/chemistry-2e"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 27,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0403",
+      "topicName": "Non-ferrous metals and ferrous materials",
+      "assessmentCriterionCode": "AC 19",
+      "assessmentCriterion": "Ferrous and non-ferrous are differentiated and synthetic materials described",
+      "lpn": "LPN 26",
+      "lessonPlanTitle": "Non-ferrous metals and ferrous materials",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://eng.libretexts.org/Bookshelves/Materials_Science"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 28,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0404",
+      "topicName": "Metal specifications and testing Internal Assessment Criteria",
+      "assessmentCriterionCode": "AC 20",
+      "assessmentCriterion": "Metal specifications and testing are discussed",
+      "lpn": "LPN 27",
+      "lessonPlanTitle": "Metal specifications and testing Internal Assessment Criteria",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 29,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0501",
+      "topicName": "Hand tools to hold, assemble or disassemble components",
+      "assessmentCriterionCode": "AC 21",
+      "assessmentCriterion": "Different Mechanical Engineering tools applicable to a Fitter and Turner are identified and explain, the following tools myst be included: hand, cutting, power, measuring, marking off, tools), the safe care, correct use and storage of mechanical engineering tools and equipment are identified and explained.",
+      "lpn": "LPN 28",
+      "lessonPlanTitle": "Hand tools to hold, assemble or disassemble components",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Hand_tools"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 30,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0502",
+      "topicName": "Hand-held cutting tools (saws, blades, files, scrapers, chisels, taps and dies, hand reamers, hand broaching tools, hammers centre punch)",
+      "assessmentCriterionCode": "AC 22",
+      "assessmentCriterion": "Identify and describe the hand-held cutting tools used by a mechanical engineer for example; saws, blades, files, scrapers, chisels, taps and dies, hand reamers, hand broaching tools, hammers centre punch",
+      "lpn": "LPN 29",
+      "lessonPlanTitle": "Hand-held cutting tools (saws, blades, files, scrapers, chisels, taps and dies, hand reamers, hand broaching tools, hammers centre punch)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Cutting_tools"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 31,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0503",
+      "topicName": "Hand-held power tools (angle grinder, drills, drill bits and reamers)",
+      "assessmentCriterionCode": "AC 23",
+      "assessmentCriterion": "Identify and describe the hand-held power tools used by a mechanical engineer such as angle grinder, drills, drill bits and reamers",
+      "lpn": "LPN 30",
+      "lessonPlanTitle": "Hand-held power tools (angle grinder, drills, drill bits and reamers)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Power_tools"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 32,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0504",
+      "topicName": "Measurement tools and equipment (basic measurement tools, precision measuring tools, angular measuring tools, inspection gauges)",
+      "assessmentCriterionCode": "AC 24",
+      "assessmentCriterion": "Identify and explain the use of mechanical engineering measurement calculations. Identify and describe the correct speeds, feeds, cutting tools and equipment used by mechanical engineers.",
+      "lpn": "LPN 31",
+      "lessonPlanTitle": "Measurement tools and equipment (basic measurement tools, precision measuring tools, angular measuring tools, inspection gauges)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Measuring_tools"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 33,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0505",
+      "topicName": "Marking-off tools and equipment (punches, scribers, combination sets, protractors, callipers (inside and outside), jenny calliper, engineering square, angle plates, marking-off table, dividers)",
+      "assessmentCriterionCode": "AC 25",
+      "assessmentCriterion": "Identify and describe the marking-off tools and equipment used by mechanical engineers in sepcific fitter and turners or machinists.",
+      "lpn": "LPN 32",
+      "lessonPlanTitle": "Marking-off tools and equipment (punches, scribers, combination sets, protractors, callipers (inside and outside), jenny calliper, engineering square, angle plates, marking-off table, dividers)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Marking_tools"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 34,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT06",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0601",
+      "topicName": "Rigging (slings, block and tackle, chain block, steel ropes)",
+      "assessmentCriterionCode": "AC 26",
+      "assessmentCriterion": "Identify and describe the types of rigging used by a mechanical engineers such as slings, block and tackle, chain block, steel ropes. Focus specific on the rigging equipment used by a fitter and turner or machinist.",
+      "lpn": "LPN 33",
+      "lessonPlanTitle": "Rigging (slings, block and tackle, chain block, steel ropes)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Rigging"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 35,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT06",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0602",
+      "topicName": "Rigging concepts",
+      "assessmentCriterionCode": "AC 27",
+      "assessmentCriterion": "Rigging concepts are discussed",
+      "lpn": "LPN 34",
+      "lessonPlanTitle": "Rigging concepts",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 36,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT06",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0603",
+      "topicName": "Loads selection and limitations",
+      "assessmentCriterionCode": "AC 28",
+      "assessmentCriterion": "Identify and describe how loads are calculated and selected during rigging by a mechanical engineer.",
+      "lpn": "LPN 35",
+      "lessonPlanTitle": "Loads selection and limitations",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://www.osha.gov"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 37,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT06",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0604",
+      "topicName": "Safety precautions",
+      "assessmentCriterionCode": "AC 29",
+      "assessmentCriterion": "Identify and describe the safety precautions pertaining to rigging used by a mechanical engineer, focus specifically on the working of a fitter and turner or machinists",
+      "lpn": "LPN 36",
+      "lessonPlanTitle": "Safety precautions",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://www.osha.gov"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 38,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT07",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0701",
+      "topicName": "Terminology related to screw threads (pitch, root diameter, nominal diameter, lead, flank, internal and external threads, helix angle, included angle)",
+      "assessmentCriterionCode": "AC 30",
+      "assessmentCriterion": "Identify and explain Screw Thread terminology and how the profile of a thread is drawn with accurate resemblance to original object in terms of dimensions, shape and size",
+      "lpn": "LPN 37",
+      "lessonPlanTitle": "Terminology related to screw threads (pitch, root diameter, nominal diameter, lead, flank, internal and external threads, helix angle, included angle)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://en.wikibooks.org/wiki/Thread_Standards"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 39,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT07",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0702",
+      "topicName": "Screw threads",
+      "assessmentCriterionCode": "AC 31",
+      "assessmentCriterion": "Identify and explain the various types of screw threads such as v-thread, acme, and square threads",
+      "lpn": "LPN 38",
+      "lessonPlanTitle": "Screw threads",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://en.wikibooks.org/wiki/Thread_Standards"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 40,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT07",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0703",
+      "topicName": "Application of screw threads",
+      "assessmentCriterionCode": "AC 32",
+      "assessmentCriterion": "Explain the use and purpose of the different screw threads such as v-thread, acme, and square threads",
+      "lpn": "LPN 39",
+      "lessonPlanTitle": "Application of screw threads",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 41,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT07",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0704",
+      "topicName": "Thread calculations",
+      "assessmentCriterionCode": "AC 33",
+      "assessmentCriterion": "Explain how the the depth of different screw threads is calculated",
+      "lpn": "LPN 40",
+      "lessonPlanTitle": "Thread calculations",
+      "bloomLevel": "identify",
+      "youtubeUrls": [
+        "https://youtu.be/9pQ1x0m2k6E"
+      ],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 42,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT08",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0801",
+      "topicName": "Fasteners and locking devices (machine screws, set screws, cap screws, grub screw, studs, locking nuts and bolts, washers, circlips, pins, keys)",
+      "assessmentCriterionCode": "AC 34",
+      "assessmentCriterion": "Types of fasteners and locking devices are identified and discussed",
+      "lpn": "LPN 41",
+      "lessonPlanTitle": "Fasteners and locking devices (machine screws, set screws, cap screws, grub screw, studs, locking nuts and bolts, washers, circlips, pins, keys)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Fasteners"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 43,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT08",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0802",
+      "topicName": "Application of fasteners and locking devices",
+      "assessmentCriterionCode": "AC 35",
+      "assessmentCriterion": "The use of safety precautions of fasteners and locking devices is explained",
+      "lpn": "LPN 42",
+      "lessonPlanTitle": "Application of fasteners and locking devices",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 44,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT08",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0803",
+      "topicName": "Drawings of fasteners and locking devices",
+      "assessmentCriterionCode": "AC 36",
+      "assessmentCriterion": "Explain how read and interpret gasteners and locking devices from drawings, eplain how to perform reehand drawings of different types of fasteners and locking devices",
+      "lpn": "LPN 43",
+      "lessonPlanTitle": "Drawings of fasteners and locking devices",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Fasteners"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 45,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT09",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0901",
+      "topicName": "Arc welding and gas cutting equipment and consumables",
+      "assessmentCriterionCode": "AC 37",
+      "assessmentCriterion": "Desctribe the various Arc welding and gas cutting equipment used by a mechanical engineer, in specific used by a fitter and turner or machinist",
+      "lpn": "LPN 44",
+      "lessonPlanTitle": "Arc welding and gas cutting equipment and consumables",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Welding"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 46,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT09",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0902",
+      "topicName": "Arc welding and gas cutting techniques and principles",
+      "assessmentCriterionCode": "AC 38",
+      "assessmentCriterion": "Arc welding and gas cutting techniques and principles are discussed",
+      "lpn": "LPN 45",
+      "lessonPlanTitle": "Arc welding and gas cutting techniques and principles",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org/Bookshelves/Materials_Science/Welding"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 47,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT09",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0903",
+      "topicName": "Material selection",
+      "assessmentCriterionCode": "AC 39",
+      "assessmentCriterion": "Explain how arc welding material is selected according to different user or application",
+      "lpn": "LPN 46",
+      "lessonPlanTitle": "Material selection",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org/Bookshelves/Materials_Science"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 48,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT09",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0904",
+      "topicName": "Cutting and welding defects",
+      "assessmentCriterionCode": "AC 40",
+      "assessmentCriterion": "Explain the different welding defects",
+      "lpn": "LPN 47",
+      "lessonPlanTitle": "Cutting and welding defects",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 49,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT09",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0905",
+      "topicName": "Safe handling of gas cylinders",
+      "assessmentCriterionCode": "AC 41",
+      "assessmentCriterion": "Explain the safety precautions pertaining to arc welding and gas cutting cylinders",
+      "lpn": "LPN 48",
+      "lessonPlanTitle": "Safe handling of gas cylinders",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.osha.gov"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 50,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Basic engineering",
+      "subjectDescription": "KM-01-KT09",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0906",
+      "topicName": "Health and safety risks and protective equipment and measures",
+      "assessmentCriterionCode": "AC 42",
+      "assessmentCriterion": "Idenfity and explain the personal protective clothing and equipment that must be used during arc welding",
+      "lpn": "LPN 49",
+      "lessonPlanTitle": "Health and safety risks and protective equipment and measures",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.osha.gov"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 51,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KT010601",
+      "topicName": "Seals and gaskets",
+      "assessmentCriterionCode": "AC 43",
+      "assessmentCriterion": "Explain the definitions of seals and gaskets and the usage different gaskets for air, steam, liquids, chemicals and gases",
+      "lpn": "LPN 50",
+      "lessonPlanTitle": "Seals and gaskets",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Gaskets"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 52,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KT010602",
+      "topicName": "The stuffing box and gland (packings)",
+      "assessmentCriterionCode": "AC 44",
+      "assessmentCriterion": "Expalin the types and functions of packings, seals, gaskets and glands and the method of packing a stuffing box",
+      "lpn": "LPN 51",
+      "lessonPlanTitle": "The stuffing box and gland (packings)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Mechanical_seals"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 53,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KT010603",
+      "topicName": "Lagging pipelines",
+      "assessmentCriterionCode": "AC 45",
+      "assessmentCriterion": "Explain what lagging pipelines in the use of static and dynamic seals and gaskets",
+      "lpn": "LPN 52",
+      "lessonPlanTitle": "Lagging pipelines",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Pipe_insulation"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 54,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KT010603",
+      "topicName": "O-rings",
+      "assessmentCriterionCode": "AC 46",
+      "assessmentCriterion": "Explain and identify the O-rings used in static and dynamic seals and gaskets",
+      "lpn": "LPN 53",
+      "lessonPlanTitle": "O-rings",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:O-rings"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 55,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KS0201",
+      "topicName": "Bearings (anti-friction and friction bearings)",
+      "assessmentCriterionCode": "AC 47",
+      "assessmentCriterion": "Types of bearings are differentiated",
+      "lpn": "LPN 54",
+      "lessonPlanTitle": "Bearings (anti-friction and friction bearings)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Bearings"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 56,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KS0202",
+      "topicName": "Application of bearing",
+      "assessmentCriterionCode": "AC 48",
+      "assessmentCriterion": "Components of bearings are identified and discussed",
+      "lpn": "LPN 55",
+      "lessonPlanTitle": "Application of bearing",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 57,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KS0203",
+      "topicName": "Maintenance of bearing",
+      "assessmentCriterionCode": "AC 49",
+      "assessmentCriterion": "Applications for different bearings are discussed",
+      "lpn": "LPN 56",
+      "lessonPlanTitle": "Maintenance of bearing",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 58,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KS0204",
+      "topicName": "Causes of failures in bearings",
+      "assessmentCriterionCode": "AC 50",
+      "assessmentCriterion": "The causes of bearing failure are described",
+      "lpn": "LPN 57",
+      "lessonPlanTitle": "Causes of failures in bearings",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 59,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KS0205",
+      "topicName": "Removal and installation of bearings",
+      "assessmentCriterionCode": "AC 51",
+      "assessmentCriterion": "Removal, installation amd Safety precaution, procedures for bearings are described",
+      "lpn": "LPN 58",
+      "lessonPlanTitle": "Removal and installation of bearings",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 60,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0301",
+      "topicName": "Classification and types of valves (Classification includes linear motion, rotary motion and quarter turn valves and types include gate, non-return, relief, ball shut- off valves, pipe systems.)",
+      "assessmentCriterionCode": "AC 52",
+      "assessmentCriterion": "Explain the classification and types of valves such as linear motion, rotary motion and quarter turn valves and types include gate, non-return, relief, ball shut- off valves, pipe systems.)",
+      "lpn": "LPN 59",
+      "lessonPlanTitle": "Classification and types of valves (Classification includes linear motion, rotary motion and quarter turn valves and types include gate, non-return, relief, ball shut- off valves, pipe systems.)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Valves"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 61,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0302",
+      "topicName": "Terminology of valves",
+      "assessmentCriterionCode": "AC 53",
+      "assessmentCriterion": "Explain the different types of valves and associated terminology",
+      "lpn": "LPN 60",
+      "lessonPlanTitle": "Terminology of valves",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 62,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0303",
+      "topicName": "Function and working principle of valves",
+      "assessmentCriterionCode": "AC 54",
+      "assessmentCriterion": "Explain the function and working principles of valves in mechanical engineering",
+      "lpn": "LPN 61",
+      "lessonPlanTitle": "Function and working principle of valves",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 63,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0304",
+      "topicName": "Removal and installation of valves",
+      "assessmentCriterionCode": "AC 55",
+      "assessmentCriterion": "Explain the safe removal and installation procedures of valves",
+      "lpn": "LPN 62",
+      "lessonPlanTitle": "Removal and installation of valves",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 64,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0401",
+      "topicName": "Drives (direct and indirect)",
+      "assessmentCriterionCode": "AC 56",
+      "assessmentCriterion": "In Fitting Theory identify and explain the classification and types of direct and indirect drives, and the usage or application of drives",
+      "lpn": "LPN 63",
+      "lessonPlanTitle": "Drives (direct and indirect)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 65,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0402",
+      "topicName": "Terminology of drives",
+      "assessmentCriterionCode": "AC 57",
+      "assessmentCriterion": "Explain the different components of drives",
+      "lpn": "LPN 64",
+      "lessonPlanTitle": "Terminology of drives",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 66,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0403",
+      "topicName": "Functions and working principle of drives",
+      "assessmentCriterionCode": "AC 58",
+      "assessmentCriterion": "Explain the functions and working principles of drives, removal and installation procedures, and the safety precautions",
+      "lpn": "LPN 65",
+      "lessonPlanTitle": "Functions and working principle of drives",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 67,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0501",
+      "topicName": "Classification of pumps",
+      "assessmentCriterionCode": "AC 59",
+      "assessmentCriterion": "Explain the use or application of pumps in mechanical engineering",
+      "lpn": "LPN 66",
+      "lessonPlanTitle": "Classification of pumps",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Pumps"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 68,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0502",
+      "topicName": "Terminology of pumps",
+      "assessmentCriterionCode": "AC 60",
+      "assessmentCriterion": "Explain the different components of pumps in mechanical engineering",
+      "lpn": "LPN 67",
+      "lessonPlanTitle": "Terminology of pumps",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 69,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0503",
+      "topicName": "Functions and working principles of pumps",
+      "assessmentCriterionCode": "AC 61",
+      "assessmentCriterion": "Explain the functions and working principles of pumps, the safe isntallation and removal procedure of pumps in mechanical engineering",
+      "lpn": "LPN 68",
+      "lessonPlanTitle": "Functions and working principles of pumps",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 70,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT06",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0601",
+      "topicName": "Gearboxes (single reduction, double reduction, variable speed)",
+      "assessmentCriterionCode": "AC 62",
+      "assessmentCriterion": "Types of gearboxes are identified and described",
+      "lpn": "LPN 69",
+      "lessonPlanTitle": "Gearboxes (single reduction, double reduction, variable speed)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Gearboxes"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 71,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT06",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0601",
+      "topicName": "Terminology of gearboxes",
+      "assessmentCriterionCode": "AC 63",
+      "assessmentCriterion": "Components of gearboxes are identified and described",
+      "lpn": "LPN 70",
+      "lessonPlanTitle": "Terminology of gearboxes",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 72,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT06",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0601",
+      "topicName": "Functions and working principles of gearboxes",
+      "assessmentCriterionCode": "AC 64",
+      "assessmentCriterion": "Functions and working principles of gearboxes are described",
+      "lpn": "LPN 71",
+      "lessonPlanTitle": "Functions and working principles of gearboxes",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 73,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT06",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0601",
+      "topicName": "Removal and installation procedures for gearboxes",
+      "assessmentCriterionCode": "AC 65",
+      "assessmentCriterion": "Safe removal and installation procedures for gearboxes are described",
+      "lpn": "LPN 72",
+      "lessonPlanTitle": "Removal and installation procedures for gearboxes",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 74,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT07",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0701",
+      "topicName": "Types of clutches",
+      "assessmentCriterionCode": "AC 66",
+      "assessmentCriterion": "Types of clutches are identified and described",
+      "lpn": "LPN 73",
+      "lessonPlanTitle": "Types of clutches",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Clutches"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 75,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT07",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0702",
+      "topicName": "Terminology of clutches",
+      "assessmentCriterionCode": "AC 67",
+      "assessmentCriterion": "Components of clutches are identified and discussed",
+      "lpn": "LPN 74",
+      "lessonPlanTitle": "Terminology of clutches",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 76,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT07",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0703",
+      "topicName": "Functions and working principles of clutches",
+      "assessmentCriterionCode": "AC 68",
+      "assessmentCriterion": "Functions and working principles of clutches are described",
+      "lpn": "LPN 75",
+      "lessonPlanTitle": "Functions and working principles of clutches",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 77,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT07",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0704",
+      "topicName": "Removal and installation procedure for clutches",
+      "assessmentCriterionCode": "AC 69",
+      "assessmentCriterion": "Removal and installation procedures for clutches are described",
+      "lpn": "LPN 76",
+      "lessonPlanTitle": "Removal and installation procedure for clutches",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 78,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT08",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0801",
+      "topicName": "Types of brakes",
+      "assessmentCriterionCode": "AC 70",
+      "assessmentCriterion": "Identify the different types of brakes used in mechanical engineering",
+      "lpn": "LPN 77",
+      "lessonPlanTitle": "Types of brakes",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Brakes"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 79,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT08",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0802",
+      "topicName": "Terminology of brakes",
+      "assessmentCriterionCode": "AC 71",
+      "assessmentCriterion": "Components of brakes are identified and discussed",
+      "lpn": "LPN 78",
+      "lessonPlanTitle": "Terminology of brakes",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 80,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT08",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0803",
+      "topicName": "Functions and working principles of brakes",
+      "assessmentCriterionCode": "AC 72",
+      "assessmentCriterion": "Functions and working principles of brakes are described",
+      "lpn": "LPN 79",
+      "lessonPlanTitle": "Functions and working principles of brakes",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 81,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT08",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0804",
+      "topicName": "Removal and installation procedures for brakes",
+      "assessmentCriterionCode": "AC 73",
+      "assessmentCriterion": "Removal and installation procedures for brakes are described",
+      "lpn": "LPN 80",
+      "lessonPlanTitle": "Removal and installation procedures for brakes",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 82,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT09",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0901",
+      "topicName": "Lubrication systems and devices",
+      "assessmentCriterionCode": "AC 74",
+      "assessmentCriterion": "Classification and types of lubrication systems and devices are described",
+      "lpn": "LPN 81",
+      "lessonPlanTitle": "Lubrication systems and devices",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://commons.wikimedia.org/wiki/Category:Compressors"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 83,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT09",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0902",
+      "topicName": "Properties of lubricants",
+      "assessmentCriterionCode": "AC 75",
+      "assessmentCriterion": "Properties of lubricants are discussed",
+      "lpn": "LPN 82",
+      "lessonPlanTitle": "Properties of lubricants",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 84,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT09",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0903",
+      "topicName": "Terminology of lubrication systems and devices",
+      "assessmentCriterionCode": "AC 76",
+      "assessmentCriterion": "Components of lubrication systems and devices are discussed",
+      "lpn": "LPN 83",
+      "lessonPlanTitle": "Terminology of lubrication systems and devices",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 85,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT09",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0904",
+      "topicName": "Working principles of lubrication systems and devices",
+      "assessmentCriterionCode": "AC 77",
+      "assessmentCriterion": "Working principles of lubrications systems and devices are discussed",
+      "lpn": "LPN 84",
+      "lessonPlanTitle": "Working principles of lubrication systems and devices",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 86,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT10",
+      "moduleCode": "KM-01",
+      "topicCode": "KT1001",
+      "topicName": "Hydraulic systems",
+      "assessmentCriterionCode": "AC 78",
+      "assessmentCriterion": "Components and functions of hydraulic systems are identified and described",
+      "lpn": "LPN 85",
+      "lessonPlanTitle": "Hydraulic systems",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org/Bookshelves/Fluid_Mechanics",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 87,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT10",
+      "moduleCode": "KM-01",
+      "topicCode": "KT1002",
+      "topicName": "Units of measurement in hydraulic systems (pressure, flow rate, area)",
+      "assessmentCriterionCode": "AC 79",
+      "assessmentCriterion": "Identify andexplain hydraulic symbols and circuits, how units of measurement in hydraulic systems are calculated",
+      "lpn": "LPN 86",
+      "lessonPlanTitle": "Units of measurement in hydraulic systems (pressure, flow rate, area)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://openstax.org/details/books/physics",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 88,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT11",
+      "moduleCode": "KM-01",
+      "topicCode": "KT1101",
+      "topicName": "Pneumatic systems",
+      "assessmentCriterionCode": "AC 80",
+      "assessmentCriterion": "Components and functions of pneumatic systems are identified and described",
+      "lpn": "LPN 87",
+      "lessonPlanTitle": "Pneumatic systems",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org/Bookshelves/Fluid_Mechanics",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 89,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT11",
+      "moduleCode": "KM-01",
+      "topicCode": "KT1102",
+      "topicName": "Units of measurement in pneumatic systems (pressure, flow rate, area)",
+      "assessmentCriterionCode": "AC 81",
+      "assessmentCriterion": "Units of measurement in pneumatic systems are described",
+      "lpn": "LPN 88",
+      "lessonPlanTitle": "Units of measurement in pneumatic systems (pressure, flow rate, area)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://openstax.org/details/books/physics",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 90,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT11",
+      "moduleCode": "KM-01",
+      "topicCode": "KT1103",
+      "topicName": "Pneumatic symbols and circuits",
+      "assessmentCriterionCode": "AC 82",
+      "assessmentCriterion": "Pneumatic symbols and circuits are read and interpreted",
+      "lpn": "LPN 89",
+      "lessonPlanTitle": "Pneumatic symbols and circuits",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Pneumatic_circuits",
+        "https://eng.libretexts.org/Bookshelves/Fluid_Mechanics"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 91,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT12",
+      "moduleCode": "KM-01",
+      "topicCode": "KT1201",
+      "topicName": "Conveyors",
+      "assessmentCriterionCode": "AC 83",
+      "assessmentCriterion": "Types of conveyors are identified and described",
+      "lpn": "LPN 90",
+      "lessonPlanTitle": "Conveyors",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Conveyors",
+        "https://openstax.org/details/books/physics"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 92,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT12",
+      "moduleCode": "KM-01",
+      "topicCode": "KT1202",
+      "topicName": "Functions of conveyors",
+      "assessmentCriterionCode": "AC 84",
+      "assessmentCriterion": "Functions of different types of conveyors are explained",
+      "lpn": "LPN 91",
+      "lessonPlanTitle": "Functions of conveyors",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://eng.libretexts.org/Bookshelves/Fluid_Mechanics"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 93,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT13",
+      "moduleCode": "KM-01",
+      "topicCode": "KT1301",
+      "topicName": "Diagnostic equipment",
+      "assessmentCriterionCode": "AC 85",
+      "assessmentCriterion": "Types of diagnostic equipment are identified and described",
+      "lpn": "LPN 92",
+      "lessonPlanTitle": "Diagnostic equipment",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Measuring_instruments",
+        "https://openstax.org/details/books/physics"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 94,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT13",
+      "moduleCode": "KM-01",
+      "topicCode": "KT1302",
+      "topicName": "Diagnostic techniques",
+      "assessmentCriterionCode": "AC 86",
+      "assessmentCriterion": "The various types of diagnostic techniques are described",
+      "lpn": "LPN 93",
+      "lessonPlanTitle": "Diagnostic techniques",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org",
+        "https://commons.wikimedia.org/wiki/Category:Pneumatic_circuits"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 95,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Fitting Theory",
+      "subjectDescription": "KM-02-KT13",
+      "moduleCode": "KM-01",
+      "topicCode": "KT1303",
+      "topicName": "Diagnostic testing",
+      "assessmentCriterionCode": "AC 87",
+      "assessmentCriterion": "The sequence involved in a diagnostic procedure or technique is explained",
+      "lpn": "LPN 94",
+      "lessonPlanTitle": "Diagnostic testing",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org",
+        "https://commons.wikimedia.org/wiki/Category:Conveyors"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 96,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0102",
+      "topicName": "Speeds, feeds and cutting tools",
+      "assessmentCriterionCode": "AC 89",
+      "assessmentCriterion": "Explain how speeds and feeds are differentiated and how cutting speeds and feeds are calculated",
+      "lpn": "LPN 95",
+      "lessonPlanTitle": "Speeds, feeds and cutting tools",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 97,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0103",
+      "topicName": "Taper systems and their applications",
+      "assessmentCriterionCode": "AC 90",
+      "assessmentCriterion": "Explain what is taper systems in mechanical engineering and how it is used",
+      "lpn": "LPN 96",
+      "lessonPlanTitle": "Taper systems and their applications",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://commons.wikimedia.org/wiki/Category:Measuring_instruments"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 98,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT01",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0104",
+      "topicName": "Limit and fits",
+      "assessmentCriterionCode": "AC 91",
+      "assessmentCriterion": "Explain how imits and fits are read and interpreted in the fabrication methods of mechanical engineering",
+      "lpn": "LPN 97",
+      "lessonPlanTitle": "Limit and fits",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 99,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0201",
+      "topicName": "Working principles of a centre lathe",
+      "assessmentCriterionCode": "AC 92",
+      "assessmentCriterion": "Explain the working principles of a centre lathe",
+      "lpn": "LPN 98",
+      "lessonPlanTitle": "Working principles of a centre lathe",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org/Bookshelves/Mechanical_Engineering/Manufacturing_Processes",
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 100,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0202",
+      "topicName": "Terminology and components of a centre lathe",
+      "assessmentCriterionCode": "AC 93",
+      "assessmentCriterion": "Explain the components of a centre lathe",
+      "lpn": "LPN 99",
+      "lessonPlanTitle": "Terminology and components of a centre lathe",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Lathes",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 101,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0203",
+      "topicName": "Internal and external turning procedures",
+      "assessmentCriterionCode": "AC 94",
+      "assessmentCriterion": "Explain what are the internal and external procedures of a centre lathe",
+      "lpn": "LPN 100",
+      "lessonPlanTitle": "Internal and external turning procedures",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 102,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0204",
+      "topicName": "Thread cutting",
+      "assessmentCriterionCode": "AC 95",
+      "assessmentCriterion": "Explain the thread cutting such as single and multiple start threads of a centre lathe",
+      "lpn": "LPN 101",
+      "lessonPlanTitle": "Thread cutting",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://en.wikibooks.org/wiki/Thread_Cutting",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 103,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0205",
+      "topicName": "Taper cutting",
+      "assessmentCriterionCode": "AC 96",
+      "assessmentCriterion": "Explain what is internal and external Taper cutting of a centre lathe machine",
+      "lpn": "LPN 102",
+      "lessonPlanTitle": "Taper cutting",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://eng.libretexts.org/Bookshelves/Mechanical_Engineering/Manufacturing_Processes"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 104,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0206",
+      "topicName": "Speeds and feeds",
+      "assessmentCriterionCode": "AC 97",
+      "assessmentCriterion": "Explain how the speeds and feeds of a centre lathe machine are calculated",
+      "lpn": "LPN 103",
+      "lessonPlanTitle": "Speeds and feeds",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://commons.wikimedia.org/wiki/Category:Lathes"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 105,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT02",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0207",
+      "topicName": "Tools and tool selection",
+      "assessmentCriterionCode": "AC 98",
+      "assessmentCriterion": "Explain the selection of tools during the use of a centre lathe machine and explain the arious turning operations such as centre drill, external parallel turning, drilling, internal cutting, chamfering, knurling",
+      "lpn": "LPN 104",
+      "lessonPlanTitle": "Tools and tool selection",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Cutting_tools",
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 106,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0301",
+      "topicName": "Working principles of a milling machine",
+      "assessmentCriterionCode": "AC 99",
+      "assessmentCriterion": "Explain the working principles of a milling machine , the various milling operations such as drilling and boring, straddle, gang and form milling, T-slots and dovetails, cutting slots, keyways, key seats, gear cutting, in mechanical engineering",
+      "lpn": "LPN 105",
+      "lessonPlanTitle": "Working principles of a milling machine",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Milling_machines",
+        "https://en.wikibooks.org/wiki/Thread_Cutting"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 107,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0302",
+      "topicName": "Terminology and components of a milling machine",
+      "assessmentCriterionCode": "AC 100",
+      "assessmentCriterion": "Identify and explain the components of a milling machine in mechanical emgineerig",
+      "lpn": "LPN 106",
+      "lessonPlanTitle": "Terminology and components of a milling machine",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Milling_machine_components",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 108,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0303",
+      "topicName": "Milling machine cutting procedures including drilling and boring, straddle, gang and form milling, T-slots and dovetails, cutting slots, keyways, key seats",
+      "assessmentCriterionCode": "AC 101",
+      "assessmentCriterion": "Explain the cutting procedures of a Milling machine",
+      "lpn": "LPN 107",
+      "lessonPlanTitle": "Milling machine cutting procedures including drilling and boring, straddle, gang and form milling, T-slots and dovetails, cutting slots, keyways, key seats",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 109,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0304",
+      "topicName": "Speeds and feeds",
+      "assessmentCriterionCode": "AC 102",
+      "assessmentCriterion": "Explain how the speeds and feeds of a milling machine are calculated",
+      "lpn": "LPN 108",
+      "lessonPlanTitle": "Speeds and feeds",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://commons.wikimedia.org/wiki/Category:Cutting_tools"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 110,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0305",
+      "topicName": "Tool selection",
+      "assessmentCriterionCode": "AC 103",
+      "assessmentCriterion": "Explain how tools are identified and selected according to the application of the milling machine",
+      "lpn": "LPN 109",
+      "lessonPlanTitle": "Tool selection",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Cutting_tools",
+        "https://commons.wikimedia.org/wiki/Category:Milling_machines"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 111,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT03",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0306",
+      "topicName": "Indexing (dividing head and differential)",
+      "assessmentCriterionCode": "AC 104",
+      "assessmentCriterion": "Explain the Indexing and indexing calculations of a Milling machine",
+      "lpn": "LPN 110",
+      "lessonPlanTitle": "Indexing (dividing head and differential)",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Dividing_heads",
+        "https://commons.wikimedia.org/wiki/Category:Milling_machine_components"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 112,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0401",
+      "topicName": "Working principles of a pedestal-grinding machine",
+      "assessmentCriterionCode": "AC 105",
+      "assessmentCriterion": "Explain the working principles of a pedestal grinding machine",
+      "lpn": "LPN 111",
+      "lessonPlanTitle": "Working principles of a pedestal-grinding machine",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Grinding_machines",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 113,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0402",
+      "topicName": "Grinding machine types, parts and attachments",
+      "assessmentCriterionCode": "AC 106",
+      "assessmentCriterion": "Identify and explain the types, parts and attachments of a pedestal grinding machine in mechanical engineering",
+      "lpn": "LPN 112",
+      "lessonPlanTitle": "Grinding machine types, parts and attachments",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Grinding_machines",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 114,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0403",
+      "topicName": "Terminology and components",
+      "assessmentCriterionCode": "AC 107",
+      "assessmentCriterion": "Explain what are the components of a pedestal grinding machine",
+      "lpn": "LPN 113",
+      "lessonPlanTitle": "Terminology and components",
+      "bloomLevel": "identify",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://commons.wikimedia.org/wiki/Category:Cutting_tools"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 115,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0404",
+      "topicName": "Wheel selection",
+      "assessmentCriterionCode": "AC 108",
+      "assessmentCriterion": "Explain Wheel selection of a pedestal grinding machine according to purpose",
+      "lpn": "LPN 114",
+      "lessonPlanTitle": "Wheel selection",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/8Zxk0u3x2lE"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Abrasive_wheels",
+        "https://commons.wikimedia.org/wiki/Category:Dividing_heads"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 116,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT04",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0405",
+      "topicName": "Balancing, mounting and dressing",
+      "assessmentCriterionCode": "AC 109",
+      "assessmentCriterion": "Explain the balancing, mounting and dressing procedures of pedestal grinding machine",
+      "lpn": "LPN 115",
+      "lessonPlanTitle": "Balancing, mounting and dressing",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/8Zxk0u3x2lE"
+      ],
+      "openSourceUrls": [
+        "https://www.oercommons.org",
+        "https://commons.wikimedia.org/wiki/Category:Grinding_machines"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 117,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0501",
+      "topicName": "Working principles of surface and cylindrical grinding machines",
+      "assessmentCriterionCode": "AC 110",
+      "assessmentCriterion": "Explain the working principles of surface and cylindrical grinding in mechanical engineering",
+      "lpn": "LPN 116",
+      "lessonPlanTitle": "Working principles of surface and cylindrical grinding machines",
+      "bloomLevel": "explain",
+      "youtubeUrls": [
+        "https://youtu.be/2yQzH1YxR0E"
+      ],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Grinding_machines"
+      ],
+      "hasYoutube": true,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 118,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0502",
+      "topicName": "Terminology and components of surface and cylindrical grinding machines",
+      "assessmentCriterionCode": "AC 111",
+      "assessmentCriterion": "Identify and explain the components of surface and cylindrical grinding machines in mechanical engineering",
+      "lpn": "LPN 117",
+      "lessonPlanTitle": "Terminology and components of surface and cylindrical grinding machines",
+      "bloomLevel": "describe",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Grinding_machines",
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 119,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0503",
+      "topicName": "Off-hand and precision grinding cutting procedures for cylindrical and surface grinding machines",
+      "assessmentCriterionCode": "AC 112",
+      "assessmentCriterion": "Explain procedures used by surface and cylindrical machines in mechanical engineering",
+      "lpn": "LPN 118",
+      "lessonPlanTitle": "Off-hand and precision grinding cutting procedures for cylindrical and surface grinding machines",
+      "bloomLevel": "demonstrate",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://commons.wikimedia.org/wiki/Category:Abrasive_wheels"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 120,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0504",
+      "topicName": "Speeds and feeds",
+      "assessmentCriterionCode": "AC 113",
+      "assessmentCriterion": "Explain how the speeds and feeds for surface and cylindrical grinding machines are calculated",
+      "lpn": "LPN 119",
+      "lessonPlanTitle": "Speeds and feeds",
+      "bloomLevel": "apply",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org",
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 121,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0505",
+      "topicName": "Grinding wheel selection, classification, bonding types and wheel markings, profiles",
+      "assessmentCriterionCode": "AC 114",
+      "assessmentCriterion": "Explain the grinding wheel selection, classification, bonding types, wheel markings, and profiles of surface and cylindrical machines in mechanical engineering",
+      "lpn": "LPN 120",
+      "lessonPlanTitle": "Grinding wheel selection, classification, bonding types and wheel markings, profiles",
+      "bloomLevel": "explain",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Abrasive_wheels",
+        "https://commons.wikimedia.org/wiki/Category:Grinding_machines"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 122,
+      "qualificationCode": "90400",
+      "qualificationDescription": "Fitter and Turner Curriculum (New Intake)",
+      "subjectCode": "Machining Theory",
+      "subjectDescription": "KM-03-KT05",
+      "moduleCode": "KM-01",
+      "topicCode": "KT0506",
+      "topicName": "Grinding faults Internal Assessment Criteria",
+      "assessmentCriterionCode": "AC 115",
+      "assessmentCriterion": "Grinding operations for flat and cylindrical grinding are explained",
+      "lpn": "LPN 121",
+      "lessonPlanTitle": "Grinding faults Internal Assessment Criteria",
+      "bloomLevel": "explain",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org",
+        "https://commons.wikimedia.org/wiki/Category:Grinding_machines"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 123,
+      "qualificationCode": "",
+      "qualificationDescription": "",
+      "subjectCode": "",
+      "subjectDescription": "",
+      "moduleCode": "",
+      "topicCode": "",
+      "topicName": "",
+      "assessmentCriterionCode": "",
+      "assessmentCriterion": "",
+      "lpn": "",
+      "lessonPlanTitle": "",
+      "bloomLevel": "",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 124,
+      "qualificationCode": "",
+      "qualificationDescription": "",
+      "subjectCode": "",
+      "subjectDescription": "",
+      "moduleCode": "",
+      "topicCode": "",
+      "topicName": "",
+      "assessmentCriterionCode": "",
+      "assessmentCriterion": "",
+      "lpn": "",
+      "lessonPlanTitle": "",
+      "bloomLevel": "",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://eng.libretexts.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 125,
+      "qualificationCode": "",
+      "qualificationDescription": "",
+      "subjectCode": "",
+      "subjectDescription": "",
+      "moduleCode": "",
+      "topicCode": "",
+      "topicName": "",
+      "assessmentCriterionCode": "",
+      "assessmentCriterion": "",
+      "lpn": "",
+      "lessonPlanTitle": "",
+      "bloomLevel": "",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://commons.wikimedia.org/wiki/Category:Abrasive_wheels"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    },
+    {
+      "excelRow": 126,
+      "qualificationCode": "",
+      "qualificationDescription": "",
+      "subjectCode": "",
+      "subjectDescription": "",
+      "moduleCode": "",
+      "topicCode": "",
+      "topicName": "",
+      "assessmentCriterionCode": "",
+      "assessmentCriterion": "",
+      "lpn": "",
+      "lessonPlanTitle": "",
+      "bloomLevel": "",
+      "youtubeUrls": [],
+      "openSourceUrls": [
+        "https://www.oercommons.org"
+      ],
+      "hasYoutube": false,
+      "hasOpenSource": true
+    }
+  ]
+}

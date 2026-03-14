@@ -1,0 +1,342 @@
+﻿# Codex Continuity Log
+
+Generated (UTC): 2026-03-12 11:14:46
+Reason: startup
+Application Root: E:\ETDP\ETDP
+Workspace Root: E:\ETDP
+
+## Runtime
+
+- AiMode: offline
+- Environment: Development
+- LocalLibraryPath: E:\ETDP\ETDP\Imports
+- MachineName: PIERRE
+- ProcessId: 1792
+
+## Data Overview
+
+- Controllers: 34
+- DbSets: 22
+- Endpoints: 281
+- KnowledgeDeveloper: 0
+- Models: 22
+- Qualifications: 3
+- Services: 138
+- SourceMaterials: 53
+- Subjects: 149
+- Topics: 1142
+
+## Controllers and Routes
+
+- {"Name":"ActivationController","RouteBase":"api/[controller]","Dependencies":["ActivationTokenService","IHostEnvironment","IOptions\u00601"],"Endpoints":[{"Method":"POST","Route":"api/[controller]/activate","Action":"Activate"},{"Method":"GET","Route":"api/[controller]/status","Action":"Status"}]}
+- {"Name":"ActivityController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"AdminController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"POST","Route":"api/[controller]/seed-skeleton","Action":"SeedSkeleton"}]}
+- {"Name":"AssessmentComplianceController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]/download/{docType}","Action":"Download"},{"Method":"GET","Route":"api/[controller]/rubric/download","Action":"DownloadGeneratedRubric"},{"Method":"POST","Route":"api/[controller]/rubric/generate","Action":"GenerateRubric"},{"Method":"GET","Route":"api/[controller]/status","Action":"Status"}]}
+- {"Name":"AssessmentCriteriaController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"GET","Route":"api/[controller]/byQualification","Action":"GetByQualification"},{"Method":"GET","Route":"api/[controller]/byTopic","Action":"GetByTopic"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"AutomationController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]/jobs","Action":"List"},{"Method":"POST","Route":"api/[controller]/jobs/build-qualification","Action":"QueueBuild"},{"Method":"GET","Route":"api/[controller]/jobs/{id:int}","Action":"Get"},{"Method":"POST","Route":"api/[controller]/jobs/{id:int}/approve","Action":"Approve"},{"Method":"POST","Route":"api/[controller]/jobs/{id:int}/cancel","Action":"Cancel"}]}
+- {"Name":"ChartsController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"POST","Route":"api/[controller]/export-docx","Action":"ExportDocx"},{"Method":"GET","Route":"api/[controller]/flow-program","Action":"FlowProgram"},{"Method":"GET","Route":"api/[controller]/sunburst","Action":"Sunburst"},{"Method":"GET","Route":"api/[controller]/workflow-rows","Action":"WorkflowRows"}]}
+- {"Name":"CodeController","RouteBase":"api/[controller]","Dependencies":[],"Endpoints":[{"Method":"GET","Route":"api/[controller]/list","Action":"List"},{"Method":"GET","Route":"api/[controller]/read","Action":"Read"},{"Method":"GET","Route":"api/[controller]/search","Action":"Search"}]}
+- {"Name":"ContentController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext","KnowledgeHierarchyService","OcrExtractionService"],"Endpoints":[{"Method":"POST","Route":"api/[controller]/assemble","Action":"Assemble"},{"Method":"POST","Route":"api/[controller]/auto-map-sources","Action":"AutoMapSources"},{"Method":"POST","Route":"api/[controller]/consolidate-knowledge-hierarchy","Action":"ConsolidateKnowledgeHierarchy"},{"Method":"GET","Route":"api/[controller]/curriculum-benchmark-summary","Action":"CurriculumBenchmarkSummary"},{"Method":"POST","Route":"api/[controller]/draft","Action":"Draft"},{"Method":"POST","Route":"api/[controller]/export-knowledge-flat","Action":"ExportKnowledgeFlat"},{"Method":"POST","Route":"api/[controller]/export-slides","Action":"ExportSlides"},{"Method":"POST","Route":"api/[controller]/export-slides-batch","Action":"ExportSlidesBatch"},{"Method":"POST","Route":"api/[controller]/export-slides-batch-download","Action":"ExportSlidesBatchDownload"},{"Method":"POST","Route":"api/[controller]/export-slides-by-lpn","Action":"ExportSlidesByLpn"},{"Method":"POST","Route":"api/[controller]/export-slides-topic-download","Action":"ExportSlidesTopicDownload"},{"Method":"POST","Route":"api/[controller]/fetch-url","Action":"FetchUrl"},{"Method":"POST","Route":"api/[controller]/generate-bibliography","Action":"GenerateBibliography"},{"Method":"GET","Route":"api/[controller]/google-config","Action":"GetGoogleConfig"},{"Method":"POST","Route":"api/[controller]/import-engineering-seed","Action":"ImportEngineeringSeed"},{"Method":"POST","Route":"api/[controller]/import-folder","Action":"ImportFolder"},{"Method":"POST","Route":"api/[controller]/import-github-repo","Action":"ImportGitHubRepo"},{"Method":"POST","Route":"api/[controller]/import-local-folder","Action":"ImportLocalFolder"},{"Method":"POST","Route":"api/[controller]/import-oai-pmh","Action":"ImportOaiPmh"},{"Method":"POST","Route":"api/[controller]/index-qualification-knowledge","Action":"IndexQualificationKnowledge"},{"Method":"GET","Route":"api/[controller]/key-present","Action":"KeyPresent"},{"Method":"GET","Route":"api/[controller]/knowledge-pools","Action":"KnowledgePools"},{"Method":"POST","Route":"api/[controller]/launch-knowledge-focus","Action":"LaunchKnowledgeFocus"},{"Method":"GET","Route":"api/[controller]/materials","Action":"Materials"},{"Method":"DELETE","Route":"api/[controller]/materials/{id}","Action":"DeleteMaterial"},{"Method":"PUT","Route":"api/[controller]/materials/{id}","Action":"UpdateMaterial"},{"Method":"GET","Route":"api/[controller]/materials/{id}/export/{format}","Action":"ExportMaterial"},{"Method":"GET","Route":"api/[controller]/materials/{id}/pages","Action":"MaterialPages"},{"Method":"GET","Route":"api/[controller]/materials/{id}/text","Action":"MaterialText"},{"Method":"POST","Route":"api/[controller]/moderator-insert-best-context","Action":"ModeratorInsertBestContext"},{"Method":"POST","Route":"api/[controller]/preview-slides-topic","Action":"PreviewSlidesTopic"},{"Method":"POST","Route":"api/[controller]/process-material/{id}","Action":"ProcessMaterial"},{"Method":"GET","Route":"api/[controller]/qualification-knowledge-hierarchy","Action":"QualificationKnowledgeHierarchy"},{"Method":"GET","Route":"api/[controller]/runtime-config","Action":"RuntimeConfig"},{"Method":"POST","Route":"api/[controller]/scaffold-knowledge-hierarchy","Action":"ScaffoldKnowledgeHierarchy"},{"Method":"POST","Route":"api/[controller]/search","Action":"Search"},{"Method":"POST","Route":"api/[controller]/search-azure","Action":"SearchAzure"},{"Method":"POST","Route":"api/[controller]/search-local","Action":"SearchLocal"},{"Method":"POST","Route":"api/[controller]/search-paragraphs","Action":"SearchParagraphs"},{"Method":"POST","Route":"api/[controller]/search-unified","Action":"SearchAzure"},{"Method":"POST","Route":"api/[controller]/store-bing","Action":"StoreBing"},{"Method":"POST","Route":"api/[controller]/store-env-file","Action":"StoreEnvFile"},{"Method":"POST","Route":"api/[controller]/store-google","Action":"StoreGoogle"},{"Method":"POST","Route":"api/[controller]/store-key","Action":"StoreKey"},{"Method":"POST","Route":"api/[controller]/store-searx-url","Action":"StoreSearxUrl"},{"Method":"POST","Route":"api/[controller]/sync-knowledge-hierarchy","Action":"SyncKnowledgeHierarchy"},{"Method":"POST","Route":"api/[controller]/upload-curriculum-local","Action":"UploadCurriculumToBlob"},{"Method":"POST","Route":"api/[controller]/upload-curriculum-to-blob","Action":"UploadCurriculumToBlob"},{"Method":"POST","Route":"api/[controller]/upload-developer-knowledge","Action":"UploadDeveloperKnowledge"},{"Method":"POST","Route":"api/[controller]/upload-material","Action":"UploadMaterial"},{"Method":"POST","Route":"api/[controller]/upload-material-local","Action":"UploadMaterialToBlob"},{"Method":"POST","Route":"api/[controller]/upload-material-to-blob","Action":"UploadMaterialToBlob"},{"Method":"POST","Route":"api/[controller]/upload-materials-bulk","Action":"UploadMaterialsBulk"},{"Method":"POST","Route":"api/[controller]/upload-source","Action":"UploadSource"},{"Method":"GET","Route":"api/[controller]/upload-structure-readme","Action":"UploadStructureReadme"}]}
+- {"Name":"CurriculumPhaseController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"GET","Route":"api/[controller]/byQualification","Action":"GetByQualification"},{"Method":"POST","Route":"api/[controller]/import-csv","Action":"ImportCsv"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"DemographicsController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"GET","Route":"api/[controller]/byQualification","Action":"GetByQualification"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"DiagnosticsController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext","CodexContinuityService","OcrExtractionService","WorkspaceBackupService"],"Endpoints":[{"Method":"GET","Route":"api/[controller]/backup-status","Action":"BackupStatus"},{"Method":"POST","Route":"api/[controller]/client-error","Action":"CaptureClientError"},{"Method":"GET","Route":"api/[controller]/codex-continuity-latest","Action":"CodexContinuityLatest"},{"Method":"POST","Route":"api/[controller]/codex-continuity-refresh","Action":"CodexContinuityRefresh"},{"Method":"GET","Route":"api/[controller]/codex-continuity-status","Action":"CodexContinuityStatus"},{"Method":"GET","Route":"api/[controller]/download","Action":"Download"},{"Method":"GET","Route":"api/[controller]/entry/{id:int}","Action":"Entry"},{"Method":"GET","Route":"api/[controller]/ocr-status","Action":"OcrStatus"},{"Method":"GET","Route":"api/[controller]/recent","Action":"Recent"},{"Method":"POST","Route":"api/[controller]/run-backup","Action":"RunBackup"},{"Method":"GET","Route":"api/[controller]/server-info","Action":"ServerInfo"}]}
+- {"Name":"ElectricBookExportController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext","ILogger\u00601","IWebHostEnvironment"],"Endpoints":[{"Method":"POST","Route":"api/[controller]/map","Action":"Map"},{"Method":"POST","Route":"api/[controller]/trigger","Action":"Trigger"}]}
+- {"Name":"KnowledgeController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext","IWebHostEnvironment","KnowledgeHierarchyService","SemanticStateContinuityService"],"Endpoints":[{"Method":"POST","Route":"api/[controller]/chat","Action":"Chat"},{"Method":"GET","Route":"api/[controller]/chat-context-sources","Action":"ChatContextSources"},{"Method":"GET","Route":"api/[controller]/development-readme","Action":"DevelopmentReadme"},{"Method":"GET","Route":"api/[controller]/health","Action":"Health"},{"Method":"GET","Route":"api/[controller]/knowledge-pools","Action":"KnowledgePools"},{"Method":"GET","Route":"api/[controller]/mira-advanced-rules","Action":"GetMiraAdvancedRules"},{"Method":"PUT","Route":"api/[controller]/mira-advanced-rules","Action":"UpdateMiraAdvancedRules"},{"Method":"GET","Route":"api/[controller]/mira-character","Action":"GetMiraCharacter"},{"Method":"PUT","Route":"api/[controller]/mira-character","Action":"UpdateMiraCharacter"},{"Method":"GET","Route":"api/[controller]/moderator-bootstrap","Action":"ModeratorBootstrap"},{"Method":"GET","Route":"api/[controller]/semantic-state-continuity-log","Action":"SemanticStateContinuityLog"},{"Method":"GET","Route":"api/[controller]/smi-task-table","Action":"GetSmiTaskTable"},{"Method":"POST","Route":"api/[controller]/smi-task-table/sync","Action":"SyncSmiTaskTable"}]}
+- {"Name":"KnowledgeQuestionnaireController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext","IWebHostEnvironment","KnowledgeQuestionnaireV1Service","SemanticKernelQuestionService"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"GET","Route":"api/[controller]/download","Action":"Download"},{"Method":"GET","Route":"api/[controller]/download-consolidated","Action":"DownloadConsolidated"},{"Method":"GET","Route":"api/[controller]/download-memorandum","Action":"DownloadMemorandum"},{"Method":"GET","Route":"api/[controller]/download-memorandum-consolidated-range","Action":"DownloadMemorandumConsolidatedRange"},{"Method":"GET","Route":"api/[controller]/download-memorandum-range","Action":"DownloadMemorandumRange"},{"Method":"GET","Route":"api/[controller]/download-range","Action":"DownloadRange"},{"Method":"GET","Route":"api/[controller]/download-report","Action":"DownloadReport"},{"Method":"GET","Route":"api/[controller]/download-report-range","Action":"DownloadReportRange"},{"Method":"GET","Route":"api/[controller]/report","Action":"Report"},{"Method":"POST","Route":"api/[controller]/smi-draft","Action":"GenerateSmiDraft"},{"Method":"GET","Route":"api/[controller]/v1-draft","Action":"GetV1Draft"},{"Method":"GET","Route":"api/[controller]/v1-phase-draft","Action":"GetV1PhaseDraft"},{"Method":"POST","Route":"api/[controller]/v1-phase-export-docx","Action":"ExportPhaseQuestionnaireDocx"},{"Method":"POST","Route":"api/[controller]/v1-phase-smi-draft","Action":"GeneratePhaseSmiDraft"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"LearnerGuideController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"GET","Route":"api/[controller]/download","Action":"Download"},{"Method":"GET","Route":"api/[controller]/download-audio","Action":"DownloadAudio"},{"Method":"GET","Route":"api/[controller]/download-range","Action":"DownloadRange"},{"Method":"GET","Route":"api/[controller]/export-readiness","Action":"ExportReadiness"},{"Method":"POST","Route":"api/[controller]/paraphrase","Action":"Paraphrase"},{"Method":"GET","Route":"api/[controller]/paraphrase-review","Action":"GetParaphraseReview"},{"Method":"POST","Route":"api/[controller]/paraphrase-review/save","Action":"SaveParaphraseReview"},{"Method":"POST","Route":"api/[controller]/paraphrase-workflow","Action":"BuildParaphraseWorkflow"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"LearnerRegistrationController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]/import-excel","Action":"ImportExcel"},{"Method":"GET","Route":"api/[controller]/template/download","Action":"DownloadTemplate"},{"Method":"GET","Route":"api/[controller]/template/original","Action":"DownloadOriginalTemplate"}]}
+- {"Name":"LearningMaterialController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"POST","Route":"api/[controller]/ensure-workspace","Action":"EnsureWorkspace"}]}
+- {"Name":"LearningScheduleController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]/download","Action":"Download"},{"Method":"GET","Route":"api/[controller]/download-docx","Action":"DownloadDocx"}]}
+- {"Name":"LecturerToolkitController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"POST","Route":"api/[controller]/automate-learning-schedule","Action":"AutomateLearningSchedule"},{"Method":"POST","Route":"api/[controller]/import-csv","Action":"ImportCsv"},{"Method":"POST","Route":"api/[controller]/upload","Action":"UploadExcel"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"LessonPlanController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"GET","Route":"api/[controller]/byCriteria","Action":"GetByCriteria"},{"Method":"GET","Route":"api/[controller]/byQualification","Action":"GetByQualification"},{"Method":"POST","Route":"api/[controller]/reorder","Action":"Reorder"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"OutcomeController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"GET","Route":"api/[controller]/byQualification","Action":"GetByQualification"},{"Method":"GET","Route":"api/[controller]/bySubject","Action":"GetBySubject"},{"Method":"POST","Route":"api/[controller]/import-csv","Action":"ImportCsv"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"ProjectRolloutController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext","IWebHostEnvironment"],"Endpoints":[{"Method":"POST","Route":"api/[controller]/export","Action":"Export"},{"Method":"POST","Route":"api/[controller]/preview","Action":"Preview"}]}
+- {"Name":"QualificationController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"GET","Route":"api/[controller]/search","Action":"Search"},{"Method":"POST","Route":"api/[controller]/upload-logo","Action":"UploadLogo"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"QualificationPhaseController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{qualificationId}","Action":"GetByQualification"}]}
+- {"Name":"QualityController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]/checks","Action":"Checks"}]}
+- {"Name":"QualityCouncilCurriculaController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext","CurriculumKnowledgeScanService","KnowledgeHierarchyService","OcrExtractionService","SansMetadataService"],"Endpoints":[{"Method":"POST","Route":"api/[controller]/apply-mapping-review","Action":"ApplyMappingReview"},{"Method":"POST","Route":"api/[controller]/apply-sans-mapping-review","Action":"ApplySansMappingReview"},{"Method":"POST","Route":"api/[controller]/build-mapping-review-queue","Action":"BuildMappingReviewQueue"},{"Method":"POST","Route":"api/[controller]/build-sans-mapping-review","Action":"BuildSansMappingReview"},{"Method":"GET","Route":"api/[controller]/cognitive-export-file","Action":"CognitiveExportFile"},{"Method":"GET","Route":"api/[controller]/cognitive-exports","Action":"CognitiveExports"},{"Method":"POST","Route":"api/[controller]/import-from-library","Action":"ImportFromSharedLibrary"},{"Method":"GET","Route":"api/[controller]/library","Action":"SharedLibrary"},{"Method":"GET","Route":"api/[controller]/mapping-review-queue","Action":"GetMappingReviewQueue"},{"Method":"POST","Route":"api/[controller]/queue-automation","Action":"QueueAutomation"},{"Method":"POST","Route":"api/[controller]/reset","Action":"Reset"},{"Method":"POST","Route":"api/[controller]/run-cognitive-scan","Action":"RunCognitiveScan"},{"Method":"POST","Route":"api/[controller]/run-sans-metadata-scan","Action":"RunSansMetadataScan"},{"Method":"POST","Route":"api/[controller]/run-scrape","Action":"RunScrape"},{"Method":"GET","Route":"api/[controller]/sans-code-name-export","Action":"ExportSansCodeName"},{"Method":"GET","Route":"api/[controller]/sans-mapping-review-queue","Action":"GetSansMappingReviewQueue"},{"Method":"GET","Route":"api/[controller]/sans-metadata-index","Action":"GetSansMetadataIndex"},{"Method":"GET","Route":"api/[controller]/status","Action":"Status"},{"Method":"GET","Route":"api/[controller]/tree","Action":"Tree"},{"Method":"POST","Route":"api/[controller]/upload","Action":"Upload"},{"Method":"POST","Route":"api/[controller]/upload-manual-csv","Action":"UploadManualCsv"}]}
+- {"Name":"RepoIntegrationController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext","ILogger\u00601","IWebHostEnvironment"],"Endpoints":[{"Method":"GET","Route":"api/[controller]/awesome/search","Action":"SearchAwesome"},{"Method":"GET","Route":"api/[controller]/catalog","Action":"Catalog"},{"Method":"GET","Route":"api/[controller]/help/{tool}","Action":"Help"},{"Method":"POST","Route":"api/[controller]/run/electric-book","Action":"RunElectricBook"},{"Method":"POST","Route":"api/[controller]/run/hunyuan","Action":"RunHunyuan"},{"Method":"POST","Route":"api/[controller]/run/langchain","Action":"RunLangchain"},{"Method":"POST","Route":"api/[controller]/run/ltx","Action":"RunLtx"},{"Method":"POST","Route":"api/[controller]/run/mem0","Action":"RunMem0"},{"Method":"POST","Route":"api/[controller]/run/opensora","Action":"RunOpenSora"},{"Method":"POST","Route":"api/[controller]/run/paper2slides","Action":"RunPaper2Slides"},{"Method":"POST","Route":"api/[controller]/run/slide-deck-ai","Action":"RunSlideDeckAi"},{"Method":"POST","Route":"api/[controller]/run/swift","Action":"RunSwift"},{"Method":"POST","Route":"api/[controller]/run/vimax","Action":"RunViMax"}]}
+- {"Name":"SubjectController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"GET","Route":"api/[controller]/byPhase","Action":"GetByPhase"},{"Method":"GET","Route":"api/[controller]/byQualification","Action":"GetByQualification"},{"Method":"POST","Route":"api/[controller]/import-csv","Action":"ImportCsv"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"SubtopicController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"TemplatesController","RouteBase":"api/[controller]","Dependencies":[],"Endpoints":[{"Method":"GET","Route":"api/[controller]/LecturerToolkit","Action":"LecturerToolkit"},{"Method":"GET","Route":"api/[controller]/LessonPlan","Action":"LessonPlan"},{"Method":"GET","Route":"api/[controller]/LessonPlanContentXlsx","Action":"LessonPlanContentXlsx"},{"Method":"GET","Route":"api/[controller]/Outcomes","Action":"Outcomes"},{"Method":"GET","Route":"api/[controller]/Phases","Action":"Phases"},{"Method":"GET","Route":"api/[controller]/Subjects","Action":"Subjects"},{"Method":"GET","Route":"api/[controller]/Topics","Action":"Topics"}]}
+- {"Name":"TextToVideoController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext","ILogger\u00601","IWebHostEnvironment"],"Endpoints":[{"Method":"POST","Route":"api/[controller]/generate","Action":"Generate"},{"Method":"GET","Route":"api/[controller]/tts-options","Action":"GetTtsOptions"},{"Method":"POST","Route":"api/[controller]/tts-preview","Action":"TtsPreview"}]}
+- {"Name":"TopicController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"POST","Route":"api/[controller]/apply-periods-by-subject","Action":"ApplyPeriodsBySubject"},{"Method":"GET","Route":"api/[controller]/byOutcome","Action":"GetByOutcome"},{"Method":"GET","Route":"api/[controller]/byQualification","Action":"GetByQualification"},{"Method":"GET","Route":"api/[controller]/bySubject","Action":"GetBySubject"},{"Method":"POST","Route":"api/[controller]/import-csv","Action":"ImportCsv"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+- {"Name":"WorkbookController","RouteBase":"api/[controller]","Dependencies":["ApplicationDbContext","IWebHostEnvironment","SemanticKernelQuestionService"],"Endpoints":[{"Method":"GET","Route":"api/[controller]","Action":"GetAll"},{"Method":"POST","Route":"api/[controller]","Action":"Create"},{"Method":"GET","Route":"api/[controller]/download","Action":"Download"},{"Method":"GET","Route":"api/[controller]/download-consolidated","Action":"DownloadConsolidated"},{"Method":"GET","Route":"api/[controller]/download-memorandum","Action":"DownloadMemorandum"},{"Method":"GET","Route":"api/[controller]/download-memorandum-range","Action":"DownloadMemorandumRange"},{"Method":"GET","Route":"api/[controller]/download-range","Action":"DownloadRange"},{"Method":"GET","Route":"api/[controller]/download-report","Action":"DownloadReport"},{"Method":"GET","Route":"api/[controller]/download-report-range","Action":"DownloadReportRange"},{"Method":"GET","Route":"api/[controller]/report","Action":"Report"},{"Method":"DELETE","Route":"api/[controller]/{id}","Action":"Delete"},{"Method":"GET","Route":"api/[controller]/{id}","Action":"Get"},{"Method":"PUT","Route":"api/[controller]/{id}","Action":"Update"}]}
+
+## Services
+
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass12_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass16_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass16_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass16_1","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass17_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass18_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass19_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass20_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass21_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass25_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass27_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass28_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass28_1","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass28_2","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass29_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass30_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass31_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass37_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass38_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass41_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass43_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass44_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass4_0","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass4_1","Dependencies":[]}
+- {"Name":"\u003C\u003Ec__DisplayClass56_0","Dependencies":[]}
+- {"Name":"\u003CApplyMappingReviewAsync\u003Ed__14","Dependencies":[]}
+- {"Name":"\u003CBuildMappingQueueAsync\u003Ed__12","Dependencies":[]}
+- {"Name":"\u003CBuildSnapshotAsync\u003Ed__16","Dependencies":[]}
+- {"Name":"\u003CDeletePendingMappingsAsync\u003Ed__16","Dependencies":[]}
+- {"Name":"\u003CEnhanceExtractedTextAsync\u003Ed__23","Dependencies":[]}
+- {"Name":"\u003CExecuteAsync\u003Ed__10","Dependencies":[]}
+- {"Name":"\u003CExecuteAsync\u003Ed__15","Dependencies":[]}
+- {"Name":"\u003CExecuteAsync\u003Ed__3","Dependencies":[]}
+- {"Name":"\u003CExecuteJobAsync\u003Ed__5","Dependencies":[]}
+- {"Name":"\u003CExpandVerbVariants\u003Ed__35","Dependencies":["Int32"]}
+- {"Name":"\u003CExpandVerbVariantsInternal\u003Ed__36","Dependencies":["Int32"]}
+- {"Name":"\u003CGenerateMultipleChoiceQuestionAsync\u003Ed__6","Dependencies":[]}
+- {"Name":"\u003CGenerateTrueFalseQuestionAsync\u003Ed__5","Dependencies":[]}
+- {"Name":"\u003CGetCodeNameIndexAsync\u003Ed__11","Dependencies":[]}
+- {"Name":"\u003CGetMappingQueueAsync\u003Ed__13","Dependencies":[]}
+- {"Name":"\u003CGetMappingQueueAsync\u003Ed__19","Dependencies":[]}
+- {"Name":"\u003CGetMetadataIndexAsync\u003Ed__10","Dependencies":[]}
+- {"Name":"\u003CInvoke\u003Ed__2","Dependencies":[]}
+- {"Name":"\u003CInvoke\u003Ed__4","Dependencies":[]}
+- {"Name":"\u003CInvokeAndParseAsync\u003Ed__7","Dependencies":[]}
+- {"Name":"\u003CLoadMetadataAsync\u003Ed__20","Dependencies":[]}
+- {"Name":"\u003CMarkMappingFailedAsync\u003Ed__18","Dependencies":[]}
+- {"Name":"\u003CReadLocalDocumentAsync\u003Ed__26","Dependencies":[]}
+- {"Name":"\u003CReadRemoteDocumentsAsync\u003Ed__25","Dependencies":[]}
+- {"Name":"\u003CRefreshNowAsync\u003Ed__14","Dependencies":[]}
+- {"Name":"\u003CRunBackupNowAsync\u003Ed__9","Dependencies":[]}
+- {"Name":"\u003CRunImageOcrAsync\u003Ed__24","Dependencies":[]}
+- {"Name":"\u003CRunPdfOcrAsync\u003Ed__25","Dependencies":[]}
+- {"Name":"\u003CRunRoboCopyAsync\u003Ed__11","Dependencies":[]}
+- {"Name":"\u003CScanSourcesAsync\u003Ed__9","Dependencies":[]}
+- {"Name":"\u003CTryAzureDocumentIntelligenceAsync\u003Ed__27","Dependencies":[]}
+- {"Name":"\u003CTryTesseractAsync\u003Ed__28","Dependencies":[]}
+- {"Name":"\u003CUpsertMappingAsync\u003Ed__17","Dependencies":[]}
+- {"Name":"\u003CUpsertMetadataAsync\u003Ed__21","Dependencies":[]}
+- {"Name":"AssessmentCriteriaProjection","Dependencies":[]}
+- {"Name":"AutomationJobWorker","Dependencies":["ILogger\u00601","IServiceScopeFactory"]}
+- {"Name":"BackupHistoryEntry","Dependencies":[]}
+- {"Name":"BackupStatus","Dependencies":[]}
+- {"Name":"BloomVerbFamily","Dependencies":[]}
+- {"Name":"BuildJobConfig","Dependencies":[]}
+- {"Name":"CodexContinuityService","Dependencies":["IDataProtectionProvider","ILogger\u00601","IServiceScopeFactory","IWebHostEnvironment"]}
+- {"Name":"CognitiveScanArtifacts","Dependencies":[]}
+- {"Name":"ConsolidationOptions","Dependencies":[]}
+- {"Name":"ConsolidationResult","Dependencies":[]}
+- {"Name":"ContinuityLedgerEntry","Dependencies":[]}
+- {"Name":"ContinuitySnapshot","Dependencies":[]}
+- {"Name":"ContinuityStatus","Dependencies":[]}
+- {"Name":"CoverageReportOptions","Dependencies":[]}
+- {"Name":"CoverageReportSummary","Dependencies":[]}
+- {"Name":"CriterionDecomposition","Dependencies":[]}
+- {"Name":"CurriculumKnowledgeScanService","Dependencies":[]}
+- {"Name":"CurriculumPhaseCsvRow","Dependencies":[]}
+- {"Name":"DetectedVerbMatch","Dependencies":[]}
+- {"Name":"DeveloperUploadRunStats","Dependencies":[]}
+- {"Name":"EndpointSummary","Dependencies":[]}
+- {"Name":"EngineAttemptResult","Dependencies":[]}
+- {"Name":"ExceptionLoggingMiddleware","Dependencies":["ILogger\u00601","IServiceScopeFactory","RequestDelegate"]}
+- {"Name":"GeneratedQuestionEnvelope","Dependencies":[]}
+- {"Name":"KnowledgeHierarchyService","Dependencies":["ApplicationDbContext","ILogger\u00601","OcrExtractionService"]}
+- {"Name":"KnowledgeModule","Dependencies":[]}
+- {"Name":"KnowledgeParseResult","Dependencies":[]}
+- {"Name":"KnowledgeQuestionnaireV1CriterionIntentDraft","Dependencies":[]}
+- {"Name":"KnowledgeQuestionnaireV1Draft","Dependencies":[]}
+- {"Name":"KnowledgeQuestionnaireV1DraftStats","Dependencies":[]}
+- {"Name":"KnowledgeQuestionnaireV1MetadataDraft","Dependencies":[]}
+- {"Name":"KnowledgeQuestionnaireV1Service","Dependencies":["ApplicationDbContext"]}
+- {"Name":"KnowledgeQuestionnaireV1SubjectScope","Dependencies":[]}
+- {"Name":"KnowledgeQuestionnaireV1TopicScope","Dependencies":[]}
+- {"Name":"KnowledgeSubject","Dependencies":[]}
+- {"Name":"KnowledgeSubjectRow","Dependencies":[]}
+- {"Name":"KnowledgeTopicElement","Dependencies":[]}
+- {"Name":"KnowledgeTopicRow","Dependencies":[]}
+- {"Name":"OcrExtractionService","Dependencies":["ILogger\u00601"]}
+- {"Name":"OcrHealthSnapshot","Dependencies":[]}
+- {"Name":"OcrRunResult","Dependencies":[]}
+- {"Name":"ParsedSourceDocument","Dependencies":[]}
+- {"Name":"QualificationFolderInfo","Dependencies":[]}
+- {"Name":"RequestCorrelationMiddleware","Dependencies":["RequestDelegate"]}
+- {"Name":"ResourceCoverageCandidate","Dependencies":[]}
+- {"Name":"SansApplyResult","Dependencies":[]}
+- {"Name":"SansCodeNameItem","Dependencies":[]}
+- {"Name":"SansMappingEvaluation","Dependencies":[]}
+- {"Name":"SansMappingQueueItem","Dependencies":[]}
+- {"Name":"SansMappingQueueResult","Dependencies":[]}
+
+## DbSets
+
+- Activities
+- AssessmentCriteria
+- AutomationJobs
+- CurriculumPhases
+- Demographics
+- KnowledgeQuestionnaires
+- LearnerGuides
+- LearnerRegistrations
+- LecturerToolkitEntries
+- LessonPlans
+- Outcomes
+- QualificationPhases
+- Qualifications
+- SmiConversationArchives
+- SmiSemanticStateSnapshots
+- SmiTaskTableItems
+- SourceMaterials
+- Subjects
+- Subtopics
+- SystemErrorLogs
+- Topics
+- Workbooks
+
+## Key Knowledge Files
+
+- {"Path":"E:\\ETDP\\ETDP\\development.readme.md","Exists":true,"LastWriteUtc":"2026-03-09T20:13:40.4462147Z","SizeBytes":35135}
+- {"Path":"E:\\ETDP\\ETDP\\Imports\\KnowledgeHierarchy\\upload.readme.md","Exists":true,"LastWriteUtc":"2026-03-12T11:14:45.9208101Z","SizeBytes":2981}
+- {"Path":"E:\\ETDP\\ETDP\\AzureAgent\\MODERATOR4_BOOTSTRAP_PROTOCOL.md","Exists":true,"LastWriteUtc":"2026-02-20T15:16:01.2046985Z","SizeBytes":4666}
+- {"Path":"E:\\ETDP\\ETDP\\BACKEND_README.md","Exists":true,"LastWriteUtc":"2026-02-17T17:25:42.4533589Z","SizeBytes":940}
+
+## Recent Core File Updates
+
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\KnowledgeQuestionnaireController.cs","LastWriteUtc":"2026-03-12T11:13:03.2129258Z","SizeBytes":207071}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\QualityCouncilCurriculaPage.jsx","LastWriteUtc":"2026-03-12T01:50:33.5250026Z","SizeBytes":50612}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\QualityCouncilCurriculaController.cs","LastWriteUtc":"2026-03-12T01:50:11.650671Z","SizeBytes":117717}
+- {"Path":"E:\\ETDP\\ETDP\\Services\\SansMetadataService.cs","LastWriteUtc":"2026-03-12T01:48:42.8180305Z","SizeBytes":56091}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\KnowledgeController.cs","LastWriteUtc":"2026-03-12T01:17:58.1436267Z","SizeBytes":196101}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\AIAgent.jsx","LastWriteUtc":"2026-03-12T01:17:33.4595554Z","SizeBytes":107521}
+- {"Path":"E:\\ETDP\\ETDP\\Models\\ETD.Api\\ApplicationDbContext.cs","LastWriteUtc":"2026-03-11T20:09:02.7539966Z","SizeBytes":23017}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LecturerToolkitPage.jsx","LastWriteUtc":"2026-03-11T07:38:34.0970374Z","SizeBytes":24487}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\ContentBuilderPage.jsx","LastWriteUtc":"2026-03-11T07:36:47.0036844Z","SizeBytes":128889}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\TopicsPage.jsx","LastWriteUtc":"2026-03-11T07:23:45.3086106Z","SizeBytes":40103}
+- {"Path":"E:\\ETDP\\ETDP\\Services\\KnowledgeQuestionnaireV1Service.cs","LastWriteUtc":"2026-03-10T15:36:36.8531696Z","SizeBytes":49471}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\Dashboard.jsx","LastWriteUtc":"2026-03-10T14:03:51.1875542Z","SizeBytes":19130}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\ContentController.cs","LastWriteUtc":"2026-03-10T14:01:55.7317446Z","SizeBytes":446357}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\TemplatesController.cs","LastWriteUtc":"2026-03-10T14:01:06.8897238Z","SizeBytes":10525}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\LecturerToolkitController.cs","LastWriteUtc":"2026-03-10T13:35:36.5381818Z","SizeBytes":48885}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\KnowledgeQuestionnairePage.jsx","LastWriteUtc":"2026-03-10T13:06:34.861652Z","SizeBytes":58214}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\utils\\docxPreview.js","LastWriteUtc":"2026-03-10T13:04:21.9282323Z","SizeBytes":1657}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearnerGuidePage.jsx","LastWriteUtc":"2026-03-10T12:17:55.0447642Z","SizeBytes":24860}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\LearnerGuideController.cs","LastWriteUtc":"2026-03-10T12:16:14.6276667Z","SizeBytes":145050}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\utils\\questionnaireDesigner.js","LastWriteUtc":"2026-03-10T11:21:39.0558852Z","SizeBytes":11414}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\utils\\knowledgeQuestionnaireV1.js","LastWriteUtc":"2026-03-10T09:59:20.7328724Z","SizeBytes":41170}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\utils\\learningMaterialWorkflow.js","LastWriteUtc":"2026-03-10T07:40:28.4700991Z","SizeBytes":3578}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\CurriculumPhaseController.cs","LastWriteUtc":"2026-03-10T07:40:28.4668173Z","SizeBytes":11942}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialSummativeAssessmentPage.jsx","LastWriteUtc":"2026-03-10T07:09:58.3805783Z","SizeBytes":908}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialSummativeMemorandaPage.jsx","LastWriteUtc":"2026-03-10T01:57:22.1820104Z","SizeBytes":1587}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\UserGuidePage.jsx","LastWriteUtc":"2026-03-10T01:57:09.4886802Z","SizeBytes":23260}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\ExportsPage.jsx","LastWriteUtc":"2026-03-10T01:56:01.6137325Z","SizeBytes":1505}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\PrintMenuPage.jsx","LastWriteUtc":"2026-03-10T01:55:58.6339004Z","SizeBytes":21115}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\App.jsx","LastWriteUtc":"2026-03-10T01:54:44.538078Z","SizeBytes":13917}
+- {"Path":"E:\\ETDP\\ETDP\\Services\\SemanticStateContinuityService.cs","LastWriteUtc":"2026-03-09T20:51:59.030092Z","SizeBytes":33366}
+- {"Path":"E:\\ETDP\\ETDP\\Models\\ETD.Api\\Models\\SmiSemanticStateSnapshot.cs","LastWriteUtc":"2026-03-09T20:48:20.0708934Z","SizeBytes":2464}
+- {"Path":"E:\\ETDP\\ETDP\\Services\\OcrExtractionService.cs","LastWriteUtc":"2026-03-09T05:56:04.000179Z","SizeBytes":32148}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\RepoIntegrationController.cs","LastWriteUtc":"2026-03-09T05:56:03.9986244Z","SizeBytes":77558}
+- {"Path":"E:\\ETDP\\ETDP\\Services\\WorkspaceBackupService.cs","LastWriteUtc":"2026-03-09T02:13:53.9771756Z","SizeBytes":23412}
+- {"Path":"E:\\ETDP\\ETDP\\Models\\ETD.Api\\Models\\SmiTaskTableItem.cs","LastWriteUtc":"2026-03-09T02:01:00.0669912Z","SizeBytes":1050}
+- {"Path":"E:\\ETDP\\ETDP\\Models\\ETD.Api\\Models\\SmiConversationArchive.cs","LastWriteUtc":"2026-03-09T02:01:00.0580979Z","SizeBytes":1026}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\WorkbookController.cs","LastWriteUtc":"2026-03-07T05:15:05.8549033Z","SizeBytes":111735}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\PowerPointSlidesPage.jsx","LastWriteUtc":"2026-03-06T18:31:04.6135155Z","SizeBytes":43031}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\WorkbookPage.jsx","LastWriteUtc":"2026-03-06T18:30:32.5707176Z","SizeBytes":13766}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\ChartsController.cs","LastWriteUtc":"2026-03-06T18:26:44.2422479Z","SizeBytes":26628}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\ProjectRolloutPlanPage.jsx","LastWriteUtc":"2026-03-06T18:07:55.2048695Z","SizeBytes":12564}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\ProjectRolloutController.cs","LastWriteUtc":"2026-03-06T18:07:43.3091619Z","SizeBytes":34531}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\LearningScheduleController.cs","LastWriteUtc":"2026-03-06T17:43:32.7251057Z","SizeBytes":47929}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\TextToVideoEditorPage.jsx","LastWriteUtc":"2026-03-06T17:00:37.1071878Z","SizeBytes":70879}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\Wan21Page.jsx","LastWriteUtc":"2026-03-06T16:59:46.2753292Z","SizeBytes":7535}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LecturerAssistancePage.jsx","LastWriteUtc":"2026-03-06T16:58:58.0466666Z","SizeBytes":15582}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\context\\QualificationContext.jsx","LastWriteUtc":"2026-03-06T15:06:50.971836Z","SizeBytes":2029}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialSchedulePage.jsx","LastWriteUtc":"2026-03-06T14:27:44.9090508Z","SizeBytes":9158}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\LearningMaterialController.cs","LastWriteUtc":"2026-03-06T13:47:40.818582Z","SizeBytes":4631}
+- {"Path":"E:\\ETDP\\ETDP\\Services\\KnowledgeHierarchyService.cs","LastWriteUtc":"2026-03-06T08:34:50.2014566Z","SizeBytes":85100}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\RepoIntegrationHubPage.jsx","LastWriteUtc":"2026-03-04T07:35:27.1447661Z","SizeBytes":50908}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\ElectricBookExportPage.jsx","LastWriteUtc":"2026-03-04T07:15:07.5116347Z","SizeBytes":12791}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\ElectricBookExportController.cs","LastWriteUtc":"2026-03-04T07:14:12.3844515Z","SizeBytes":29886}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialLearnerGuidePage.jsx","LastWriteUtc":"2026-03-04T06:08:08.309421Z","SizeBytes":1764}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LibraryManagerPage.jsx","LastWriteUtc":"2026-03-03T20:38:34.8329716Z","SizeBytes":27367}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\CodeController.cs","LastWriteUtc":"2026-03-03T20:37:56.2749778Z","SizeBytes":4869}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialWorkbookMemorandaPage.jsx","LastWriteUtc":"2026-03-01T12:00:38.5955278Z","SizeBytes":4155}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\MainMenuPage.jsx","LastWriteUtc":"2026-03-01T11:51:14.2392999Z","SizeBytes":7512}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\QualificationReview.jsx","LastWriteUtc":"2026-03-01T11:51:06.2573317Z","SizeBytes":6932}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\QualificationsPage.jsx","LastWriteUtc":"2026-03-01T11:50:59.7515239Z","SizeBytes":7409}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\MainPage.jsx","LastWriteUtc":"2026-03-01T11:50:51.7988371Z","SizeBytes":23608}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\QualificationController.cs","LastWriteUtc":"2026-03-01T11:50:24.6511034Z","SizeBytes":13916}
+- {"Path":"E:\\ETDP\\ETDP\\Models\\ETD.Api\\DTOs\\QualificationDto.cs","LastWriteUtc":"2026-03-01T11:50:08.4080246Z","SizeBytes":3063}
+- {"Path":"E:\\ETDP\\ETDP\\Models\\ETD.Api\\Models\\Qualification.cs","LastWriteUtc":"2026-03-01T11:50:02.0405191Z","SizeBytes":1189}
+- {"Path":"E:\\ETDP\\ETDP\\Services\\SemanticKernelQuestionService.cs","LastWriteUtc":"2026-03-01T06:11:13.5150117Z","SizeBytes":18893}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialWorkbookPage.jsx","LastWriteUtc":"2026-03-01T05:08:46.7164418Z","SizeBytes":1600}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialSlidesPage.jsx","LastWriteUtc":"2026-03-01T05:08:30.1968907Z","SizeBytes":1786}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialPage.jsx","LastWriteUtc":"2026-03-01T05:05:44.0081249Z","SizeBytes":22245}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\utils\\learningMaterialCommon.js","LastWriteUtc":"2026-03-01T05:03:59.2788057Z","SizeBytes":7509}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LessonPlansListPage.jsx","LastWriteUtc":"2026-02-28T21:46:23.1247974Z","SizeBytes":3207}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LessonPlanPage.jsx","LastWriteUtc":"2026-02-28T21:46:06.8529955Z","SizeBytes":7437}
+- {"Path":"E:\\ETDP\\ETDP\\Services\\AutomationJobWorker.cs","LastWriteUtc":"2026-02-28T15:31:55.1706457Z","SizeBytes":6452}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialTemplateUploadsPage.jsx","LastWriteUtc":"2026-02-28T08:00:43.3280437Z","SizeBytes":6136}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialLearnerRegistrationPage.jsx","LastWriteUtc":"2026-02-28T08:00:17.4786932Z","SizeBytes":491}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialFlowDiagramsPage.jsx","LastWriteUtc":"2026-02-28T07:54:42.2865918Z","SizeBytes":471}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialLogbookPage.jsx","LastWriteUtc":"2026-02-28T07:54:36.0946032Z","SizeBytes":512}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialProgressReportPage.jsx","LastWriteUtc":"2026-02-28T07:54:31.6440843Z","SizeBytes":535}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialRolloutPage.jsx","LastWriteUtc":"2026-02-28T07:54:00.8750842Z","SizeBytes":1581}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\components\\LearningMaterialFooterNav.jsx","LastWriteUtc":"2026-02-28T07:51:56.3493891Z","SizeBytes":3619}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\utils\\learningMaterialParams.js","LastWriteUtc":"2026-02-28T07:51:40.811993Z","SizeBytes":1390}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\LessonPlanReview.jsx","LastWriteUtc":"2026-02-28T07:44:02.7763176Z","SizeBytes":9359}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\utils\\workflowPrerequisites.js","LastWriteUtc":"2026-02-28T07:43:16.4211371Z","SizeBytes":1989}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\utils\\tts.js","LastWriteUtc":"2026-02-27T08:03:36.4058923Z","SizeBytes":7793}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\TextToVideoController.cs","LastWriteUtc":"2026-02-27T08:02:33.1726426Z","SizeBytes":29807}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\SystemDiagnosticsPage.jsx","LastWriteUtc":"2026-02-26T15:24:28.1886864Z","SizeBytes":13859}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\components\\RequireWorkflow.jsx","LastWriteUtc":"2026-02-26T08:48:37.8962663Z","SizeBytes":12723}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\SubjectsPage.jsx","LastWriteUtc":"2026-02-26T08:46:39.7089995Z","SizeBytes":28975}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\components\\DocxPreviewModal.jsx","LastWriteUtc":"2026-02-26T07:20:54.7550231Z","SizeBytes":11945}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\utils\\docxEditExport.js","LastWriteUtc":"2026-02-26T07:05:39.8981846Z","SizeBytes":4927}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\CurriculumPhasesPage.jsx","LastWriteUtc":"2026-02-26T06:34:51.8423861Z","SizeBytes":62991}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\components\\AIAgentFallback.jsx","LastWriteUtc":"2026-02-25T19:56:06.1605819Z","SizeBytes":386}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\AIAgentChat.jsx","LastWriteUtc":"2026-02-25T19:55:40.5409588Z","SizeBytes":6484}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\TopicsReview.jsx","LastWriteUtc":"2026-02-25T19:43:35.5502262Z","SizeBytes":3067}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\SubjectsReview.jsx","LastWriteUtc":"2026-02-25T19:43:31.3181645Z","SizeBytes":3211}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\SubjectsCapturePage.jsx","LastWriteUtc":"2026-02-25T19:43:27.3310798Z","SizeBytes":21463}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\SubjectsListPage.jsx","LastWriteUtc":"2026-02-25T19:43:22.8301163Z","SizeBytes":4149}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\OutcomesPage.jsx","LastWriteUtc":"2026-02-25T19:43:10.4170452Z","SizeBytes":18437}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\PhasesReview.jsx","LastWriteUtc":"2026-02-25T19:43:06.3130628Z","SizeBytes":6182}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\DemographicsReview.jsx","LastWriteUtc":"2026-02-25T19:42:32.0360975Z","SizeBytes":4430}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\DemographicsPage.jsx","LastWriteUtc":"2026-02-25T19:42:27.0470516Z","SizeBytes":12510}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\AssessmentCriteriaPage.jsx","LastWriteUtc":"2026-02-25T19:41:56.9016147Z","SizeBytes":12255}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\AssessmentCriteriaReview.jsx","LastWriteUtc":"2026-02-25T19:41:52.9035984Z","SizeBytes":3769}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\TopicController.cs","LastWriteUtc":"2026-02-25T19:04:33.9805384Z","SizeBytes":33974}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\main.jsx","LastWriteUtc":"2026-02-25T17:20:15.4747274Z","SizeBytes":14062}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\components\\ScriptErrorWarning.jsx","LastWriteUtc":"2026-02-25T17:03:43.2398231Z","SizeBytes":5341}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\OutcomeController.cs","LastWriteUtc":"2026-02-25T16:49:33.2019361Z","SizeBytes":13222}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\SubjectController.cs","LastWriteUtc":"2026-02-25T16:49:28.7756849Z","SizeBytes":17121}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\QualificationPhaseController.cs","LastWriteUtc":"2026-02-25T16:49:18.239748Z","SizeBytes":3436}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\RequireQualification.jsx","LastWriteUtc":"2026-02-25T16:20:42.6636622Z","SizeBytes":1001}
+- {"Path":"E:\\ETDP\\ETDP\\Services\\CurriculumKnowledgeScanService.cs","LastWriteUtc":"2026-02-24T09:35:44.5535574Z","SizeBytes":36071}
+- {"Path":"E:\\ETDP\\ETDP\\Services\\CodexContinuityService.cs","LastWriteUtc":"2026-02-22T02:22:19.5315531Z","SizeBytes":24704}
+- {"Path":"E:\\ETDP\\ETDP\\Controllers\\DiagnosticsController.cs","LastWriteUtc":"2026-02-22T02:21:25.8893145Z","SizeBytes":8565}
+- {"Path":"E:\\ETDP\\ETDP\\Models\\ETD.Api\\Models\\SourceMaterial.cs","LastWriteUtc":"2026-02-22T00:29:11.3437913Z","SizeBytes":1150}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\components\\GlossaryAutoTagger.jsx","LastWriteUtc":"2026-02-22T00:28:45.8663421Z","SizeBytes":4398}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\context\\GlossaryContext.jsx","LastWriteUtc":"2026-02-22T00:28:35.819974Z","SizeBytes":6631}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\components\\GlossaryLabel.jsx","LastWriteUtc":"2026-02-21T22:32:24.7289434Z","SizeBytes":650}
+- {"Path":"E:\\ETDP\\ETDP\\Models\\ETD.Api\\DTOs\\TopicDto.cs","LastWriteUtc":"2026-02-21T19:52:16.3923308Z","SizeBytes":2883}
+- {"Path":"E:\\ETDP\\ETDP\\Models\\ETD.Api\\Models\\Topic.cs","LastWriteUtc":"2026-02-21T19:46:45.3688642Z","SizeBytes":939}
+- {"Path":"E:\\ETDP\\ETDP\\Models\\ETD.Api\\DTOs\\SubjectDto.cs","LastWriteUtc":"2026-02-21T19:00:48.4243334Z","SizeBytes":1784}
+- {"Path":"E:\\ETDP\\ETDP\\frontend\\src\\pages\\TopicsListPage.jsx","LastWriteUtc":"2026-02-21T06:00:11.1835771Z","SizeBytes":499}

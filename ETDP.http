@@ -1,0 +1,6 @@
+@ETDP_HostAddress = http://localhost:5299
+
+GET {{ETDP_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

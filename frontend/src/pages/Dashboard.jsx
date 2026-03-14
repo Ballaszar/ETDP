@@ -1,0 +1,325 @@
+import React, { useState } from 'react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import './Dashboard.css';
+import AIAgent from './AIAgent';
+import { GraduationCap, Users, Library, BookCopy, Lightbulb, ListChecks, Wrench, LineChart, Home, List, ClipboardList, FileText, BookOpen, Download, Video, Link as LinkIcon, Cpu } from 'lucide-react';
+import { useQualification } from '../context/QualificationContext';
+
+const workflowSteps = [
+    { step: 1, title: "Main Menu", description: "Start from the central menu for qualification and learning material workflows.", path: "/main-menu", icon: <Home size={32} className="workflow-icon" /> },
+    { step: 2, title: "Qualification", description: "Capture qualification metadata and accreditation details.", path: "/main", icon: <GraduationCap size={32} className="workflow-icon" /> },
+    { step: 3, title: "Quality Council Curricula", description: "Upload curriculum and assessment specifications before automation.", path: "/quality-council-curricula", icon: <ClipboardList size={32} className="workflow-icon" /> },
+    { step: 4, title: "Demographics", description: "Record learner demographic and enrolment statistics.", path: "/demographics", icon: <Users size={32} className="workflow-icon" /> },
+    { step: 5, title: "Curriculum Phases", description: "Define structural phases for the selected qualification.", path: "/phases", icon: <Library size={32} className="workflow-icon" /> },
+    { step: 6, title: "Subjects", description: "Add subjects aligned to each curriculum phase.", path: "/subjects", icon: <BookCopy size={32} className="workflow-icon" /> },
+    { step: 7, title: "Topics", description: "Break subjects into structured learning topics.", path: "/topics", icon: <Lightbulb size={32} className="workflow-icon" /> },
+    { step: 8, title: "Library Manager", description: "Upload and manage local source material.", path: "/library", icon: <Library size={32} className="workflow-icon" /> },
+    { step: 9, title: "Lecturer Toolkit", description: "Prepare LPN entries and toolkit metadata for assembly.", path: "/lecturer-toolkit", icon: <Wrench size={32} className="workflow-icon" /> },
+    { step: 10, title: "Engine", description: "Assemble lesson content from sources into LPNs.", path: "/lecturer-toolkit", icon: <ListChecks size={32} className="workflow-icon" /> },
+    { step: 11, title: "Lesson Plan Review", description: "Review all LPN lesson rows and completion status before export.", path: "/lesson-plan-review", icon: <FileText size={32} className="workflow-icon" /> },
+    { step: 12, title: "Learning Material", description: "Preview-first dashboard for grouped learning material exports.", path: "/learning-material", icon: <Download size={32} className="workflow-icon" /> },
+    { step: 13, title: "Project Rollout Plan", description: "Set rollout date window, preview semester flow, and export roll out plan output.", path: "/project-rollout-plan", icon: <ClipboardList size={32} className="workflow-icon" /> },
+    { step: 14, title: "Graphs", description: "Visualize qualification structure and curriculum flow.", path: "/graphs", icon: <LineChart size={32} className="workflow-icon" /> },
+    { step: 15, title: "Learner Progress Report", description: "Capture learner progress ratings and print moderated reports.", path: "/learner-progress-report", icon: <BookOpen size={32} className="workflow-icon" /> },
+    { step: 16, title: "Text-to-Video Editor", description: "Generate and edit storyboard scenes from curriculum topics.", path: "/text-to-video-editor", icon: <Video size={32} className="workflow-icon" /> },
+    { step: 17, title: "Repo Integration Hub", description: "Run HunyuanVideo, LTX-Video, paper2slides, slide-deck-ai, electric-book, ms-swift, Open-Sora, ViMax, langchain, and mem0 from one page.", path: "/repo-integration-hub", icon: <Cpu size={32} className="workflow-icon" /> },
+    { step: 18, title: "Electric Book Export", description: "Map ETDP subject/topic data into Electric Book folders and trigger output/export.", path: "/electric-book-export", icon: <BookOpen size={32} className="workflow-icon" /> },
+    { step: 19, title: "Lecturer Assistance", description: "Launch lecturer tools and browse YouTube/Open Source links by subject.", path: "/lecturer-assistance", icon: <LinkIcon size={32} className="workflow-icon" /> }
+];
+
+const menuItems = [
+    { label: 'Dashboard', path: '/', icon: <Home size={18} /> },
+    { label: 'Main Menu', path: '/main-menu', icon: <Home size={18} /> },
+    { label: 'Qualifications', path: '/qualifications', icon: <GraduationCap size={18} /> },
+    { label: 'Main Page', path: '/main', icon: <Home size={18} /> },
+    { label: 'Quality Council Curricula', path: '/quality-council-curricula', icon: <ClipboardList size={18} /> },
+    { label: 'Demographics', path: '/demographics', icon: <Users size={18} /> },
+    { label: 'Learner Registration', path: '/learner-registration', icon: <Users size={18} /> },
+    { label: 'Work Experience Logbook', path: '/work-experience-logbook', icon: <ClipboardList size={18} /> },
+    { label: 'Learner Progress Report', path: '/learner-progress-report', icon: <BookOpen size={18} /> },
+    { label: 'Automation Jobs', path: '/automation-jobs', icon: <Wrench size={18} /> },
+    { label: 'System Diagnostics', path: '/system-diagnostics', icon: <LineChart size={18} /> },
+    { label: 'User Guide', path: '/user-guide', icon: <BookOpen size={18} /> },
+    { label: 'Library Manager', path: '/library', icon: <Library size={18} /> },
+    { label: 'Curriculum Phases', path: '/phases', icon: <Library size={18} /> },
+    { label: 'Subjects', path: '/subjects', icon: <BookCopy size={18} /> },
+    { label: 'Subjects List', path: '/subjects-list', icon: <List size={18} /> },
+    { label: 'Topics', path: '/topics', icon: <Lightbulb size={18} /> },
+    { label: 'Topics List', path: '/topics-list', icon: <List size={18} /> },
+    { label: 'Lecturer Toolkit', path: '/lecturer-toolkit', icon: <Wrench size={18} /> },
+    { label: 'Engine', path: '/lecturer-toolkit', icon: <ListChecks size={18} /> },
+    { label: 'Lesson Plan Review', path: '/lesson-plan-review', icon: <FileText size={18} /> },
+    { label: 'Learner Guide Export', path: '/learner-guide-export', icon: <BookOpen size={18} /> },
+    { label: 'Workbook Export', path: '/workbook-export', icon: <BookOpen size={18} /> },
+    { label: 'PowerPoint Slides Export', path: '/powerpoint-slides-export', icon: <FileText size={18} /> },
+    { label: 'Electric Book Export', path: '/electric-book-export', icon: <BookOpen size={18} /> },
+    { label: 'Text-to-Video Editor', path: '/text-to-video-editor', icon: <Video size={18} /> },
+    { label: 'Repo Integration Hub', path: '/repo-integration-hub', icon: <Cpu size={18} /> },
+    { label: 'Lecturer Assistance', path: '/lecturer-assistance', icon: <LinkIcon size={18} /> },
+    { label: 'Project Rollout Plan', path: '/project-rollout-plan', icon: <ClipboardList size={18} /> },
+    { label: 'Assessment Compliance', path: '/assessment-compliance', icon: <ClipboardList size={18} /> },
+    { label: 'Graphs', path: '/graphs', icon: <LineChart size={18} /> },
+    { label: 'Learning Material', path: '/learning-material', icon: <Download size={18} /> },
+];
+
+function ImportAllButton() {
+    const navigate = useNavigate();
+    const { qualificationId, setQualificationId } = useQualification() || { qualificationId: null, setQualificationId: () => {} };
+    const [status, setStatus] = useState(null);
+    const [running, setRunning] = useState(false);
+    const rawQualificationRef = qualificationId ?? localStorage.getItem('qualificationId') ?? '';
+
+    const toArray = (value) => {
+        if (!value) return [];
+        return Array.isArray(value) ? value : [value];
+    };
+
+    const resolveQualificationNumericId = async (rawValue) => {
+        const raw = String(rawValue ?? '').trim();
+        const numeric = Number(raw || 0);
+
+        if (numeric > 0) {
+            const probe = await fetch(`/api/Qualification/${numeric}`, { cache: 'no-store' });
+            if (probe.ok) return numeric;
+            if (probe.status !== 404) return numeric;
+        }
+
+        if (!raw) return 0;
+
+        const search = await fetch(`/api/Qualification/search?text=${encodeURIComponent(raw)}`, { cache: 'no-store' });
+        if (search.ok) {
+            const list = toArray(await search.json());
+            const exact = list.find((q) =>
+                String(q?.qualificationNumber ?? q?.QualificationNumber ?? '').trim() === raw ||
+                Number(q?.id ?? q?.Id ?? 0) === numeric
+            );
+            const fallback = list.length === 1 ? list[0] : null;
+            const resolved = Number(exact?.id ?? exact?.Id ?? fallback?.id ?? fallback?.Id ?? 0);
+            if (resolved > 0) return resolved;
+        }
+
+        if (numeric > 0) {
+            const allRes = await fetch('/api/Qualification', { cache: 'no-store' });
+            if (allRes.ok) {
+                const all = toArray(await allRes.json());
+                const exact = all.find((q) => String(q?.qualificationNumber ?? q?.QualificationNumber ?? '').trim() === raw);
+                const resolved = Number(exact?.id ?? exact?.Id ?? 0);
+                if (resolved > 0) return resolved;
+            }
+        }
+
+        return 0;
+    };
+
+    const readResult = async (res) => {
+        if (!res) return {};
+        const contentType = String(res.headers?.get('content-type') || '').toLowerCase();
+        if (contentType.includes('application/json')) {
+            return await res.json().catch(() => ({}));
+        }
+        const text = await res.text().catch(() => '');
+        return { error: text };
+    };
+
+    const runImport = async () => {
+        if (running) return;
+        let resolvedQualificationId = 0;
+        try {
+            resolvedQualificationId = await resolveQualificationNumericId(rawQualificationRef);
+        } catch (e) {
+            setStatus({
+                qualificationId: 0,
+                phases: 0,
+                subjects: 0,
+                topics: 0,
+                learningSchedule: 0,
+                errors: [`Unable to resolve qualification: ${String(e?.message || e)}`]
+            });
+            return;
+        }
+
+        if (!resolvedQualificationId) {
+            setStatus({
+                qualificationId: 0,
+                phases: 0,
+                subjects: 0,
+                topics: 0,
+                learningSchedule: 0,
+                errors: ['Select a qualification first (Main Menu / Main Page).']
+            });
+            return;
+        }
+
+        if (Number(qualificationId || 0) !== Number(resolvedQualificationId)) {
+            setQualificationId(resolvedQualificationId);
+        }
+
+        setRunning(true);
+        setStatus(null);
+        try {
+            const phaseRes = await fetch(`/api/CurriculumPhase/import-csv?qualificationId=${resolvedQualificationId}`, { method: 'POST' });
+            const phaseJson = await readResult(phaseRes);
+
+            const subjRes = await fetch(`/api/Subject/import-csv?qualificationId=${resolvedQualificationId}`, { method: 'POST' });
+            const subjJson = await readResult(subjRes);
+
+            const topicRes = await fetch(`/api/Topic/import-csv?qualificationId=${resolvedQualificationId}`, { method: 'POST' });
+            const topicJson = await readResult(topicRes);
+
+            setStatus({
+                qualificationId: resolvedQualificationId,
+                phases: phaseJson.created ?? 0,
+                subjects: subjJson.created ?? 0,
+                topics: topicJson.created ?? 0,
+                learningSchedule: 'Manual rebuild required',
+                note: 'Use Lecturer Toolkit to import the canonical Lesson Plan and rebuild the learning schedule when you are ready.',
+                errors: [
+                    !phaseRes.ok ? `Phases: ${String(phaseJson.error || `HTTP ${phaseRes.status}`)}` : null,
+                    !subjRes.ok ? `Subjects: ${String(subjJson.error || `HTTP ${subjRes.status}`)}` : (subjJson.error ? `Subjects: ${String(subjJson.error)}` : null),
+                    !topicRes.ok ? `Topics: ${String(topicJson.error || `HTTP ${topicRes.status}`)}` : (topicJson.error ? `Topics: ${String(topicJson.error)}` : null),
+                ].filter(Boolean)
+            });
+        } catch (e) {
+            setStatus({
+                qualificationId: resolvedQualificationId,
+                phases: 0,
+                subjects: 0,
+                topics: 0,
+                learningSchedule: 0,
+                errors: [String(e)]
+            });
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    return (
+        <>
+            <button onClick={runImport} disabled={running}>
+                {running ? 'Installing...' : 'Install All Templates'}
+            </button>
+                {status && (
+                <div className="import-status">
+                    <span>QID: {status.qualificationId ?? '-'} | Phases: {status.phases ?? 0} | Subjects: {status.subjects ?? 0} | Topics: {status.topics ?? 0} | Learning Schedule: {status.learningSchedule ?? 'Manual rebuild required'}</span>
+                    {status.errors?.length ? (
+                        <span className="import-status-errors">
+                            {status.errors.join(' | ')}
+                        </span>
+                    ) : null}
+                    {status.note ? <span>{status.note}</span> : null}
+                    {!status.errors?.length ? (
+                        <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button
+                                className="next-step-button"
+                                type="button"
+                                onClick={() => navigate('/subjects', {
+                                    state: Number(status?.qualificationId || 0) > 0 ? { qualificationId: Number(status.qualificationId) } : undefined
+                                })}
+                            >
+                                Goto Subjects
+                            </button>
+                            <button
+                                className="next-step-button"
+                                type="button"
+                                onClick={() => navigate('/lecturer-toolkit', {
+                                    state: Number(status?.qualificationId || 0) > 0 ? { qualificationId: Number(status.qualificationId) } : undefined
+                                })}
+                            >
+                                Goto Learning Schedule
+                            </button>
+                        </span>
+                    ) : null}
+                </div>
+            )}
+        </>
+    );
+}
+const Dashboard = () => {
+    const location = useLocation();
+    const { qualificationId } = useQualification() || { qualificationId: null };
+    const qualificationNavState =
+        Number(qualificationId || 0) > 0 ? { qualificationId: Number(qualificationId) } : undefined;
+
+    // FIXED: Only "/" is the dashboard root
+    const isDashboardRoot = location.pathname === "/";
+    const isAIAgentRoute = location.pathname === "/ai-agent";
+
+    return (
+        <div className="dashboard-root">
+            <aside className="dashboard-menu">
+                <h2>ETDP</h2>
+                <nav>
+                    <ul>
+                        {menuItems.map(item => (
+                            <li key={`${item.path}-${item.label}`} className={location.pathname === item.path ? 'active' : ''}>
+                                <Link to={item.path} state={qualificationNavState}>
+                                    <span className="menu-icon">{item.icon}</span>
+                                    {item.label}
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </nav>
+            </aside>
+
+            <main className="dashboard-main">
+                <header className="dashboard-header">
+                    <h1>Education and Training Learning Program Design System</h1>
+                    <div className="button-row import-actions">
+                        <ImportAllButton />
+                    </div>
+                </header>
+
+                {isDashboardRoot ? (
+                    <section className="workflow-section">
+                        <div className="workflow-header">
+                            <h2 style={{ margin: 0, color: '#1d4f80', fontSize: '1.4rem', fontWeight: '700' }}>
+                                Curriculum Development Workflow
+                            </h2>
+                            <p style={{ margin: '4px 0 16px 0', color: '#47617a', fontSize: '0.95rem' }}>
+                                Follow these steps in sequence to build your complete curriculum
+                            </p>
+                        </div>
+                        <div className="workflow-note">
+                            <p>Use the navigation menu on the left to access each step of the curriculum development workflow.</p>
+                        </div>
+                        <div className="workflow-grid">
+                            {workflowSteps.map((item) => (
+                                <Link
+                                    key={`${item.step}-${item.path}`}
+                                    to={item.path}
+                                    state={qualificationNavState}
+                                    className="workflow-card"
+                                >
+                                    <div className="workflow-card-inner">
+                                        {item.icon}
+                                        <h3>{item.step}. {item.title}</h3>
+                                        <p>{item.description}</p>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </section>
+                ) : null}
+
+                <section className="dashboard-content">
+                    <Outlet />
+                    <section className="codex-attribution-note" aria-label="Attribution and liability notice">
+                        <h3>Attribution and Liability Notice</h3>
+                        <p>
+                            This ETDP export/output workflow includes logic created with Codex 5.3 by OpenAI and integrated by the ETDP project team.
+                        </p>
+                        <p>
+                            Generated exports are assistive outputs only. OpenAI and Codex provide no warranty and accept no responsibility or liability for correctness, completeness, legal compliance, or fitness for purpose. Final verification and approval remain the operator&apos;s responsibility.
+                        </p>
+                    </section>
+                </section>
+            </main>
+            {!isAIAgentRoute ? <AIAgent /> : null}
+        </div>
+    );
+};
+
+export default Dashboard;
+
+

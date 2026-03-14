@@ -1,0 +1,19 @@
+{
+  "name": "smi-knowledge-env",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local isolated Node workspace for SMI knowledge tooling.",
+  "scripts": {
+    "env:check": "node -e \"console.log('smi-knowledge-env ok')\""
+  },
+  "dependencies": {
+    "@langchain/anthropic": "1.3.22",
+    "@langchain/cerebras": "1.0.4",
+    "@langchain/core": "1.1.31",
+    "@langchain/openai": "1.2.12",
+    "@langchain/tavily": "1.2.0",
+    "deepagents": "1.8.2",
+    "langchain": "1.2.30"
+  }
+}

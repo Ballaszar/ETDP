@@ -1,0 +1,77 @@
+.lt-card {
+  margin-top: 0.85rem;
+  border: 1px solid #d9e4ef;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.75rem;
+}
+
+.lt-flow-note {
+  margin: 0.3rem 0 0 0;
+  color: #39536b;
+  font-weight: 600;
+}
+
+.lt-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.lt-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.lt-upload input[type='file'] {
+  max-width: 320px;
+}
+
+.lt-replace-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  color: #2b4258;
+  border: 1px solid #d3dfe9;
+  border-radius: 8px;
+  padding: 0.35rem 0.55rem;
+  background: #f6fbff;
+}
+
+.lt-table-title {
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+.lt-table-wrap {
+  overflow-x: auto;
+}
+
+.lt-row-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.lt-error {
+  color: #a11919;
+  font-weight: 600;
+}
+
+.lt-success {
+  color: #1f5e45;
+  font-weight: 600;
+}
+
+.lt-alert {
+  margin-top: 0.5rem;
+  border: 1px solid #efb2b2;
+  background: #ffe2e2;
+  color: #9f1e1e;
+  border-radius: 8px;
+  padding: 0.55rem;
+}

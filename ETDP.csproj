@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>e08a3895-d508-483f-8227-bc079fc8b8ff</UserSecretsId>
+    <DockerDefaultTargetOS>Windows</DockerDefaultTargetOS>
+    <DockerfileContext>.</DockerfileContext>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <!-- Prevent recursive temp build snapshots from being scanned as project items -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);**\_tmpbuild*\**;Imports\**;Exports\**;Requests\**;Processed\**;SystemData\**;Backups\**;Bing\**;Google\**;AzureAgent\**;dotnetbuilder\**;api-etd\**;API's\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="frontend\package.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="appsettings*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Security\keys\*.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exclude vendored AzureAgent source/test trees from this web app build -->
+    <Compile Remove="AzureAgent\Bot\**\*.cs" />
+    <EmbeddedResource Remove="AzureAgent\Bot\**\*" />
+    <None Remove="AzureAgent\Bot\**\*" />
+    <!-- Exclude standalone tooling projects under dotnetbuilder -->
+    <Compile Remove="dotnetbuilder\CurriculumRipTool\**\*.cs" />
+    <EmbeddedResource Remove="dotnetbuilder\CurriculumRipTool\**\*" />
+    <None Remove="dotnetbuilder\CurriculumRipTool\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="itext7" Version="9.5.0" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.36.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.36.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <PackageReference Include="System.Data.Odbc" Version="10.0.4" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="2.20.0" />
+  </ItemGroup>
+
+</Project>

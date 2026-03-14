@@ -1,0 +1,55 @@
+Requests and Errors Friday 27 Feb 2026 08:0 ZAR time
+Key Pain Point 1)Please read these two attachments first, it is very possibe it might help in our approach to create word documents and images before implimenting the steps below. If it as of use and fesiible make use of it to create he the components neccessary for the steps listed below.
+"C:\ETDP\ETDP\Requests\text-to-image.pdf"
+"C:\ETDP\ETDP\Requests\syncfusion.docio.md"
+
+1) The Roll out Plan is clearly dependent on the learning schedule to be first executed.
+2) The learning Shedule (i see you have build in the logic to automate the start - to en date per row, thank you).
+3) The learning schedule is executed ot exported as and .csv file, the page must provide for a preview feature and it must be exported in table format to MS word .cox format and .xlsx format.
+4) The flow diagram must allow for filters to prewiew graphs for the fulle qualification where the filters is aitomated to set the flow from subjects.
+4.1) The flow diagram must also allow filter to show the flow diagram  filtered as topics per subject (this is preferered default)
+4.2) Is it possible to export the flow diagram per subject aas a png to be the Figire 1: under each chapter just before topics and lesson pla content is discussed according tothe lesson plan.
+
+5) Create a new workflow page named "Learning Material" this should be in a form of a Dashboard to it many functions that must be created. This should replace the "Print Menu" where every export must have have a "Preview" to vie all exports live on screen before "saving" or "printing" it. All exports must be to .docx format except of course the PowerPoint Slides.
+5.1) In order for the app and in specefic the feature below to working create a directory under the user My Documents with the following structure
+		root directory: Qualifaction Number and Name
+		Subdirectory: Roll Out Plan
+		Subdirectory: Learning schedule (Creating Sub-directories for learning Schedules per Subject Code)
+		Subdirectory: Learner Guide
+		Subdirectory: Summative Assessment (Save all Knowledge Questionnaires per subject here as default output)
+		Subdirectory: Summative memoranda (Save all memoranda per Knowledge Questionnaire here)
+		Subdirectory: Workbooks (Save all Workbooks per Subject here as default)
+		Subdirectory: Workbook Memoranda (Save all Workboobs per subject as default here)
+		Subdirectory: SlideShows (Save all Slideshow per subject here, creating sub-directories where all Topic PowerPoint Slides can be grouped)
+		Subdirectory: LearnerRegistration, save the learner registration Template here
+		Subdirectory: Logbook, save all logbooks per Subject here
+		Subdirectory: Progress Report,Save all Progress Reports per Subject here
+		Subdirectory: TemplateUploads: Export all the Template Uploads here this include the Phase.csv, Subject.csv, Topics.csv, LessonPlanContent.csv, export it as .xlsx templates as the user will not have the understanding to work with .csv. Include a help topic "How to create .csv files from Excel Templates for Upload, within the help guide, and insert a link to the help guide from every page upload)
+Note: Naming conventions for all documents created should use as Suffix 1 Qualification Number & Suffix 2) Subject Code & type of document as desribed in the steps below.
+
+5.1) The Learning Material Dashboard should follow the same typology, icons, as use for the main Dashboard
+5.2) The Learning Material Dashboard will consist of the following workflows:
+5.2.1) Create Learning Schedule (Remove from Main menu and create it wiht all the functionalities here, and ensure that steps 2 amd 3 above are implemented here)
+5.2.2) Create Roll Out Plan (Remoive from Main Menu and group it here with all functionalities, preview feature and ensure to export as .docx to the created sub-driectory)
+5.2.3) Create Learner Guide Page (Add all the funnctionalities as it currently exists but add groupe it all here and removed it from the main menu)
+5.2.4) Create Summative Assessment Page: see steps  below, Automated function with preview feature. The key component of the Summative Assessment Page is to create the knwowledge Questionnair per Subhect. It must therefor allow filter link to each Subject. A quizz must be created for each subject, and it must allow rpeview in Text Preview , and save according to the Subject use a naming convention to archive the Knowledge Questionnaire according to Qualification ID, Subject Code and Subject Description
+5.2.5) Create Workbook Page include preview, and automate the save in the appropriate directorty using the Wokrbooas prefix and subjectcodeassuffice as nameing convention.
+5.2.6) Create Progress Report Page (Remove from Main menu and group it here with all functionalities. preview and save or export as .docx to the created sub-directory)
+5.2.7) Create Logbook (Remove from main menue and group it here) with all functionalities, Preview, save to created sub-driectory per Subject)
+5.2.8) Create Flow Diagrams Page: Remove from main menue and create it here, ensure to include all functionalities as describe in Step 4 above)
+
+6) Under the new Summative Assessment Page (see Step 5.2.4) The knowledge questionnaire typology and the quiz methodlogy of creating True and False questions is not yet correct.
+6.1) Create a Page dedicated to the knwoledge Questionnair and name the Page "Summative Assessment" please use these Github repos and wire it to the Summative assessment Page to allow testing of both repos for functionality, we will decide after testing which is the best options to use.
+6.2) These are the github repos for the Summative Assessment Page https://github.com/IzicTemi/tf_qgen.git
+https://github.com/QuizCraftCorporation/QuizGeneratorModel.git
+6.3) Ensure the Topics on blooms logic is wired to the Summative Page to serve as source for Quizz creation
+
+Key Paint Points
+1) If it is possible to make use of the functionalities as describe in Key Paint 1 above we should explore every method to include image automated Image Generation As Figures according to the Topic and Lesson Plan Content within the Learner Guide, this would eliminate the need for Image generation by Text to Powerpoint or text to video
+2) We should explore every possible features to create a professional Learner Guide, no stone should be left untouched, if I should create additional resources on Azure just let me know.
+3) Please follow a stepped approached, and provide me a feedback list or confirmation either .txt or .md of issues or functionalities that I must resolve in order for all of this to work, or resources you need for me to impliment.
+4) Please think enterpise level, and let me get you want you want to make all of this to work.
+5) Please impliment the Quizz Github Repos as described for testing
+6) Run Smoke tests as necessary it is not a problem.
+7) If I should create an Improved AI Agent that can control all resources, LLMS integrations or to orchestrate all functions let me now.
+8) If space becomes a problem which it seems move the project to the E:\ DevDrive and use the C: drive as backup.
