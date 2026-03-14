@@ -52,6 +52,29 @@ _ps1.code-search
 **/.venv/
 **/.venv*/
 
+# Local workspace-only roots and side projects
+/API's/
+/AssessmentPedagogy/
+/Bing/
+/Errors_to_Fix/
+/Google/
+/OFO/
+/_external/
+/api-etd/
+/dotnetbuilder/
+/word-addin-apa-assistant/
+/TextFile.txt
+
+# AzureAgent keeps a few shared operator docs and scripts; the rest is local-only
+/AzureAgent/*
+!/AzureAgent/README.md
+!/AzureAgent/MODERATOR4_BOOTSTRAP_PROTOCOL.md
+!/AzureAgent/MODERATOR4_GITHUB_ACCESS.md
+!/AzureAgent/MODERATOR4_RESOURCE_PROTOCOL.md
+!/AzureAgent/build-runbook.md
+!/AzureAgent/smoke-test-agent.ps1
+!/AzureAgent/azure-foundry-API_key.md
+
 # Large local installers and archives
 *.msi
 *.zip
