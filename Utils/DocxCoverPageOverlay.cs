@@ -17,11 +17,12 @@ namespace ETD.Api.Utils
             public bool Bold { get; init; }
             public int BeforeTwips { get; init; }
             public int AfterTwips { get; init; }
+            public string ColorHex { get; init; } = "FFFFFF";
         }
 
         private const int PortraitCoverSourceWidthPx = 576;
         private const int PortraitCoverSourceHeightPx = 794;
-        private const string DefaultCoverFont = "Arial";
+        private const string DefaultCoverFont = "Times New Roman";
 
         public static bool TryAppendStandardPortraitCoverPage(
             Body body,
@@ -127,7 +128,8 @@ namespace ETD.Api.Utils
                     centered: true,
                     beforeTwips: line.BeforeTwips,
                     afterTwips: line.AfterTwips,
-                    leftIndentTwips: 0));
+                    leftIndentTwips: 0,
+                    colorHex: line.ColorHex));
             }
 
             return true;
@@ -152,11 +154,13 @@ namespace ETD.Api.Utils
             bool centered,
             int beforeTwips,
             int afterTwips,
-            int leftIndentTwips)
+            int leftIndentTwips,
+            string? colorHex = "FFFFFF")
         {
             var runProperties = new RunProperties(
                 new FontSize { Val = Math.Max(18, fontSizeHalfPt).ToString() },
-                new RunFonts { Ascii = DefaultCoverFont, HighAnsi = DefaultCoverFont });
+                new RunFonts { Ascii = DefaultCoverFont, HighAnsi = DefaultCoverFont },
+                new Color { Val = string.IsNullOrWhiteSpace(colorHex) ? "FFFFFF" : colorHex.Trim() });
             if (bold)
             {
                 runProperties.Bold = new Bold();

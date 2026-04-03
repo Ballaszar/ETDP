@@ -2,6 +2,7 @@ namespace ETD.Api.Security
 {
     public class AppAuthorizationOptions
     {
+        // Require API key and activation by default for security. Local dev can disable via env flags.
         public bool RequireApiKey { get; set; } = true;
         public bool RequireActivation { get; set; } = true;
         public bool BypassInDevelopment { get; set; } = true;

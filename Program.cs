@@ -39,7 +39,10 @@ builder.Services.AddScoped<KnowledgeQuestionnaireV1Service>();
 builder.Services.AddSingleton<SemanticStateContinuityService>();
 builder.Services.AddSingleton<SemanticKernelQuestionService>();
 builder.Services.AddSingleton<OcrExtractionService>();
+builder.Services.AddSingleton<PdfVisualExtractionService>();
 builder.Services.AddSingleton<CurriculumKnowledgeScanService>();
+builder.Services.AddSingleton<CurriculumDeliveryPilotService>();
+builder.Services.AddSingleton<CurriculumPipelineService>();
 builder.Services.AddSingleton<SansMetadataService>();
 builder.Services.AddSingleton<CodexContinuityService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CodexContinuityService>());
@@ -81,6 +84,33 @@ builder.Services.PostConfigure<AppAuthorizationOptions>(options =>
         .Select(x => x.Trim())
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToList();
+
+    // If running in non-production (development/test) disable auth/activation checks so the app
+    // can be run locally without requiring activation scripts or key files.
+    if (!isProduction)
+    {
+        options.RequireApiKey = false;
+        options.RequireActivation = false;
+        options.ApiKeys = new List<string>();
+        options.ActivationKeys = new List<string>();
+        options.BypassInDevelopment = true;
+        options.BypassMachineNames = new List<string>();
+        return;
+    }
+
+    // Allow disabling auth/activation checks explicitly for local development or testing by setting
+    // ETDP_DISABLE_AUTH=true or ETDP_DISABLE_ACTIVATION=true in the environment. When set, require flags
+    // are cleared and any configured keys are ignored so the app can run without the activation scripts.
+    if (IsFlagEnabled("ETDP_DISABLE_AUTH") || IsFlagEnabled("ETDP_DISABLE_ACTIVATION"))
+    {
+        options.RequireApiKey = false;
+        options.RequireActivation = false;
+        options.ApiKeys = new List<string>();
+        options.ActivationKeys = new List<string>();
+        options.BypassInDevelopment = true;
+        options.BypassMachineNames = new List<string>();
+        return;
+    }
 
     ValidateAuthorizationOptions(options, isProduction, externalKeysProvided);
 });
@@ -141,6 +171,9 @@ using (var scope = app.Services.CreateScope())
     }
     app.Logger.LogInformation("Startup init: ensuring upload readme");
     knowledgeHierarchy.EnsureUploadReadme();
+    app.Logger.LogInformation("Startup init: ensuring agent knowledge structures");
+    knowledgeHierarchy.EnsureAgentKnowledgeReadme();
+    knowledgeHierarchy.EnsureAgentKnowledgeStructures();
     app.Logger.LogInformation("Startup init: ensuring qualification structures");
     knowledgeHierarchy.EnsureStructuresForKnownQualifications();
     app.Logger.LogInformation("Startup init: consolidating legacy qualification folders");

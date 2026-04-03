@@ -176,6 +176,7 @@ namespace ETD.Api.Data
         public DbSet<AssessmentCriteria> AssessmentCriteria { get; set; }
         public DbSet<LessonPlan> LessonPlans { get; set; }
         public DbSet<KnowledgeQuestionnaire> KnowledgeQuestionnaires { get; set; }
+        public DbSet<SmiContentQuestionnaire> SmiContentQuestionnaires { get; set; }
         public DbSet<Workbook> Workbooks { get; set; }
         public DbSet<Demographics> Demographics { get; set; }
         public DbSet<LearnerGuide> LearnerGuides { get; set; }
@@ -183,8 +184,11 @@ namespace ETD.Api.Data
         public DbSet<LecturerToolkitEntry> LecturerToolkitEntries { get; set; }
         public DbSet<SourceMaterial> SourceMaterials { get; set; }
         public DbSet<LearnerRegistration> LearnerRegistrations { get; set; }
+        public DbSet<WorkExperienceLogbook> WorkExperienceLogbooks { get; set; }
+        public DbSet<WorkExperienceLogbookEntry> WorkExperienceLogbookEntries { get; set; }
         public DbSet<AutomationJob> AutomationJobs { get; set; }
         public DbSet<SystemErrorLog> SystemErrorLogs { get; set; }
+        public DbSet<MiraReviewFeedbackEntry> MiraReviewFeedbackEntries { get; set; }
         public DbSet<SmiConversationArchive> SmiConversationArchives { get; set; }
         public DbSet<SmiSemanticStateSnapshot> SmiSemanticStateSnapshots { get; set; }
         public DbSet<SmiTaskTableItem> SmiTaskTableItems { get; set; }
@@ -228,6 +232,32 @@ namespace ETD.Api.Data
                     CreatedAtUtc TEXT NOT NULL,
                     UpdatedAtUtc TEXT NOT NULL,
                     CompletedAtUtc TEXT NULL
+                );");
+
+            context.Database.ExecuteSqlRaw(
+                @"CREATE TABLE IF NOT EXISTS MiraReviewFeedbackEntries (
+                    Id INTEGER NOT NULL CONSTRAINT PK_MiraReviewFeedbackEntries PRIMARY KEY AUTOINCREMENT,
+                    QualificationScopeKey TEXT NOT NULL DEFAULT 'qualification:unscoped',
+                    QualificationId INTEGER NULL,
+                    QualificationCode TEXT NOT NULL DEFAULT '',
+                    QualificationDescription TEXT NOT NULL DEFAULT '',
+                    ReportedBy TEXT NOT NULL DEFAULT 'Mira',
+                    SourceAgent TEXT NOT NULL DEFAULT 'SMI',
+                    ReviewContext TEXT NOT NULL DEFAULT 'agent-governance',
+                    ArtifactType TEXT NOT NULL DEFAULT '',
+                    ArtifactReference TEXT NOT NULL DEFAULT '',
+                    Severity TEXT NOT NULL DEFAULT 'medium',
+                    Status TEXT NOT NULL DEFAULT 'new',
+                    Title TEXT NOT NULL DEFAULT '',
+                    Summary TEXT NOT NULL DEFAULT '',
+                    Details TEXT NOT NULL DEFAULT '',
+                    RecommendedAction TEXT NOT NULL DEFAULT '',
+                    SourceExcerpt TEXT NOT NULL DEFAULT '',
+                    OperatorNotes TEXT NOT NULL DEFAULT '',
+                    CreatedAtUtc TEXT NOT NULL,
+                    UpdatedAtUtc TEXT NOT NULL,
+                    ReviewedAtUtc TEXT NULL,
+                    ClosedAtUtc TEXT NULL
                 );");
 
             context.Database.ExecuteSqlRaw(
@@ -309,6 +339,19 @@ namespace ETD.Api.Data
                     UpdatedAtUtc TEXT NOT NULL
                 );");
 
+            context.Database.ExecuteSqlRaw(
+                @"CREATE TABLE IF NOT EXISTS SmiContentQuestionnaires (
+                    Id INTEGER NOT NULL CONSTRAINT PK_SmiContentQuestionnaires PRIMARY KEY AUTOINCREMENT,
+                    QualificationId INTEGER NOT NULL,
+                    SubjectId INTEGER NOT NULL,
+                    PhaseId INTEGER NULL,
+                    MainCategoryCode TEXT NOT NULL DEFAULT '',
+                    MainCategoryLabel TEXT NOT NULL DEFAULT '',
+                    Title TEXT NOT NULL DEFAULT '',
+                    Version TEXT NULL,
+                    Questions TEXT NOT NULL DEFAULT ''
+                );");
+
             EnsureColumn(context, "SmiSemanticStateSnapshots", "CognitiveInterpretation", "TEXT NOT NULL DEFAULT ''");
             EnsureColumn(context, "SmiSemanticStateSnapshots", "PromptInfluenceSummary", "TEXT NOT NULL DEFAULT ''");
             EnsureColumn(context, "SmiSemanticStateSnapshots", "StateStability", "REAL NOT NULL DEFAULT 0");
@@ -343,6 +386,15 @@ namespace ETD.Api.Data
             context.Database.ExecuteSqlRaw(
                 @"CREATE INDEX IF NOT EXISTS IX_SmiTaskTableItems_Scope_Status_SortOrder
                   ON SmiTaskTableItems (QualificationScopeKey, Status, SortOrder);");
+            context.Database.ExecuteSqlRaw(
+                @"CREATE INDEX IF NOT EXISTS IX_MiraReviewFeedbackEntries_Scope_CreatedAtUtc
+                  ON MiraReviewFeedbackEntries (QualificationScopeKey, CreatedAtUtc DESC);");
+            context.Database.ExecuteSqlRaw(
+                @"CREATE INDEX IF NOT EXISTS IX_MiraReviewFeedbackEntries_Status_CreatedAtUtc
+                  ON MiraReviewFeedbackEntries (Status, CreatedAtUtc DESC);");
+            context.Database.ExecuteSqlRaw(
+                @"CREATE INDEX IF NOT EXISTS IX_MiraReviewFeedbackEntries_SourceAgent_CreatedAtUtc
+                  ON MiraReviewFeedbackEntries (SourceAgent, CreatedAtUtc DESC);");
 
             context.Database.ExecuteSqlRaw(
                 @"CREATE UNIQUE INDEX IF NOT EXISTS IX_ScrapedSANSMetadata_StandardNumber
@@ -356,6 +408,12 @@ namespace ETD.Api.Data
             context.Database.ExecuteSqlRaw(
                 @"CREATE INDEX IF NOT EXISTS IX_ProposedStandardMappings_Qualification_Status_Confidence
                   ON ProposedStandardMappings (QualificationId, Status, MatchConfidence DESC);");
+            context.Database.ExecuteSqlRaw(
+                @"CREATE INDEX IF NOT EXISTS IX_SmiContentQuestionnaires_Qualification_Phase_Category
+                  ON SmiContentQuestionnaires (QualificationId, PhaseId, MainCategoryCode);");
+            context.Database.ExecuteSqlRaw(
+                @"CREATE UNIQUE INDEX IF NOT EXISTS IX_SmiContentQuestionnaires_Subject_Title
+                  ON SmiContentQuestionnaires (SubjectId, Title);");
         }
 
         private static void EnsureColumn(ApplicationDbContext context, string tableName, string columnName, string columnDefinition)
@@ -482,6 +540,31 @@ namespace ETD.Api.Data
             modelBuilder.Entity<SmiTaskTableItem>()
                 .HasIndex(x => new { x.QualificationScopeKey, x.TaskKey })
                 .IsUnique();
+
+            modelBuilder.Entity<SmiContentQuestionnaire>()
+                .HasIndex(x => new { x.QualificationId, x.PhaseId, x.MainCategoryCode });
+
+            modelBuilder.Entity<SmiContentQuestionnaire>()
+                .HasIndex(x => new { x.SubjectId, x.Title })
+                .IsUnique();
+
+            modelBuilder.Entity<WorkExperienceLogbook>()
+                .HasMany(x => x.Entries)
+                .WithOne(x => x.WorkExperienceLogbook)
+                .HasForeignKey(x => x.WorkExperienceLogbookId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<WorkExperienceLogbook>()
+                .HasOne(x => x.LearnerRegistration)
+                .WithMany()
+                .HasForeignKey(x => x.LearnerRegistrationId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<WorkExperienceLogbook>()
+                .HasIndex(x => new { x.QualificationId, x.LearnerRegistrationId, x.UpdatedAtUtc });
+
+            modelBuilder.Entity<WorkExperienceLogbookEntry>()
+                .HasIndex(x => new { x.WorkExperienceLogbookId, x.SortOrder });
         }
     }
 }

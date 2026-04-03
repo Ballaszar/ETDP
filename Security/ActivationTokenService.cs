@@ -7,9 +7,16 @@ namespace ETD.Api.Security
     {
         private readonly IDataProtector _protector;
 
+        public sealed class ActivationTokenInfo
+        {
+            public DateTimeOffset ExpiresAtUtc { get; set; }
+            public string LecturerEmail { get; set; } = string.Empty;
+        }
+
         private sealed class ActivationPayload
         {
             public DateTimeOffset ExpiresAtUtc { get; set; }
+            public string LecturerEmail { get; set; } = string.Empty;
         }
 
         public ActivationTokenService(IDataProtectionProvider dataProtectionProvider)
@@ -17,29 +24,49 @@ namespace ETD.Api.Security
             _protector = dataProtectionProvider.CreateProtector("ETDP.AppActivationToken.v1");
         }
 
-        public string CreateToken(DateTimeOffset expiresAtUtc)
+        public string CreateToken(DateTimeOffset expiresAtUtc, string? lecturerEmail = null)
         {
-            var payload = new ActivationPayload { ExpiresAtUtc = expiresAtUtc };
+            var payload = new ActivationPayload
+            {
+                ExpiresAtUtc = expiresAtUtc,
+                LecturerEmail = string.IsNullOrWhiteSpace(lecturerEmail) ? string.Empty : lecturerEmail.Trim()
+            };
             var json = JsonSerializer.Serialize(payload);
             return _protector.Protect(json);
         }
 
-        public bool TryValidate(string? token, out DateTimeOffset expiresAtUtc)
+        public bool TryValidateInfo(string? token, out ActivationTokenInfo info)
         {
-            expiresAtUtc = DateTimeOffset.MinValue;
+            info = new ActivationTokenInfo();
             if (string.IsNullOrWhiteSpace(token)) return false;
             try
             {
                 var json = _protector.Unprotect(token);
                 var payload = JsonSerializer.Deserialize<ActivationPayload>(json);
                 if (payload == null) return false;
-                expiresAtUtc = payload.ExpiresAtUtc;
-                return expiresAtUtc > DateTimeOffset.UtcNow;
+
+                info = new ActivationTokenInfo
+                {
+                    ExpiresAtUtc = payload.ExpiresAtUtc,
+                    LecturerEmail = payload.LecturerEmail ?? string.Empty
+                };
+                return info.ExpiresAtUtc > DateTimeOffset.UtcNow;
             }
             catch
             {
                 return false;
             }
+        }
+
+        public bool TryValidate(string? token, out DateTimeOffset expiresAtUtc)
+        {
+            expiresAtUtc = DateTimeOffset.MinValue;
+            var valid = TryValidateInfo(token, out var info);
+            if (valid)
+            {
+                expiresAtUtc = info.ExpiresAtUtc;
+            }
+            return valid;
         }
     }
 }

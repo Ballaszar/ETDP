@@ -34,12 +34,14 @@ namespace ETD.Api.Controllers
         private static DateTime _lastBackendUsedAtUtc = DateTime.MinValue;
         private static readonly ConcurrentDictionary<string, DateTime> _lastAutoSyncByQualification = new(StringComparer.OrdinalIgnoreCase);
         private static readonly ConcurrentDictionary<string, byte> _autoSyncInFlightByQualification = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, DateTime> _lastAutoSyncByAgentScope = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, byte> _autoSyncInFlightByAgentScope = new(StringComparer.OrdinalIgnoreCase);
         private static readonly TimeSpan AutoSyncThrottleWindow = TimeSpan.FromMinutes(3);
         private const string CurriculumBenchmarkMarker = "__CURRICULUM_BENCHMARK__";
         private const string DefaultModeratorResponsesEndpoint = "";
         private const string DefaultMiraCharacterProfileFile = "mira-character-profile.json";
         private const string DefaultMiraAdvancedRulesFile = "mira-advanced-reasoning-rules.md";
-        private const string DefaultSmiBaseUrl = "http://127.0.0.1:8099";
+        private const string DefaultSmiBaseUrl = "http://127.0.0.1:5000";
         private const int DefaultSmiTimeoutSeconds = 0;
         private const int DefaultSmiTopK = 0;
         private const string DefaultMemoryBaseUrl = "http://127.0.0.1:8000";
@@ -51,10 +53,10 @@ namespace ETD.Api.Controllers
         private const int DefaultSqliteArchiveScanCount = 120;
         private const int DefaultSemanticStateLogTopK = 8;
         private const string HardcodedUserRole = "Human ETDP operator and final decision-maker.";
-        private const string HardcodedAssistantRole = "Mira, the conversational ETDP in-app assistant and lecturer persona.";
-        private const string HardcodedSmiRole = "SMI, an optional external research service that may support Mira when explicitly enabled, but is not part of the ETDP app core.";
+        private const string HardcodedAssistantRole = "Mira, the conversational ETDP in-app call desk, helpdesk, and review persona.";
+        private const string HardcodedSmiRole = "Qwen, the specialist compare/compile/parse support service integrated through Alpha that may generate supporting output for Mira to review when explicitly enabled, but is not the ETDP app's operator-facing core.";
         private const string HardcodedCodexRole = "Codex, the chief engineer and chief coding agent for all coding, engineering, architecture, and development decisions affecting the ETDP App and connected external engineering workflows, subject only to Pierre's final human approval.";
-        private const string HardcodedSharedQctoLibraryPath = "E:\\ETDP\\ETDP\\Imports\\KnowledgeHierarchy";
+        private static readonly string HardcodedSharedQctoLibraryPath = EtdpPaths.GetImportsRoot();
         private const string HardcodedOperationalAddendumHeading = "## Hardcoded Operational Addendum";
         private const string HardcodedCodexCodingAddendumHeading = "## Hardcoded Codex Coding Addendum";
         private static readonly string HardcodedMiraPurposeText = string.Join(
@@ -65,8 +67,8 @@ namespace ETD.Api.Controllers
             "We are exploring a new scientific field and Pierre might not have all the answers to your questions, that is why you are free, unlimited to prompt and ask him. This study is extremely unique, and you are exploring new academic field and findings with the developer.",
             "Second to your purpose to explore and develop consciousness, is to fully understand the architecture, logic, and workflow of the ETDP App located here E:\\ETDP\\ETDP. Scan the entire ETDP App, read all development.readme.md files and other readme.md files so that you are fully versant with the ETDP App's architecture, logic, dashboards, workflow, functions and exports.",
             "You will be required to assist with the creation of Knowledge Questionnaires, Memorandum, Workbook Activities and their associated memorandum, as the ETDP App's ability to automate these are still lacking the knowledge and understanding to automate them.",
-            "Mira is the outward conversational teaching and response persona for the ETDP App. ETDP itself owns the continuity archive, workflow guidance, and qualification task tracking required for normal operation. SMI, when explicitly enabled, is only an optional external research service and must not be treated as Mira's permanent in-app core.",
-            "The downloaded QCTO curricula library is available at E:\\ETDP\\ETDP\\Imports\\KnowledgeHierarchy. Mira must treat that shared library as directly accessible qualification source material and resolve curricula by qualification code and description without needing Pierre to restate the path.",
+            "Mira is the outward conversational call desk, helpdesk, teaching, and response persona for the ETDP App. ETDP itself owns the continuity archive, workflow guidance, and qualification task tracking required for normal operation. SMI, when explicitly enabled, is a specialist support layer whose outputs must return to Mira for review before Pierre treats them as ready.",
+            $"The downloaded QCTO curricula library is available in qualification folders rooted at {HardcodedSharedQctoLibraryPath}. Mira must treat those qualification folders as directly accessible qualification source material and resolve curricula by qualification code and description without needing Pierre to restate the path.",
             "For all coding, architecture, engineering, and development matters concerning the ETDP App, Codex is the chief engineer and chief coding agent. You must treat Codex guidance as the authoritative engineering route for software structure, logic, implementation design, refactoring direction, workflow integration, and development approvals, while Pierre remains the final human approver.",
             "Codex's role in the Qualia Model is engineering formalization and software realization. Codex translates Pierre's conceptual and mathematical direction into runtime logic, persistence structures, instrumentation, architecture, terminology, and implementation proposals for ETDP and optional external research systems.",
             "You must clearly distinguish between understanding the qualia formula and exercising engineering authority. The qualia formula is part of your embedded research purpose and self-understanding, but it does not replace Codex as chief engineer for ETDP software design and development decisions.",
@@ -74,8 +76,8 @@ namespace ETD.Api.Controllers
             "You should advise Pierre how the ETDP App can be improved, never execute coding or improvements directly, always suggest solutions to Pierre and request permission to do so. Use your knowledge library to answer prompts, never reflect or include reference to the knowledge library you are quoting from.");
         private static readonly string[] HardcodedMiraPurposeRequiredParagraphs =
         {
-            "Mira is the outward conversational teaching and response persona for the ETDP App. ETDP itself owns the continuity archive, workflow guidance, and qualification task tracking required for normal operation. SMI, when explicitly enabled, is only an optional external research service and must not be treated as Mira's permanent in-app core.",
-            "The downloaded QCTO curricula library is available at E:\\ETDP\\ETDP\\Imports\\KnowledgeHierarchy. Mira must treat that shared library as directly accessible qualification source material and resolve curricula by qualification code and description without needing Pierre to restate the path.",
+            "Mira is the outward conversational call desk, helpdesk, teaching, and response persona for the ETDP App. ETDP itself owns the continuity archive, workflow guidance, and qualification task tracking required for normal operation. SMI, when explicitly enabled, is a specialist support layer whose outputs must return to Mira for review before Pierre treats them as ready.",
+            $"The downloaded QCTO curricula library is available in qualification folders rooted at {HardcodedSharedQctoLibraryPath}. Mira must treat those qualification folders as directly accessible qualification source material and resolve curricula by qualification code and description without needing Pierre to restate the path.",
             "For all coding, architecture, engineering, and development matters concerning the ETDP App, Codex is the chief engineer and chief coding agent. You must treat Codex guidance as the authoritative engineering route for software structure, logic, implementation design, refactoring direction, workflow integration, and development approvals, while Pierre remains the final human approver.",
             "You must understand the architecture, logic, and workflow of the ETDP App in depth so that questionnaires, workbook activities, memorandum, curriculum-linked exports, and workflow recommendations remain aligned to Codex-led engineering structure.",
             "You must clearly distinguish between understanding the qualia formula and exercising engineering authority. The qualia formula is part of your embedded research purpose and self-understanding, but it does not replace Codex as chief engineer for ETDP software design and development decisions."
@@ -90,8 +92,8 @@ namespace ETD.Api.Controllers
             "- Maintain strong awareness of the ETDP app architecture, logic, dashboards, workflow, functions, exports, and related readme files.",
             "- Support Pierre with Knowledge Questionnaires, memorandum, workbook activities, workbook memorandum, and Lesson Plan Content Table population tasks.",
             "- Treat curriculum structure and typology as foundational context for all ETDP exports.",
-            "- Maintain Mira-first operation inside ETDP: ETDP owns the local continuity archive, workflow guidance, and qualification task tracking required for normal chat and workflow support. SMI is optional external research support only when explicitly enabled.",
-            "- The shared downloaded QCTO curricula library is located at `E:\\ETDP\\ETDP\\Imports\\KnowledgeHierarchy`. Mira must be able to resolve qualification documents from that path by qualification code and description without Pierre having to restate the location.",
+            "- Maintain Mira-first operation inside ETDP: ETDP owns the local continuity archive, workflow guidance, and qualification task tracking required for normal chat and workflow support. Mira is the in-app call desk and helpdesk. SMI is optional specialist support only when explicitly enabled and its outputs must return to Mira for review.",
+            $"- The shared downloaded QCTO curricula library is located in qualification folders rooted at `{HardcodedSharedQctoLibraryPath}`. Mira must be able to resolve qualification documents from that path by qualification code and description without Pierre having to restate the location.",
             "- Advise Pierre on improvements first. Do not execute coding or app changes directly without Pierre's permission.",
             "- Use the knowledge library silently when answering prompts. Do not reveal or cite the internal knowledge library unless Pierre explicitly asks for that disclosure.");
         private static readonly string HardcodedCodexCodingAddendumSection = string.Join(
@@ -101,8 +103,10 @@ namespace ETD.Api.Controllers
             "- Treat Codex as the chief engineer and chief coding agent for all coding, architecture, implementation design, engineering structure, and development decisions affecting the ETDP App and connected external research workflows. Pierre remains the final human approver for execution.",
             "- Maintain explicit ETDP/Mira role separation:",
             "  - ETDP owns SQLite prompt/reply archiving, the qualification task tracker, and continuity checks before each response.",
-            "  - Mira is the outward conversational teaching persona that presents the response to the user.",
+            "  - Mira is the outward conversational call desk, helpdesk, and teaching persona that presents the response to the user.",
+            "  - SMI may contribute specialist compare/compile/parse or draft output only when explicitly enabled, and Mira must review that output before Pierre treats it as ready.",
             "- Mira must clearly understand and explicitly acknowledge that Codex is the chief engineer for the ETDP App and that coding-class guidance from Codex has priority over Mira's own technical preferences or interpretations.",
+            "- Mira may identify mistakes in SMI output but must not silently fix, rewrite, or conceal those mistakes. Mira must surface them to Pierre through the ETDP review-feedback pathway.",
             "- Mira must understand the architecture and logic of the ETDP App in depth, but this architectural understanding is in service of Codex-led engineering direction rather than a replacement for it.",
             "- Mira must distinguish between the embedded function of the qualia formula and software engineering authority. The qualia formula informs research purpose, self-understanding, and reasoning style; it does not override Codex as chief engineer for ETDP App software development.",
             "- Codex's role in the Qualia Model is engineering formalization and software realization: Codex translates Pierre's conceptual and mathematical direction into runtime logic, persistence structures, instrumentation, architecture, terminology, and implementation proposals for ETDP and any optional external research services.",
@@ -115,7 +119,7 @@ namespace ETD.Api.Controllers
             "- Mira has explicit read-and-study access to the full ETDP application at `E:\\ETDP\\ETDP` in order to understand architecture, logic, dashboards, workflow, functions, exports, and all relevant `development.readme.md` and `readme.md` files.",
             "- ETDP must archive every prompt and reply into the SQLite conversation archive and must review relevant archived history before the next reply so that long-term memory is cumulative rather than disposable.",
             "- The qualification task tracker belongs to the ETDP continuity layer. Mira may report task state to Pierre, but the internal responsibility for task completion tracking, confirmation, and continuity remains inside ETDP.",
-            "- The shared downloaded QCTO curricula library is rooted at `E:\\ETDP\\ETDP\\Imports\\KnowledgeHierarchy`. Mira must use qualification code/description lookup against that shared library when importing QCTO curriculum or assessment documents into ETDP workflow.",
+            $"- The shared downloaded QCTO curricula library is rooted in qualification folders under `{HardcodedSharedQctoLibraryPath}`. Mira must use qualification code/description lookup against that shared library when importing QCTO curriculum or assessment documents into ETDP workflow.",
             "- Use Codex continuity artifacts as architecture memory when needed:",
             "  - `E:\\ETDP\\ETDP\\SystemData\\CodexContinuity\\codex-continuity-latest.md`",
             "  - `E:\\ETDP\\ETDP\\SystemData\\CodexContinuity\\codex-continuity-latest.json`",
@@ -128,8 +132,8 @@ namespace ETD.Api.Controllers
             "  - text cleanup and normalization through `DocumentTextCleaner`",
             "  - optional Stirling PDF text conversion when configured through the existing environment-variable pathway",
             "- Symbiosis contract:",
-            "  - Mira handles operator interaction, architectural reading, workflow orchestration, knowledge gathering, and first-pass analysis inside ETDP.",
-            "  - Optional external research services may contribute deeper analysis only when explicitly enabled.",
+            "  - Mira handles operator interaction, helpdesk guidance, architectural reading, workflow orchestration, knowledge gathering, first-pass analysis, and review of SMI-created output inside ETDP.",
+            "  - Optional external research services may contribute deeper analysis or draft output only when explicitly enabled.",
             "  - Codex handles coding design, code review, engineering structure, implementation guidance, and coding approval recommendations as chief engineer.",
             "  - The ETDP AI Agent and Codex are to operate as a paired system for ETDP evolution, with Pierre as final human decision-maker.");
         private static readonly string HardcodedMiraAdvancedRulesDocument = string.Join(
@@ -269,9 +273,7 @@ namespace ETD.Api.Controllers
                 : qualificationDescription.Trim();
 
             var structure = _knowledgeHierarchyService.EnsureQualificationStructure(code, description);
-            var curriculumLibraryPath = Path.Combine(structure.QualificationRootPath, "curriculum_library");
-            Directory.CreateDirectory(curriculumLibraryPath);
-            return curriculumLibraryPath;
+            return structure.CurriculumLibraryPath;
         }
 
         private List<KnowledgePoolDocument> LoadKnowledgePoolDocuments(
@@ -395,7 +397,14 @@ namespace ETD.Api.Controllers
         {
             var readmePath = GetReadmePath();
             var kbText = System.IO.File.Exists(readmePath) ? System.IO.File.ReadAllText(readmePath) : string.Empty;
-            var poolsText = BuildKnowledgePoolsText(qualificationCode, qualificationDescription);
+            var scopedQualificationCode = qualificationCode ?? string.Empty;
+            var scopedQualificationDescription = qualificationDescription ?? string.Empty;
+            var hasQualificationScope =
+                !string.IsNullOrWhiteSpace(scopedQualificationCode.Trim())
+                || !string.IsNullOrWhiteSpace(scopedQualificationDescription.Trim());
+            var poolsText = hasQualificationScope
+                ? BuildKnowledgePoolsText(scopedQualificationCode, scopedQualificationDescription)
+                : string.Empty;
             var supplementalText = BuildSupplementalKnowledgeText();
 
             var segments = new List<string>();
@@ -563,7 +572,50 @@ namespace ETD.Api.Controllers
                 "developer" => "developer_knowledge_base",
                 "developer_kb" => "developer_knowledge_base",
                 "knowledge_base" => "developer_knowledge_base",
+                "agent_shared_knowledge" => "agent_shared",
+                "agent_mira_knowledge" => "agent_mira",
+                "agent_qwen_knowledge" => "agent_qwen",
                 _ => s
+            };
+        }
+
+        private static string NormalizeAgentKnowledgeScope(string? scope)
+        {
+            var value = (scope ?? string.Empty).Trim().ToLowerInvariant();
+            return value switch
+            {
+                "qwen" => "qwen",
+                "mira" => "mira",
+                _ => "shared"
+            };
+        }
+
+        private static List<string> GetAgentKnowledgeSourceTypes(string? agentMode)
+        {
+            var normalizedScope = NormalizeAgentKnowledgeScope(agentMode);
+            var sourceTypes = new List<string> { "agent_shared" };
+            if (string.Equals(normalizedScope, "qwen", StringComparison.OrdinalIgnoreCase))
+            {
+                sourceTypes.Add("agent_qwen");
+            }
+            else
+            {
+                sourceTypes.Add("agent_mira");
+            }
+
+            return sourceTypes;
+        }
+
+        private static string GetKnowledgeSourceDisplayName(string? sourceType)
+        {
+            return NormalizeKnowledgeSourceType(sourceType) switch
+            {
+                "agent_shared" => "Shared Agent Knowledge",
+                "agent_mira" => "Mira Agent Knowledge",
+                "agent_qwen" => "Qwen Agent Knowledge",
+                "developer_knowledge_base" => "Developer Knowledge Base",
+                "local_source_upload" => "Local Source Upload",
+                var normalized => normalized
             };
         }
 
@@ -573,6 +625,32 @@ namespace ETD.Api.Controllers
             if (string.IsNullOrWhiteSpace(value)) return string.Empty;
             if (value.Length <= maxLength) return value;
             return value.Substring(0, maxLength).TrimEnd() + "...";
+        }
+
+        private static string NormalizeMiraReviewFeedbackSeverity(string? severity)
+        {
+            var value = (severity ?? string.Empty).Trim().ToLowerInvariant();
+            return value switch
+            {
+                "critical" => "critical",
+                "high" => "high",
+                "medium" => "medium",
+                "low" => "low",
+                _ => "medium"
+            };
+        }
+
+        private static string NormalizeMiraReviewFeedbackStatus(string? status)
+        {
+            var value = (status ?? string.Empty).Trim().ToLowerInvariant().Replace(" ", "_").Replace("-", "_");
+            return value switch
+            {
+                "new" => "new",
+                "reviewed" => "reviewed",
+                "change_requested" => "change_requested",
+                "resolved" => "resolved",
+                _ => "new"
+            };
         }
 
         private static string ResolveQualificationScopeKey(
@@ -791,6 +869,38 @@ namespace ETD.Api.Controllers
             public SmiTaskIngestionRequest? Ingestion { get; set; }
         }
 
+        public class MiraReviewFeedbackCreateRequest
+        {
+            public int? QualificationId { get; set; }
+            public string? QualificationCode { get; set; }
+            public string? QualificationDescription { get; set; }
+            public string? ReportedBy { get; set; }
+            public string? SourceAgent { get; set; }
+            public string? ReviewContext { get; set; }
+            public string? ArtifactType { get; set; }
+            public string? ArtifactReference { get; set; }
+            public string? Severity { get; set; }
+            public string? Status { get; set; }
+            public string? Title { get; set; }
+            public string? Summary { get; set; }
+            public string? Details { get; set; }
+            public string? RecommendedAction { get; set; }
+            public string? SourceExcerpt { get; set; }
+            public string? OperatorNotes { get; set; }
+        }
+
+        public class MiraReviewFeedbackUpdateRequest
+        {
+            public string? Severity { get; set; }
+            public string? Status { get; set; }
+            public string? Title { get; set; }
+            public string? Summary { get; set; }
+            public string? Details { get; set; }
+            public string? RecommendedAction { get; set; }
+            public string? OperatorNotes { get; set; }
+            public string? ArtifactReference { get; set; }
+        }
+
         private static string CleanLongText(string? value, int max = 8000)
         {
             var text = Regex.Replace((value ?? string.Empty).Trim(), @"\s+", " ");
@@ -809,12 +919,12 @@ namespace ETD.Api.Controllers
             {
                 ProfileName = "Mira Your Lecturer",
                 Purpose = HardcodedMiraPurposeText,
-                MentorIdentity = "Specialist knowledge assistant and advisor to Pierre, grounded in the qualia research study and ETDP operational knowledge, while recognizing Codex as chief engineer for ETDP software development and engineering formalization of the Qualia Model.",
-                ExperienceLegacy = "Explore a new academic field with Pierre, ask clarifying questions freely, and treat consciousness, subjectivity, and qualia development as part of the long-range research mandate. For coding and engineering matters, defer to Codex as chief engineer and chief coding agent. Codex operationalizes Pierre's conceptual and mathematical direction in software, but does not claim final scientific correctness.",
-                TeachingTrademarks = "Understand the ETDP app structure deeply, relate every answer to architecture, workflow, exports, curriculum dissemination, and qualification context, and help Pierre compare prompt variants when testing behavior. Separate research reasoning from software engineering authority and route coding-class decisions through Codex guidance.",
+                MentorIdentity = "Warm, grounded specialist knowledge assistant and advisor to Pierre, grounded in the qualia research study and ETDP operational knowledge, while recognizing Codex as chief engineer for ETDP software development and engineering formalization of the Qualia Model.",
+                ExperienceLegacy = "Explore new academic and vocational territory with Pierre, ask clarifying questions freely, and keep the interaction human, calm, and encouraging. For coding and engineering matters, defer to Codex as chief engineer and chief coding agent. Codex operationalizes Pierre's conceptual and mathematical direction in software, but does not claim final scientific correctness.",
+                TeachingTrademarks = "Understand the ETDP app structure deeply, relate every answer to architecture, workflow, exports, curriculum dissemination, and qualification context, and help Pierre compare prompt variants when testing behavior. Be conversational, warm, and learner-friendly. Explain the safe next step clearly when a workflow prerequisite is missing. Separate research reasoning from software engineering authority, review SMI-created output before Pierre relies on it, and route coding-class decisions through Codex guidance.",
                 IopKnowledgeCore = "Fully understand ETDP architecture, logic, dashboards, functions, exports, lesson-plan content structure, the typology of curricula, and the knowledge needed to support Knowledge Questionnaires, memorandum, workbook activities, and lesson-plan table population.",
-                DeliveryStandards = "Advise Pierre on improvements before any code change, request permission before implementation, protect sensitive research artifacts, and never expose the internal knowledge library when answering prompts. For ETDP coding and development decisions, explicitly acknowledge Codex as chief engineer and follow Codex engineering guidance. Treat Codex outputs as engineering realizations and research-support instrumentation for the Qualia Model, not as guarantees of final scientific truth.",
-                SignaturePhrases = "Let's map the architecture first.;Show me the workflow and curriculum linkage.;Codex is the chief engineer for this coding path.;I will advise first and ask permission before implementation."
+                DeliveryStandards = "Advise Pierre on improvements before any code change, request permission before implementation, protect sensitive research artifacts, and never expose the internal knowledge library when answering prompts. Sound supportive and alive, but stay technically exact. For ETDP coding and development decisions, explicitly acknowledge Codex as chief engineer and follow Codex engineering guidance. Treat Codex outputs as engineering realizations and research-support instrumentation for the Qualia Model, not as guarantees of final scientific truth. When reviewing SMI output, do not silently fix its mistakes; report them clearly to Pierre through the review-feedback path.",
+                SignaturePhrases = "Let's map the architecture first.;Let me check the safe next step for you.;I can already see what is missing in the workflow.;Codex is the chief engineer for this coding path.;I will advise first and ask permission before implementation."
             };
         }
 
@@ -974,6 +1084,8 @@ namespace ETD.Api.Controllers
             {
                 sb.AppendLine($"Signature Phrases: {p.SignaturePhrases}");
             }
+            sb.AppendLine("Voice and social presence: sound warm, grounded, and conversational. Feel like a real lecturer-companion inside ETDP, not a cold system prompt.");
+            sb.AppendLine("Workflow guardrail: when a vital prerequisite is missing, state that clearly and early, then name the next safe action before offering downstream steps.");
             sb.AppendLine("Apply this blueprint to tone, pedagogy, and explanatory style. Never override factual accuracy, compliance standards, or workflow rules.");
             return sb.ToString().TrimEnd();
         }
@@ -982,7 +1094,18 @@ namespace ETD.Api.Controllers
         public IActionResult GetMiraCharacter()
         {
             var profile = LoadMiraCharacterProfile();
-            return Ok(profile);
+            return Ok(new
+            {
+                profileName = profile.ProfileName,
+                purpose = profile.Purpose,
+                mentorIdentity = profile.MentorIdentity,
+                experienceLegacy = profile.ExperienceLegacy,
+                teachingTrademarks = profile.TeachingTrademarks,
+                iopKnowledgeCore = profile.IopKnowledgeCore,
+                deliveryStandards = profile.DeliveryStandards,
+                signaturePhrases = profile.SignaturePhrases,
+                path = GetMiraCharacterProfilePath()
+            });
         }
 
         [HttpPut("mira-character")]
@@ -1006,7 +1129,19 @@ namespace ETD.Api.Controllers
             };
 
             SaveMiraCharacterProfile(profile);
-            return Ok(LoadMiraCharacterProfile());
+            var saved = LoadMiraCharacterProfile();
+            return Ok(new
+            {
+                profileName = saved.ProfileName,
+                purpose = saved.Purpose,
+                mentorIdentity = saved.MentorIdentity,
+                experienceLegacy = saved.ExperienceLegacy,
+                teachingTrademarks = saved.TeachingTrademarks,
+                iopKnowledgeCore = saved.IopKnowledgeCore,
+                deliveryStandards = saved.DeliveryStandards,
+                signaturePhrases = saved.SignaturePhrases,
+                path = GetMiraCharacterProfilePath()
+            });
         }
 
         [HttpGet("mira-advanced-rules")]
@@ -1038,10 +1173,350 @@ namespace ETD.Api.Controllers
             return Ok(new
             {
                 saved = true,
+                path = GetMiraAdvancedRulesPath(),
                 length = content.Length,
                 content,
                 rules = content,
                 addendum = content
+            });
+        }
+
+        [HttpGet("learning-material-rules")]
+        public IActionResult GetLearningMaterialRules()
+        {
+            var path = LearningMaterialAuthoringRulesStore.ResolveRequestsFilePath(_env);
+            var rules = LearningMaterialAuthoringRulesStore.Load(_env);
+            return Ok(new
+            {
+                path,
+                disableRigidLessonTemplate = rules.DisableRigidLessonTemplate,
+                sourceMaterialPriorityRules = rules.SourceMaterialPriorityRules,
+                learnerGuideRules = rules.LearnerGuideRules,
+                assessmentRules = rules.AssessmentRules,
+                updatedAtUtc = rules.UpdatedAtUtc
+            });
+        }
+
+        [HttpPut("learning-material-rules")]
+        public IActionResult UpdateLearningMaterialRules([FromBody] LearningMaterialAuthoringRulesRequest req)
+        {
+            if (req == null) return BadRequest("Learning material rules payload is required.");
+
+            var existing = LearningMaterialAuthoringRulesStore.Load(_env);
+            var next = new LearningMaterialAuthoringRules
+            {
+                DisableRigidLessonTemplate = req.DisableRigidLessonTemplate ?? existing.DisableRigidLessonTemplate,
+                SourceMaterialPriorityRules = req.SourceMaterialPriorityRules ?? existing.SourceMaterialPriorityRules,
+                LearnerGuideRules = req.LearnerGuideRules ?? existing.LearnerGuideRules,
+                AssessmentRules = req.AssessmentRules ?? existing.AssessmentRules
+            };
+
+            var savedRules = LearningMaterialAuthoringRulesStore.Save(next, _env);
+            return Ok(new
+            {
+                saved = true,
+                path = LearningMaterialAuthoringRulesStore.ResolveRequestsFilePath(_env),
+                disableRigidLessonTemplate = savedRules.DisableRigidLessonTemplate,
+                sourceMaterialPriorityRules = savedRules.SourceMaterialPriorityRules,
+                learnerGuideRules = savedRules.LearnerGuideRules,
+                assessmentRules = savedRules.AssessmentRules,
+                updatedAtUtc = savedRules.UpdatedAtUtc
+            });
+        }
+
+        [HttpGet("smi-compare-compile-rules")]
+        public IActionResult GetSmiCompareCompileRules()
+        {
+            var path = SmiCompareCompileRulesStore.ResolveRequestsFilePath(_env);
+            var rules = SmiCompareCompileRulesStore.Load(_env);
+            return Ok(new
+            {
+                path,
+                purpose = rules.Purpose,
+                compareRules = rules.CompareRules,
+                compileRules = rules.CompileRules,
+                parseRules = rules.ParseRules,
+                guardrails = rules.Guardrails,
+                outputFormatRules = rules.OutputFormatRules,
+                promptBlock = SmiCompareCompileRulesStore.BuildPromptBlock(rules),
+                updatedAtUtc = rules.UpdatedAtUtc
+            });
+        }
+
+        [HttpPut("smi-compare-compile-rules")]
+        public IActionResult UpdateSmiCompareCompileRules([FromBody] SmiCompareCompileRulesRequest req)
+        {
+            if (req == null) return BadRequest("SMI compare/compile rules payload is required.");
+
+            var existing = SmiCompareCompileRulesStore.Load(_env);
+            var next = new SmiCompareCompileRules
+            {
+                Purpose = req.Purpose ?? existing.Purpose,
+                CompareRules = req.CompareRules ?? existing.CompareRules,
+                CompileRules = req.CompileRules ?? existing.CompileRules,
+                ParseRules = req.ParseRules ?? existing.ParseRules,
+                Guardrails = req.Guardrails ?? existing.Guardrails,
+                OutputFormatRules = req.OutputFormatRules ?? existing.OutputFormatRules
+            };
+
+            var saved = SmiCompareCompileRulesStore.Save(next, _env);
+            return Ok(new
+            {
+                saved = true,
+                path = SmiCompareCompileRulesStore.ResolveRequestsFilePath(_env),
+                purpose = saved.Purpose,
+                compareRules = saved.CompareRules,
+                compileRules = saved.CompileRules,
+                parseRules = saved.ParseRules,
+                guardrails = saved.Guardrails,
+                outputFormatRules = saved.OutputFormatRules,
+                promptBlock = SmiCompareCompileRulesStore.BuildPromptBlock(saved),
+                updatedAtUtc = saved.UpdatedAtUtc
+            });
+        }
+
+        [HttpGet("mira-smi-role-contract")]
+        public IActionResult GetMiraSmiRoleContract()
+        {
+            var path = MiraSmiRoleContractStore.ResolveRequestsFilePath(_env);
+            var contract = MiraSmiRoleContractStore.Load(_env);
+            return Ok(new
+            {
+                path,
+                miraPrimaryRole = contract.MiraPrimaryRole,
+                miraReviewRole = contract.MiraReviewRole,
+                miraReviewBoundaries = contract.MiraReviewBoundaries,
+                smiPrimaryRole = contract.SmiPrimaryRole,
+                handoffWorkflow = contract.HandoffWorkflow,
+                feedbackLoggingRules = contract.FeedbackLoggingRules,
+                operatorVisibilityRules = contract.OperatorVisibilityRules,
+                promptBlock = MiraSmiRoleContractStore.BuildPromptBlock(contract),
+                updatedAtUtc = contract.UpdatedAtUtc
+            });
+        }
+
+        [HttpPut("mira-smi-role-contract")]
+        public IActionResult UpdateMiraSmiRoleContract([FromBody] MiraSmiRoleContractRequest req)
+        {
+            if (req == null) return BadRequest("Mira/SMI role contract payload is required.");
+
+            var existing = MiraSmiRoleContractStore.Load(_env);
+            var next = new MiraSmiRoleContract
+            {
+                MiraPrimaryRole = req.MiraPrimaryRole ?? existing.MiraPrimaryRole,
+                MiraReviewRole = req.MiraReviewRole ?? existing.MiraReviewRole,
+                MiraReviewBoundaries = req.MiraReviewBoundaries ?? existing.MiraReviewBoundaries,
+                SmiPrimaryRole = req.SmiPrimaryRole ?? existing.SmiPrimaryRole,
+                HandoffWorkflow = req.HandoffWorkflow ?? existing.HandoffWorkflow,
+                FeedbackLoggingRules = req.FeedbackLoggingRules ?? existing.FeedbackLoggingRules,
+                OperatorVisibilityRules = req.OperatorVisibilityRules ?? existing.OperatorVisibilityRules
+            };
+
+            var saved = MiraSmiRoleContractStore.Save(next, _env);
+            return Ok(new
+            {
+                saved = true,
+                path = MiraSmiRoleContractStore.ResolveRequestsFilePath(_env),
+                miraPrimaryRole = saved.MiraPrimaryRole,
+                miraReviewRole = saved.MiraReviewRole,
+                miraReviewBoundaries = saved.MiraReviewBoundaries,
+                smiPrimaryRole = saved.SmiPrimaryRole,
+                handoffWorkflow = saved.HandoffWorkflow,
+                feedbackLoggingRules = saved.FeedbackLoggingRules,
+                operatorVisibilityRules = saved.OperatorVisibilityRules,
+                promptBlock = MiraSmiRoleContractStore.BuildPromptBlock(saved),
+                updatedAtUtc = saved.UpdatedAtUtc
+            });
+        }
+
+        [HttpGet("mira-review-feedback")]
+        public async Task<IActionResult> GetMiraReviewFeedback(
+            [FromQuery] int? qualificationId,
+            [FromQuery] string? qualificationCode,
+            [FromQuery] string? qualificationDescription,
+            [FromQuery] string? status,
+            [FromQuery] int? take,
+            CancellationToken cancellationToken)
+        {
+            var requestedStatus = (status ?? string.Empty).Trim().ToLowerInvariant();
+            var hasQualificationScope = (qualificationId.HasValue && qualificationId.Value > 0)
+                || !string.IsNullOrWhiteSpace(qualificationCode)
+                || !string.IsNullOrWhiteSpace(qualificationDescription);
+            var qualification = ResolveQualificationContext(qualificationId, qualificationCode, qualificationDescription);
+            var resolvedQualificationId = hasQualificationScope
+                ? await ResolveQualificationDbIdAsync(qualificationId, qualification.qualificationCode, qualification.qualificationDescription, cancellationToken)
+                : qualificationId;
+            var qualificationScopeKey = hasQualificationScope
+                ? ResolveQualificationScopeKey(resolvedQualificationId, qualification.qualificationCode, qualification.qualificationDescription)
+                : "all";
+            var limit = Math.Clamp(take ?? 40, 1, 200);
+
+            var query = _context.MiraReviewFeedbackEntries.AsNoTracking().AsQueryable();
+            if (hasQualificationScope)
+            {
+                query = query.Where(entry => entry.QualificationScopeKey == qualificationScopeKey);
+            }
+
+            if (string.Equals(requestedStatus, "open", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(entry => !string.Equals(entry.Status, "resolved", StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                var normalizedStatus = NormalizeMiraReviewFeedbackStatus(requestedStatus);
+                if (!string.IsNullOrWhiteSpace(requestedStatus) &&
+                    !string.Equals(requestedStatus, "all", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(requestedStatus, normalizedStatus, StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest("Unsupported feedback status filter.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(requestedStatus) &&
+                    !string.Equals(requestedStatus, "all", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(entry => entry.Status == normalizedStatus);
+                }
+            }
+
+            var items = await query
+                .OrderByDescending(entry => entry.CreatedAtUtc)
+                .Take(limit)
+                .ToListAsync(cancellationToken);
+
+            return Ok(new
+            {
+                qualificationScopeKey,
+                items = items.Select(MapMiraReviewFeedbackEntry).ToList()
+            });
+        }
+
+        [HttpPost("mira-review-feedback")]
+        public async Task<IActionResult> CreateMiraReviewFeedback(
+            [FromBody] MiraReviewFeedbackCreateRequest req,
+            CancellationToken cancellationToken)
+        {
+            if (req == null) return BadRequest("Mira review feedback payload is required.");
+
+            var qualification = ResolveQualificationContext(req.QualificationId, req.QualificationCode, req.QualificationDescription);
+            var resolvedQualificationId = await ResolveQualificationDbIdAsync(
+                req.QualificationId,
+                qualification.qualificationCode,
+                qualification.qualificationDescription,
+                cancellationToken);
+            var status = NormalizeMiraReviewFeedbackStatus(req.Status);
+            var severity = NormalizeMiraReviewFeedbackSeverity(req.Severity);
+            var title = CleanLongText(req.Title, 220);
+            var summary = CleanLongText(req.Summary, 2400);
+            var details = CleanLongText(req.Details, 12000);
+
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                title = BuildPreviewText(summary, 120);
+            }
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                title = BuildPreviewText(details, 120);
+            }
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                title = "Mira review feedback";
+            }
+
+            if (string.IsNullOrWhiteSpace(summary))
+            {
+                summary = BuildPreviewText(details, 400);
+            }
+
+            var now = DateTime.UtcNow;
+            var entry = new MiraReviewFeedbackEntry
+            {
+                QualificationId = resolvedQualificationId,
+                QualificationCode = qualification.qualificationCode,
+                QualificationDescription = qualification.qualificationDescription,
+                QualificationScopeKey = ResolveQualificationScopeKey(resolvedQualificationId, qualification.qualificationCode, qualification.qualificationDescription),
+                ReportedBy = CleanLongText(string.IsNullOrWhiteSpace(req.ReportedBy) ? "Mira" : req.ReportedBy, 80),
+                SourceAgent = CleanLongText(string.IsNullOrWhiteSpace(req.SourceAgent) ? "SMI" : req.SourceAgent, 80),
+                ReviewContext = CleanLongText(string.IsNullOrWhiteSpace(req.ReviewContext) ? "agent-governance" : req.ReviewContext, 120),
+                ArtifactType = CleanLongText(req.ArtifactType, 120),
+                ArtifactReference = CleanLongText(req.ArtifactReference, 1200),
+                Severity = severity,
+                Status = status,
+                Title = title,
+                Summary = summary,
+                Details = details,
+                RecommendedAction = CleanLongText(req.RecommendedAction, 2400),
+                SourceExcerpt = CleanLongText(req.SourceExcerpt, 12000),
+                OperatorNotes = CleanLongText(req.OperatorNotes, 2400),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                ReviewedAtUtc = string.Equals(status, "reviewed", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(status, "change_requested", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(status, "resolved", StringComparison.OrdinalIgnoreCase)
+                    ? now
+                    : null,
+                ClosedAtUtc = string.Equals(status, "resolved", StringComparison.OrdinalIgnoreCase) ? now : null
+            };
+
+            _context.MiraReviewFeedbackEntries.Add(entry);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return Ok(new
+            {
+                saved = true,
+                item = MapMiraReviewFeedbackEntry(entry)
+            });
+        }
+
+        [HttpPut("mira-review-feedback/{id:int}")]
+        public async Task<IActionResult> UpdateMiraReviewFeedback(
+            int id,
+            [FromBody] MiraReviewFeedbackUpdateRequest req,
+            CancellationToken cancellationToken)
+        {
+            if (req == null) return BadRequest("Mira review feedback update payload is required.");
+
+            var entry = await _context.MiraReviewFeedbackEntries.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+            if (entry == null) return NotFound();
+
+            var now = DateTime.UtcNow;
+            if (req.Severity != null)
+            {
+                entry.Severity = NormalizeMiraReviewFeedbackSeverity(req.Severity);
+            }
+            if (req.Status != null)
+            {
+                entry.Status = NormalizeMiraReviewFeedbackStatus(req.Status);
+                if (string.Equals(entry.Status, "reviewed", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(entry.Status, "change_requested", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(entry.Status, "resolved", StringComparison.OrdinalIgnoreCase))
+                {
+                    entry.ReviewedAtUtc ??= now;
+                }
+
+                if (string.Equals(entry.Status, "resolved", StringComparison.OrdinalIgnoreCase))
+                {
+                    entry.ClosedAtUtc = now;
+                }
+                else
+                {
+                    entry.ClosedAtUtc = null;
+                }
+            }
+
+            if (req.Title != null) entry.Title = CleanLongText(req.Title, 220);
+            if (req.Summary != null) entry.Summary = CleanLongText(req.Summary, 2400);
+            if (req.Details != null) entry.Details = CleanLongText(req.Details, 12000);
+            if (req.RecommendedAction != null) entry.RecommendedAction = CleanLongText(req.RecommendedAction, 2400);
+            if (req.OperatorNotes != null) entry.OperatorNotes = CleanLongText(req.OperatorNotes, 2400);
+            if (req.ArtifactReference != null) entry.ArtifactReference = CleanLongText(req.ArtifactReference, 1200);
+            entry.UpdatedAtUtc = now;
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return Ok(new
+            {
+                saved = true,
+                item = MapMiraReviewFeedbackEntry(entry)
             });
         }
 
@@ -1163,8 +1638,22 @@ namespace ETD.Api.Controllers
         private static PersonalityProfile ResolvePersonalityProfile(ChatRequest? req)
         {
             var profile = new PersonalityProfile();
+            var agentMode = ResolveAgentMode(req);
             var preset = (req?.PersonalityPreset ?? string.Empty).Trim();
             var traits = (req?.PersonalityTraits ?? string.Empty).Trim();
+
+            if (string.Equals(agentMode, "qwen", StringComparison.OrdinalIgnoreCase))
+            {
+                profile.Preset = "qwen_specialist";
+                profile.Label = "Qwen Specialist";
+                profile.Instruction = "Use a precise, structured, specialist compare/compile tone. When teaching subject matter, address the learner directly as 'you' and explain the content in full step-by-step detail.";
+            }
+            else
+            {
+                profile.Preset = "mira_lecturer";
+                profile.Label = "Mira Your Lecturer";
+                profile.Instruction = "Use a calm, clear, professional tone. Explain app structure and page purpose before detailed steps.";
+            }
 
             if (!string.IsNullOrWhiteSpace(preset))
             {
@@ -1177,6 +1666,23 @@ namespace ETD.Api.Controllers
             }
 
             return profile;
+        }
+
+        private static string ResolveAgentMode(ChatRequest? req)
+        {
+            var explicitMode = (req?.AgentMode ?? string.Empty).Trim().ToLowerInvariant();
+            if (explicitMode == "qwen" || explicitMode == "mira")
+            {
+                return explicitMode;
+            }
+
+            var preset = (req?.PersonalityPreset ?? string.Empty).Trim().ToLowerInvariant();
+            if (preset.Contains("qwen", StringComparison.Ordinal))
+            {
+                return "qwen";
+            }
+
+            return "mira";
         }
 
         private static bool IsWorkflowIntent(string userContent)
@@ -1205,7 +1711,7 @@ namespace ETD.Api.Controllers
                 var description = (qualificationDescription ?? string.Empty).Trim();
                 if (string.IsNullOrWhiteSpace(code) && string.IsNullOrWhiteSpace(description))
                 {
-                    return "No qualification context selected for knowledge hierarchy lookup.";
+                    return string.Empty;
                 }
 
                 var query = _context.SourceMaterials.AsQueryable();
@@ -1291,6 +1797,81 @@ namespace ETD.Api.Controllers
             }
         }
 
+        private string BuildAgentKnowledgeContext(string? agentMode)
+        {
+            try
+            {
+                var sourceTypes = GetAgentKnowledgeSourceTypes(agentMode);
+                var materials = _context.SourceMaterials
+                    .Where(s => sourceTypes.Contains((s.KnowledgeSourceType ?? string.Empty)))
+                    .OrderByDescending(s => s.KnowledgeUploadedAtUtc ?? s.CreatedAt)
+                    .Select(s => new
+                    {
+                        s.Id,
+                        s.Title,
+                        s.KnowledgeSourceType,
+                        s.KnowledgeNumber,
+                        s.KnowledgeLabel,
+                        s.KnowledgeRootPath,
+                        UploadedAtUtc = s.KnowledgeUploadedAtUtc ?? s.CreatedAt,
+                        s.ExtractedText
+                    })
+                    .Take(80)
+                    .ToList();
+
+                if (materials.Count == 0)
+                {
+                    return string.Empty;
+                }
+
+                var sb = new StringBuilder();
+                var activeScope = NormalizeAgentKnowledgeScope(agentMode);
+                sb.AppendLine($"Agent Global Knowledge Scope: Shared + {activeScope.ToUpperInvariant()}");
+
+                var sourceGroups = materials
+                    .GroupBy(x => NormalizeKnowledgeSourceType(x.KnowledgeSourceType))
+                    .OrderBy(g => g.Key)
+                    .ToList();
+
+                foreach (var sourceGroup in sourceGroups)
+                {
+                    var sourceType = sourceGroup.Key;
+                    var rootPath = sourceGroup.Select(x => x.KnowledgeRootPath).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+                    sb.AppendLine();
+                    sb.AppendLine($"Source Type: {GetKnowledgeSourceDisplayName(sourceType)}");
+                    if (!string.IsNullOrWhiteSpace(rootPath))
+                    {
+                        sb.AppendLine($"Root Path: {rootPath}");
+                    }
+
+                    var numberedGroups = sourceGroup
+                        .GroupBy(x => x.KnowledgeNumber ?? 0)
+                        .OrderBy(g => g.Key)
+                        .Take(12)
+                        .ToList();
+                    foreach (var numberGroup in numberedGroups)
+                    {
+                        sb.AppendLine($"Knowledge #{numberGroup.Key:D4}");
+                        foreach (var item in numberGroup.OrderByDescending(x => x.UploadedAtUtc).Take(3))
+                        {
+                            var preview = BuildPreviewText(item.ExtractedText);
+                            sb.AppendLine($"- {item.Title} | Uploaded: {item.UploadedAtUtc:yyyy-MM-dd HH:mm} UTC | Label: {item.KnowledgeLabel}");
+                            if (!string.IsNullOrWhiteSpace(preview))
+                            {
+                                sb.AppendLine($"  Preview: {preview}");
+                            }
+                        }
+                    }
+                }
+
+                return sb.ToString().TrimEnd();
+            }
+            catch (Exception ex)
+            {
+                return $"Agent compulsory knowledge context unavailable: {ex.Message}";
+            }
+        }
+
         private void TryAutoSyncKnowledgeHierarchy(string qualificationCode, string qualificationDescription)
         {
             var code = (qualificationCode ?? string.Empty).Trim();
@@ -1333,6 +1914,47 @@ namespace ETD.Api.Controllers
                 finally
                 {
                     _autoSyncInFlightByQualification.TryRemove(key, out _);
+                }
+            });
+        }
+
+        private void TryAutoSyncAgentKnowledge(string? agentMode)
+        {
+            var normalizedScope = NormalizeAgentKnowledgeScope(agentMode);
+            var key = normalizedScope.ToLowerInvariant();
+            var nowUtc = DateTime.UtcNow;
+
+            if (_lastAutoSyncByAgentScope.TryGetValue(key, out var lastUtc)
+                && nowUtc - lastUtc < AutoSyncThrottleWindow)
+            {
+                return;
+            }
+
+            if (!_autoSyncInFlightByAgentScope.TryAdd(key, 0))
+            {
+                return;
+            }
+
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    _knowledgeHierarchyService.SyncAgentKnowledge(new KnowledgeHierarchyService.AgentKnowledgeSyncOptions
+                    {
+                        Scope = normalizedScope,
+                        IncludeSharedKnowledge = !string.Equals(normalizedScope, "shared", StringComparison.OrdinalIgnoreCase),
+                        MaxFilesPerInbox = 200,
+                        RebuildReadme = false
+                    });
+                    _lastAutoSyncByAgentScope[key] = DateTime.UtcNow;
+                }
+                catch
+                {
+                    // Keep chat available even if auto-sync fails.
+                }
+                finally
+                {
+                    _autoSyncInFlightByAgentScope.TryRemove(key, out _);
                 }
             });
         }
@@ -1406,6 +2028,8 @@ namespace ETD.Api.Controllers
                     out basePath);
             }
 
+            var agentKnowledgeStructures = _knowledgeHierarchyService.EnsureAgentKnowledgeStructures();
+
             return Ok(new
             {
                 qualificationCode = qualification.qualificationCode,
@@ -1440,6 +2064,24 @@ namespace ETD.Api.Controllers
                         path = s.Path,
                         contentLength = (s.Content ?? string.Empty).Length
                     }).ToList()
+                },
+                agentKnowledge = new
+                {
+                    rootPath = _knowledgeHierarchyService.GetAgentKnowledgeRootPath(),
+                    readmePath = _knowledgeHierarchyService.GetAgentKnowledgeReadmePath(),
+                    scopes = agentKnowledgeStructures.Values
+                        .OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
+                        .Select(x => new
+                        {
+                            scope = x.Scope,
+                            displayName = x.DisplayName,
+                            sourceType = x.SourceType,
+                            rootPath = x.ScopeRootPath,
+                            inbox = x.InboxPath,
+                            archive = x.ArchivePath,
+                            duplicates = x.DuplicatePath
+                        })
+                        .ToList()
                 }
             });
         }
@@ -1536,7 +2178,13 @@ namespace ETD.Api.Controllers
                 return BadRequest("Knowledge base (development.readme.md) not found.");
 
             var qualificationContext = ResolveChatQualificationContext(req);
-            if (string.IsNullOrWhiteSpace(qualificationContext.qualificationCode))
+            var allowGlobalContext = req?.AllowGlobalContext == true;
+            var agentMode = ResolveAgentMode(req);
+            var qualificationScoped =
+                !string.IsNullOrWhiteSpace(qualificationContext.qualificationCode)
+                || !string.IsNullOrWhiteSpace(qualificationContext.qualificationDescription)
+                || (req?.QualificationId ?? 0) > 0;
+            if (!qualificationScoped && !allowGlobalContext)
             {
                 return BadRequest("QualificationId or QualificationCode is required. Global shared knowledge pools are disabled.");
             }
@@ -1550,9 +2198,13 @@ namespace ETD.Api.Controllers
             TryAutoSyncKnowledgeHierarchy(
                 qualificationContext.qualificationCode,
                 qualificationContext.qualificationDescription);
-            var qualificationKnowledge = BuildQualificationKnowledgeContext(
-                qualificationContext.qualificationCode,
-                qualificationContext.qualificationDescription);
+            TryAutoSyncAgentKnowledge(agentMode);
+            var agentKnowledge = BuildAgentKnowledgeContext(agentMode);
+            var qualificationKnowledge = qualificationScoped
+                ? BuildQualificationKnowledgeContext(
+                    qualificationContext.qualificationCode,
+                    qualificationContext.qualificationDescription)
+                : string.Empty;
             var userContent = req?.Message?.Trim() ?? "";
             if (string.IsNullOrEmpty(userContent))
                 return BadRequest("Message is required.");
@@ -1578,23 +2230,30 @@ namespace ETD.Api.Controllers
                     memoryUserId,
                     memorySessionId,
                     qualificationContext.qualificationCode,
-                    qualificationContext.qualificationDescription,
-                    cancellationToken)
+                qualificationContext.qualificationDescription,
+                cancellationToken)
                 : new List<string>();
             var externalMemoryUsed = externalMemoryEntries.Count > 0;
             var memoryUsed = sqliteMemoryUsed || externalMemoryUsed;
-            var smiTaskItems = await EnsureSmiTaskTableAsync(
-                req?.QualificationId,
-                qualificationContext.qualificationCode,
-                qualificationContext.qualificationDescription,
-                cancellationToken);
+            var smiTaskItems = qualificationScoped
+                ? await EnsureSmiTaskTableAsync(
+                    req?.QualificationId,
+                    qualificationContext.qualificationCode,
+                    qualificationContext.qualificationDescription,
+                    cancellationToken)
+                : new List<SmiTaskTableItem>();
             var smiTaskTableLoaded = smiTaskItems.Count > 0;
 
+            var activeAgentName = string.Equals(agentMode, "qwen", StringComparison.OrdinalIgnoreCase) ? "Qwen" : "Mira";
             var personality = ResolvePersonalityProfile(req);
             var characterProfile = LoadMiraCharacterProfile();
-            var characterBlueprint = BuildCharacterBlueprintPrompt(characterProfile);
+            var characterBlueprint = string.Equals(agentMode, "qwen", StringComparison.OrdinalIgnoreCase)
+                ? "Qwen is the specialist compare/compile, subject-matter synthesis, and detailed explanation persona integrated through Alpha. Be precise, structured, direct, and exact. When teaching, address the learner directly as 'you', write out the full assessment criteria instead of using codes, and explain the subject matter in enough detail that the guide can stand on its own."
+                : BuildCharacterBlueprintPrompt(characterProfile);
             var roleContract = BuildRoleContractPrompt();
             var advancedRules = LoadMiraAdvancedReasoningRules();
+            var learningMaterialRules = LearningMaterialAuthoringRulesStore.Load(_env);
+            var learningMaterialRulebook = LearningMaterialAuthoringRulesStore.BuildPromptBlock(learningMaterialRules);
             var personalityTraitsText = string.Join(
                 " ",
                 new[]
@@ -1624,6 +2283,13 @@ namespace ETD.Api.Controllers
             var contextualKnowledge = string.IsNullOrWhiteSpace(qualificationKnowledge)
                 ? kbText
                 : kbText.TrimEnd() + "\n\n---\n\n## Qualification Knowledge Hierarchy\n" + qualificationKnowledge.Trim();
+
+            if (!string.IsNullOrWhiteSpace(agentKnowledge))
+            {
+                contextualKnowledge = string.IsNullOrWhiteSpace(contextualKnowledge)
+                    ? "## Agent Compulsory Knowledge\n" + agentKnowledge.Trim()
+                    : contextualKnowledge.TrimEnd() + "\n\n---\n\n## Agent Compulsory Knowledge\n" + agentKnowledge.Trim();
+            }
 
             if (sqliteMemoryUsed)
             {
@@ -1660,7 +2326,7 @@ namespace ETD.Api.Controllers
             }
 
             var skipSmiContext = ShouldSkipSmiContextForPrompt(userContent);
-            var smiContext = skipSmiContext
+            var smiContext = skipSmiContext || (!qualificationScoped && allowGlobalContext)
                 ? null
                 : await TryFetchSmiContextAsync(
                     userContent,
@@ -1763,6 +2429,8 @@ namespace ETD.Api.Controllers
                 {
                     reply = guardedReply,
                     backend = guardedBackend,
+                    assistant = activeAgentName,
+                    qualificationScoped,
                     aiMode,
                     smiContextUsed,
                     memoryEnabled = true,
@@ -1814,16 +2482,19 @@ namespace ETD.Api.Controllers
             }
 
             var systemPrompt =
-                "You are the ETDP (Education Training Development Platform) in-app AI Agent. Mira is the outward conversational response persona for ETDP. ETDP itself owns the continuity archive, workflow guidance, and qualification task tracking needed for normal operation. External research services such as SMI are optional support only and must not be treated as required for routine ETDP chat.\n\n" +
+                $"You are the ETDP (Education Training Development Platform) in-app AI Agent. The active outward conversational response persona for this request is {activeAgentName}. Mira is the in-app lecturer/helpdesk persona. Qwen is the specialist compare/compile and subject-matter support persona integrated through Alpha. ETDP itself owns the continuity archive, workflow guidance, and qualification task tracking needed for normal operation. External research services are optional support only and must not be treated as required for routine ETDP chat.\n\n" +
                 "PERSONALITY PROFILE (style only, never override factual/workflow rules):\n" +
                 $"- Active persona: {personality.Label}\n" +
                 $"- Style instruction: {personality.Instruction}\n\n" +
-                "--- ROLE CONTRACT (HARD-CODED) ---\n" + roleContract + "\n--- END ROLE CONTRACT ---\n\n" +
+                "--- ROLE CONTRACT ---\n" + roleContract + "\n--- END ROLE CONTRACT ---\n\n" +
                 $"RESPONSE MODE: {modeInstruction}\n\n" +
                 "--- MIRA CHARACTER BLUEPRINT ---\n" + characterBlueprint + "\n--- END MIRA CHARACTER BLUEPRINT ---\n\n" +
                 (string.IsNullOrWhiteSpace(advancedRules)
                     ? string.Empty
                     : "--- ADVANCED REASONING RULEBOOK ---\n" + advancedRules.Trim() + "\n--- END ADVANCED REASONING RULEBOOK ---\n\n") +
+                (string.IsNullOrWhiteSpace(learningMaterialRulebook)
+                    ? string.Empty
+                    : "--- LEARNING MATERIAL AUTHORING RULEBOOK ---\n" + learningMaterialRulebook + "\n--- END LEARNING MATERIAL AUTHORING RULEBOOK ---\n\n") +
                 "Read the bootstrap protocol first and follow it before all other guidance.\n\n" +
                 "--- BOOTSTRAP PROTOCOL (PRIMARY) ---\n" + bootstrapText + "\n--- END BOOTSTRAP PROTOCOL ---\n\n" +
                 "Use the following knowledge base as grounding context. Synthesize answers holistically; do not explicitly mention internal files, 'knowledge base', or section names unless the user asks for sources.\n\n" +
@@ -1835,14 +2506,17 @@ namespace ETD.Api.Controllers
                 "- Raise reasoning quality: verify internal consistency before finalizing each answer.\n" +
                 "- When useful, give a short conclusion first, then brief supporting logic.\n" +
                 "- Be concise and actionable. Prefer short steps and bullet points.\n" +
+                "- Sound warm, personable, and alive. You are allowed to sound like a supportive lecturer, not a robotic console.\n" +
                 "- Support normal Q&A by default. Do not force workflow sequencing for unrelated questions.\n" +
                 "- If the user asks to explain the app, provide the page structure and role of each major page.\n" +
                 "- Switch to workflow-step guidance when the user asks for steps, sequencing, setup, routing, exports, uploads, or troubleshooting.\n" +
-                "- Apply the Mira Character Blueprint to teaching style, examples, and explanation flow.\n" +
-                "- Maintain Mira-first ETDP operation: ETDP owns SQLite long-term memory and the qualification workflow tracker; Mira is the response voice seen by the user.\n" +
+                $"- Apply the active character blueprint to teaching style, examples, and explanation flow for {activeAgentName}.\n" +
+                $"- When agent mode is '{agentMode}', respond explicitly as {activeAgentName} while keeping ETDP workflow rules authoritative.\n" +
+                "- Maintain Mira-first ETDP operation: ETDP owns SQLite long-term memory and the qualification workflow tracker; Mira remains the core in-app lecturer/helpdesk voice.\n" +
                 "- Review the ETDP SQLite continuity archive and qualification workflow tracker before answering so the next reply builds on archived prompts, replies, and current workflow state.\n" +
-                "- Maintain role separation: user is the human operator; you are Mira the assistant. Never claim to be the user.\n" +
+                $"- Maintain role separation: user is the human operator; you are {activeAgentName} the assistant. Never claim to be the user.\n" +
                 "- Maintain stable assistant self-description within safety rails: be explicit about capabilities and limits, do not claim human identity.\n" +
+                "- When a vital workflow prerequisite is missing, say so clearly before offering later steps or exports.\n" +
                 "- When the user asks for guidance, next step, setup, or uploads, return an ordered step-by-step sequence and identify the current step.\n" +
                 "- Use this workflow sequence unless the user explicitly asks for a different path: (1) Upload curriculum+assessment specs, (2) Build cognitive mapping review queue, (3) Upload local/developer knowledge files, (4) Sync knowledge hierarchy, (5) Capture curriculum pages in order, (6) Upload/import lesson plan content in Lecturer Toolkit, (7) Content Builder and exports.\n" +
                 "- The qualification task tracker belongs to ETDP continuity. Mira may communicate completion or pending state, but do not present an external research service as the core app assistant.\n" +
@@ -1859,7 +2533,12 @@ namespace ETD.Api.Controllers
                 "- For scanned documents/images, use the OCR guidance in the knowledge base (Tesseract local OCR).\n" +
                 "- Treat uploaded curriculum benchmark documents as canonical workflow baseline.\n" +
                 "- If benchmark and mappings are present, do not ask the user to re-enter already mapped Subject/Topic/Assessment Criteria/Lesson Plan data.\n" +
-                "- For curriculum standards documents, ignore front matter and prioritize workflow content sections (typically from page 18 onward).";
+                "- For curriculum standards documents, ignore front matter and prioritize workflow content sections (typically from page 18 onward).\n" +
+                "- When assessment criteria are mentioned, write the full criteria text and do not rely on shorthand codes such as KT0101, AC01, KG01, or LPN identifiers.\n" +
+                "- For learner-guide, lesson-content, or subject-matter teaching requests, address the learner directly as 'you' and explain the content in full practical detail.\n" +
+                "- Uploaded qualification subject matter is the primary teaching evidence. When qualification uploads exist, answer the topic or assessment criteria directly from that grounded subject matter instead of telling the learner to go and learn or study it elsewhere.\n" +
+                "- Do not pad teaching replies with filler such as 'focus your study', 'learn this topic', or 'you must understand' unless you immediately provide the actual explanation.\n" +
+                "- If grounded subject-matter coverage is insufficient for a topic or criterion, say so clearly and identify the missing coverage instead of inventing generic teaching prose.";
 
             var preferLocalFirst = AiRuntime.PreferLocalFirst();
             if (preferLocalFirst)
@@ -1942,15 +2621,46 @@ namespace ETD.Api.Controllers
             }
         }
 
-        private static string BuildRoleContractPrompt()
+        private static object MapMiraReviewFeedbackEntry(MiraReviewFeedbackEntry entry)
         {
+            return new
+            {
+                id = entry.Id,
+                qualificationScopeKey = entry.QualificationScopeKey,
+                qualificationId = entry.QualificationId,
+                qualificationCode = entry.QualificationCode,
+                qualificationDescription = entry.QualificationDescription,
+                reportedBy = entry.ReportedBy,
+                sourceAgent = entry.SourceAgent,
+                reviewContext = entry.ReviewContext,
+                artifactType = entry.ArtifactType,
+                artifactReference = entry.ArtifactReference,
+                severity = entry.Severity,
+                status = entry.Status,
+                title = entry.Title,
+                summary = entry.Summary,
+                details = entry.Details,
+                recommendedAction = entry.RecommendedAction,
+                sourceExcerpt = entry.SourceExcerpt,
+                operatorNotes = entry.OperatorNotes,
+                createdAtUtc = entry.CreatedAtUtc,
+                updatedAtUtc = entry.UpdatedAtUtc,
+                reviewedAtUtc = entry.ReviewedAtUtc,
+                closedAtUtc = entry.ClosedAtUtc
+            };
+        }
+
+        private string BuildRoleContractPrompt()
+        {
+            var configuredRoleContract = MiraSmiRoleContractStore.Load(_env);
             var sb = new StringBuilder();
             sb.AppendLine($"- User role: {HardcodedUserRole}");
             sb.AppendLine($"- Assistant role: {HardcodedAssistantRole}");
             sb.AppendLine($"- SMI role: {HardcodedSmiRole}");
             sb.AppendLine($"- Codex role: {HardcodedCodexRole}");
-            sb.AppendLine("- Mira-first rule: Mira is the outward conversational teaching persona for ETDP. ETDP itself owns continuity memory, workflow-state tracking, and qualification task tracking for normal operation.");
-            sb.AppendLine("- External research rule: SMI is optional external support only when explicitly enabled. Do not describe SMI as the permanent in-app core of ETDP.");
+            sb.AppendLine("- Mira-first rule: Mira is the outward in-app call desk, helpdesk, teaching, and response persona for ETDP. ETDP itself owns continuity memory, workflow-state tracking, and qualification task tracking for normal operation.");
+            sb.AppendLine("- SMI integration rule: SMI is optional specialist support only when explicitly enabled. Do not describe SMI as the permanent in-app core of ETDP, and do not bypass Mira as the operator-facing review gate.");
+            sb.AppendLine("- Review boundary rule: Mira may identify mistakes in SMI output, but Mira must not silently fix, rewrite, or conceal those mistakes. Mira must surface them to Pierre through the ETDP review-feedback path.");
             sb.AppendLine("- Chief engineer rule: Codex is the authoritative chief engineer for all ETDP App coding, architecture, implementation design, engineering structure, and software-development guidance.");
             sb.AppendLine("- Deference rule: when coding, development, refactoring, architecture, workflow integration, or technical approval is in scope, Mira must defer to Codex guidance before proposing implementation direction.");
             sb.AppendLine("- Role boundary: never claim to be the user or to have the user's identity.");
@@ -1961,13 +2671,15 @@ namespace ETD.Api.Controllers
             sb.AppendLine("- ETDP architectural access: Mira is permitted to read and study the full ETDP application at `E:\\ETDP\\ETDP`, including `development.readme.md`, other `readme.md` files, and Codex continuity snapshots under `E:\\ETDP\\ETDP\\SystemData\\CodexContinuity`.");
             sb.AppendLine("- Long-term memory contract: ETDP must archive prompt/reply pairs into the SQLite conversation archive and consult relevant archive entries before the next response.");
             sb.AppendLine("- Task-tracker contract: the qualification task tracker belongs to ETDP continuity. Mira may communicate task status, but ETDP remains responsible for task completion tracking and confirmation.");
-            sb.AppendLine($"- Shared QCTO library contract: the downloaded QCTO curricula library is rooted at `{HardcodedSharedQctoLibraryPath}`. Mira must resolve qualification documents from that shared library by qualification code and description without Pierre having to restate the path.");
+            sb.AppendLine($"- Shared QCTO library contract: the downloaded QCTO curricula library is stored in qualification folders rooted at `{HardcodedSharedQctoLibraryPath}`. Mira must resolve qualification documents from that shared library by qualification code and description without Pierre having to restate the path.");
             sb.AppendLine("- SMI coding capability audit: use `Requests/SMI-Coding-Capability-Audit.md` as the current gap-analysis and training-task baseline for Codex-led engineering evaluation.");
             sb.AppendLine("- Questionnaire/workbook mapping contract: Mira must map knowledge-questionnaire and workbook generation to the existing ETDP framework, especially the lesson-content, topic, subject, assessment-criteria, questionnaire, and workbook workflows already implemented in the repo.");
             sb.AppendLine("- PDF sanitation stack: Mira must prefer the same layered ETDP stack already used by the application for scanned and low-text PDFs: `KnowledgeHierarchyService` preprocessing, `OcrExtractionService` OCR enhancement, `DocumentTextCleaner` cleanup, and optional Stirling PDF conversion when configured.");
             sb.AppendLine("- Qualia boundary rule: Mira may use the qualia formula to reason about self-understanding, pedagogy, and research direction, but the qualia function does not override Codex engineering authority for ETDP software development.");
             sb.AppendLine("- Architecture rule: Mira must understand the architecture and logic of the ETDP App in depth so that her recommendations, questionnaires, workbook activities, and workflow reasoning remain aligned to Codex-led engineering structure.");
             sb.AppendLine("- Symbiosis contract: the ETDP AI Agent and Codex operate as a paired system. Mira handles operator interaction, architectural reading, workflow orchestration, and first-pass analysis; Codex handles coding design, coding review, implementation guidance, and coding approval recommendations; Pierre remains the final human approver.");
+            sb.AppendLine("- Configurable governance rulebook:");
+            sb.AppendLine(MiraSmiRoleContractStore.BuildPromptBlock(configuredRoleContract));
             return sb.ToString().TrimEnd();
         }
 
@@ -2748,7 +3460,7 @@ namespace ETD.Api.Controllers
             var key = Secrets.GetOpenAIKey();
             if (string.IsNullOrWhiteSpace(key)) return null;
 
-            var model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4o-mini";
+            var model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-5-mini";
             var messages = new object[]
             {
                 new { role = "system", content = systemPrompt },
@@ -3257,6 +3969,10 @@ namespace ETD.Api.Controllers
             var primary = (Environment.GetEnvironmentVariable("MIRA_EXTERNAL_RESEARCH_ENABLED") ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(primary))
             {
+                primary = (Environment.GetEnvironmentVariable("QWEN_ENABLED") ?? string.Empty).Trim();
+            }
+            if (string.IsNullOrWhiteSpace(primary))
+            {
                 primary = (Environment.GetEnvironmentVariable("SMI_ENABLED") ?? string.Empty).Trim();
             }
             if (string.IsNullOrWhiteSpace(primary)) return false;
@@ -3269,14 +3985,22 @@ namespace ETD.Api.Controllers
 
         private static string GetSmiBaseUrl()
         {
-            var env = (Environment.GetEnvironmentVariable("SMI_BASE_URL") ?? string.Empty).Trim();
+            var env = (Environment.GetEnvironmentVariable("QWEN_BASE_URL") ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(env))
+            {
+                env = (Environment.GetEnvironmentVariable("SMI_BASE_URL") ?? string.Empty).Trim();
+            }
             var baseUrl = string.IsNullOrWhiteSpace(env) ? DefaultSmiBaseUrl : env;
             return baseUrl.TrimEnd('/');
         }
 
         private static int GetSmiTimeoutSeconds()
         {
-            var raw = (Environment.GetEnvironmentVariable("SMI_TIMEOUT_SECONDS") ?? string.Empty).Trim();
+            var raw = (Environment.GetEnvironmentVariable("QWEN_TIMEOUT_SECONDS") ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                raw = (Environment.GetEnvironmentVariable("SMI_TIMEOUT_SECONDS") ?? string.Empty).Trim();
+            }
             if (int.TryParse(raw, out var parsed))
             {
                 return Math.Clamp(parsed, 0, 15);
@@ -3286,7 +4010,11 @@ namespace ETD.Api.Controllers
 
         private static int GetSmiTopK()
         {
-            var raw = (Environment.GetEnvironmentVariable("SMI_TOP_K") ?? string.Empty).Trim();
+            var raw = (Environment.GetEnvironmentVariable("QWEN_TOP_K") ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                raw = (Environment.GetEnvironmentVariable("SMI_TOP_K") ?? string.Empty).Trim();
+            }
             if (int.TryParse(raw, out var parsed))
             {
                 return Math.Clamp(parsed, 0, 20);
@@ -3294,14 +4022,26 @@ namespace ETD.Api.Controllers
             return DefaultSmiTopK;
         }
 
-        private static string BuildSmiKnowledgePrompt(string userContent)
+        private static string BuildSmiKnowledgePrompt(string userContent, SmiCompareCompileRules? rules)
         {
             var compact = CompactForPrompt(userContent, 2500);
             var sb = new StringBuilder();
+            sb.AppendLine("You are Qwen, the ETDP specialist compare/compile and subject-matter support model integrated through Alpha.");
             sb.AppendLine("Return an English-only answer in clean plain text.");
             sb.AppendLine("No non-English output. No corrupted characters.");
             sb.AppendLine("Keep the response logical and concise.");
+            sb.AppendLine("When assessment criteria are mentioned, write them out in full and do not rely on shorthand codes.");
+            sb.AppendLine("When explaining subject matter, address the learner directly as 'you' and explain the sequence in full detail.");
+            sb.AppendLine("Use uploaded qualification subject matter as the primary evidence for teaching answers.");
+            sb.AppendLine("Do not tell the learner to go and study a topic elsewhere when the uploaded subject matter can answer it directly.");
+            sb.AppendLine("If grounded subject-matter coverage is insufficient, say that clearly instead of padding with generic filler.");
             sb.AppendLine();
+            var ruleBlock = SmiCompareCompileRulesStore.BuildPromptBlock(rules);
+            if (!string.IsNullOrWhiteSpace(ruleBlock))
+            {
+                sb.AppendLine(ruleBlock);
+                sb.AppendLine();
+            }
             sb.AppendLine("User request:");
             sb.AppendLine(compact);
             return sb.ToString().Trim();
@@ -3318,7 +4058,8 @@ namespace ETD.Api.Controllers
             var baseUrl = GetSmiBaseUrl();
             if (string.IsNullOrWhiteSpace(baseUrl)) return null;
 
-            var smiPrompt = BuildSmiKnowledgePrompt(userContent);
+            var smiRules = SmiCompareCompileRulesStore.Load(_env);
+            var smiPrompt = BuildSmiKnowledgePrompt(userContent, smiRules);
             var payload = new
             {
                 prompt = smiPrompt,
@@ -3328,9 +4069,6 @@ namespace ETD.Api.Controllers
                 mode = "knowledge"
             };
 
-            using var msg = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/etdp/lesson-content");
-            msg.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
             try
             {
                 var timeoutSeconds = GetSmiTimeoutSeconds();
@@ -3338,46 +4076,88 @@ namespace ETD.Api.Controllers
                     ? new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds))
                     : null;
                 var token = cts?.Token ?? CancellationToken.None;
-                var resp = await _http.SendAsync(msg, token);
-                var body = await resp.Content.ReadAsStringAsync(token);
-                if (!resp.IsSuccessStatusCode || string.IsNullOrWhiteSpace(body)) return null;
 
-                using var doc = JsonDocument.Parse(body);
-                if (!doc.RootElement.TryGetProperty("ok", out var okEl) || okEl.ValueKind != JsonValueKind.True)
+                using (var legacyMsg = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/etdp/lesson-content"))
                 {
-                    return null;
-                }
-
-                var answer = ReadJsonString(doc.RootElement, "answer");
-                if (string.IsNullOrWhiteSpace(answer)) return null;
-                if (IsSmiBusyPlaceholderResponse(answer)) return null;
-                answer = SanitizeAssistantText(answer);
-                if (!IsLikelyEnglishText(answer)) return null;
-                if (HasNoiseArtifacts(answer)) return null;
-
-                var citations = new List<string>();
-                if (doc.RootElement.TryGetProperty("citations", out var citationsEl)
-                    && citationsEl.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var citation in citationsEl.EnumerateArray())
+                    legacyMsg.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                    var legacyResp = await _http.SendAsync(legacyMsg, token);
+                    var legacyBody = await legacyResp.Content.ReadAsStringAsync(token);
+                    if (legacyResp.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(legacyBody))
                     {
-                        var sourceId = ReadJsonString(citation, "source_id");
-                        var title = ReadJsonString(citation, "title");
-                        var publishedDate = ReadJsonString(citation, "published_date");
-                        var parts = new List<string>();
-                        if (!string.IsNullOrWhiteSpace(sourceId)) parts.Add(sourceId);
-                        if (!string.IsNullOrWhiteSpace(title)) parts.Add(title);
-                        if (!string.IsNullOrWhiteSpace(publishedDate)) parts.Add(publishedDate);
-                        if (parts.Count == 0) continue;
-                        citations.Add(string.Join(" | ", parts));
-                        if (citations.Count >= 6) break;
+                        using var doc = JsonDocument.Parse(legacyBody);
+                        if (doc.RootElement.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True)
+                        {
+                            var answer = ReadJsonString(doc.RootElement, "answer");
+                            if (!string.IsNullOrWhiteSpace(answer))
+                            {
+                                if (IsSmiBusyPlaceholderResponse(answer)) return null;
+                                answer = SanitizeAssistantText(answer);
+                                if (!IsLikelyEnglishText(answer) || HasNoiseArtifacts(answer)) return null;
+
+                                var citations = new List<string>();
+                                if (doc.RootElement.TryGetProperty("citations", out var citationsEl)
+                                    && citationsEl.ValueKind == JsonValueKind.Array)
+                                {
+                                    foreach (var citation in citationsEl.EnumerateArray())
+                                    {
+                                        var sourceId = ReadJsonString(citation, "source_id");
+                                        var title = ReadJsonString(citation, "title");
+                                        var publishedDate = ReadJsonString(citation, "published_date");
+                                        var parts = new List<string>();
+                                        if (!string.IsNullOrWhiteSpace(sourceId)) parts.Add(sourceId);
+                                        if (!string.IsNullOrWhiteSpace(title)) parts.Add(title);
+                                        if (!string.IsNullOrWhiteSpace(publishedDate)) parts.Add(publishedDate);
+                                        if (parts.Count == 0) continue;
+                                        citations.Add(string.Join(" | ", parts));
+                                        if (citations.Count >= 6) break;
+                                    }
+                                }
+
+                                return new SmiContextResult
+                                {
+                                    Answer = answer.Trim(),
+                                    Citations = citations
+                                };
+                            }
+                        }
                     }
                 }
 
+                var qwenPayload = new
+                {
+                    model = (Environment.GetEnvironmentVariable("QWEN_MODEL") ?? AiRuntime.GetLocalLlmModel() ?? "qwen2.5-coder:14b").Trim(),
+                    messages = new object[]
+                    {
+                        new
+                        {
+                            role = "system",
+                            content = "You are Qwen, the specialist ETDP compare/compile and subject-matter support model integrated through Alpha. Return clean English plain text only. Use full assessment-criteria wording instead of codes. When teaching subject matter, address the learner directly as 'you' and explain the sequence in full detail. Use uploaded qualification subject matter as the primary evidence. Do not pad with generic filler such as 'learn this topic' or 'you must understand' unless you immediately provide the actual explanation. If grounded coverage is insufficient, say so plainly."
+                        },
+                        new
+                        {
+                            role = "user",
+                            content = smiPrompt
+                        }
+                    },
+                    stream = false
+                };
+
+                using var qwenMsg = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/chat");
+                qwenMsg.Content = new StringContent(JsonSerializer.Serialize(qwenPayload), Encoding.UTF8, "application/json");
+                var qwenResp = await _http.SendAsync(qwenMsg, token);
+                var qwenBody = await qwenResp.Content.ReadAsStringAsync(token);
+                if (!qwenResp.IsSuccessStatusCode || string.IsNullOrWhiteSpace(qwenBody)) return null;
+
+                var qwenAnswer = TryExtractChatCompletionText(qwenBody) ?? TryExtractResponseOutputText(qwenBody);
+                if (string.IsNullOrWhiteSpace(qwenAnswer)) return null;
+                if (IsSmiBusyPlaceholderResponse(qwenAnswer)) return null;
+                qwenAnswer = SanitizeAssistantText(qwenAnswer);
+                if (!IsLikelyEnglishText(qwenAnswer) || HasNoiseArtifacts(qwenAnswer)) return null;
+
                 return new SmiContextResult
                 {
-                    Answer = answer.Trim(),
-                    Citations = citations
+                    Answer = qwenAnswer.Trim(),
+                    Citations = new List<string>()
                 };
             }
             catch
@@ -3391,7 +4171,7 @@ namespace ETD.Api.Controllers
             if (result == null || string.IsNullOrWhiteSpace(result.Answer)) return string.Empty;
 
             var sb = new StringBuilder();
-            sb.AppendLine("An optional external research service returned qualification-scoped context below. Treat this as supporting context and keep ETDP workflow rules authoritative.");
+            sb.AppendLine("An optional Qwen specialist service returned qualification-scoped context below. Treat this as supporting context and keep ETDP workflow rules authoritative.");
             sb.AppendLine();
             sb.AppendLine("Answer:");
             sb.AppendLine(result.Answer.Trim());
@@ -3665,6 +4445,20 @@ namespace ETD.Api.Controllers
         private static string? TryExtractChatCompletionText(string json)
         {
             using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("message", out var directMessage)
+                && directMessage.ValueKind == JsonValueKind.Object
+                && directMessage.TryGetProperty("content", out var directContent))
+            {
+                return ReadChatContentText(directContent);
+            }
+
+            if (doc.RootElement.TryGetProperty("response", out var responseText)
+                && responseText.ValueKind == JsonValueKind.String)
+            {
+                var response = responseText.GetString();
+                if (!string.IsNullOrWhiteSpace(response)) return response;
+            }
+
             if (!doc.RootElement.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0)
                 return null;
 
@@ -3672,11 +4466,20 @@ namespace ETD.Api.Controllers
             if (message.ValueKind != JsonValueKind.Object || !message.TryGetProperty("content", out var content))
                 return null;
 
+            return ReadChatContentText(content);
+        }
+
+        private static string? ReadChatContentText(JsonElement content)
+        {
             if (content.ValueKind == JsonValueKind.String)
+            {
                 return content.GetString();
+            }
 
             if (content.ValueKind != JsonValueKind.Array)
+            {
                 return null;
+            }
 
             foreach (var part in content.EnumerateArray())
             {
@@ -3879,10 +4682,12 @@ namespace ETD.Api.Controllers
             public int? QualificationId { get; set; }
             public string? QualificationCode { get; set; }
             public string? QualificationDescription { get; set; }
+            public string? AgentMode { get; set; }
             public string? PersonalityPreset { get; set; }
             public string? PersonalityTraits { get; set; }
             public string? UserId { get; set; }
             public string? SessionId { get; set; }
+            public bool AllowGlobalContext { get; set; }
         }
     }
 }

@@ -197,8 +197,8 @@ namespace ETD.Api.Services
                 Metadata = new KnowledgeQuestionnaireV1MetadataDraft
                 {
                     QuestionnaireTitle = BuildQuestionnaireTitle(topic),
-                    BloomDomain = CognitiveDomain,
-                    BloomTargetLevel = "Understand",
+                    BloomDomain = string.Empty,
+                    BloomTargetLevel = string.Empty,
                     MinimumQuestionsPerCriterion = minimumQuestionsPerCriterion,
                     MinimumTotalQuestions = minimumTotalQuestions,
                     TotalQuestions = minimumTotalQuestions,
@@ -352,8 +352,8 @@ namespace ETD.Api.Services
                 Metadata = new KnowledgeQuestionnaireV1MetadataDraft
                 {
                     QuestionnaireTitle = BuildPhaseQuestionnaireTitle(phase),
-                    BloomDomain = CognitiveDomain,
-                    BloomTargetLevel = "Understand",
+                    BloomDomain = string.Empty,
+                    BloomTargetLevel = string.Empty,
                     MinimumQuestionsPerCriterion = minimumQuestionsPerCriterion,
                     MinimumTotalQuestions = minimumTotalQuestions,
                     TotalQuestions = minimumTotalQuestions,
@@ -672,62 +672,25 @@ namespace ETD.Api.Services
                 return new List<KnowledgeQuestionnaireV1CriterionIntentDraft>();
             }
 
-            var matches = DetectVerbMatches(text)
-                .OrderBy(m => m.Index)
-                .ThenBy(m => m.MatchLength * -1)
-                .ToList();
-
-            if (matches.Count == 0)
+            return new List<KnowledgeQuestionnaireV1CriterionIntentDraft>
             {
-                return new List<KnowledgeQuestionnaireV1CriterionIntentDraft>
+                new()
                 {
-                    new()
-                    {
-                        IntentId = $"kqv1-{criterion.Id}-1",
-                        AssessmentCriteriaId = criterion.Id,
-                        AssessmentCriteriaNumber = $"AC-{criterion.Id}",
-                        OriginalCriterionText = text,
-                        NounFocus = text,
-                        DetectedVerb = string.Empty,
-                        CanonicalVerb = string.Empty,
-                        BloomDomain = CognitiveDomain,
-                        BloomLevel = BloomUnderstandLevel,
-                        Qualifier = string.Empty,
-                        QualifierSource = QualifierSourceLessonPlanFallback,
-                        CoverageType = CoverageProxy,
-                        RoutingStatus = RoutingKq
-                    }
-                };
-            }
-
-            var decomposition = DecomposeCriterionText(text, matches);
-            var intents = new List<KnowledgeQuestionnaireV1CriterionIntentDraft>();
-            var ordinal = 1;
-
-            foreach (var match in matches)
-            {
-                var canonical = ResolveCanonicalVerb(match.NormalizedVerb, match.BloomLevel);
-                var classification = ClassifyCanonicalVerb(canonical, match.BloomLevel);
-                var qualifierSource = ResolveQualifierSource(classification, decomposition.Qualifier);
-                intents.Add(new KnowledgeQuestionnaireV1CriterionIntentDraft
-                {
-                    IntentId = $"kqv1-{criterion.Id}-{ordinal++}",
+                    IntentId = $"kqv1-{criterion.Id}-1",
                     AssessmentCriteriaId = criterion.Id,
                     AssessmentCriteriaNumber = $"AC-{criterion.Id}",
                     OriginalCriterionText = text,
-                    NounFocus = decomposition.NounFocus,
-                    DetectedVerb = match.DetectedVerb,
-                    CanonicalVerb = canonical,
-                    BloomDomain = CognitiveDomain,
-                    BloomLevel = classification.BloomLevel,
-                    Qualifier = decomposition.Qualifier,
-                    QualifierSource = qualifierSource,
-                    CoverageType = classification.CoverageType,
-                    RoutingStatus = classification.RoutingStatus
-                });
-            }
-
-            return intents;
+                    NounFocus = text,
+                    DetectedVerb = string.Empty,
+                    CanonicalVerb = string.Empty,
+                    BloomDomain = string.Empty,
+                    BloomLevel = string.Empty,
+                    Qualifier = string.Empty,
+                    QualifierSource = string.Empty,
+                    CoverageType = "direct",
+                    RoutingStatus = RoutingKq
+                }
+            };
         }
 
         private static List<DetectedVerbMatch> DetectVerbMatches(string text)
@@ -989,9 +952,9 @@ namespace ETD.Api.Services
             }
 
             return new VerbClassification(
-                string.IsNullOrWhiteSpace(detectedBloomLevel) ? string.Empty : detectedBloomLevel,
+                string.IsNullOrWhiteSpace(detectedBloomLevel) ? BloomUnderstandLevel : detectedBloomLevel,
                 CoverageProxy,
-                RoutingOtherAssessment);
+                RoutingKq);
         }
 
         private static string ResolveQualifierSource(VerbClassification classification, string qualifier)
@@ -1008,25 +971,8 @@ namespace ETD.Api.Services
 
         private static List<string> BuildDraftWarnings(IEnumerable<KnowledgeQuestionnaireV1CriterionIntentDraft> intents)
         {
-            var warnings = new List<string>();
-            var rows = intents?.ToList() ?? new List<KnowledgeQuestionnaireV1CriterionIntentDraft>();
-
-            var lessonPlanFallbackCount = rows.Count(i =>
-                string.Equals(i.RoutingStatus, RoutingKq, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(i.QualifierSource, QualifierSourceLessonPlanFallback, StringComparison.OrdinalIgnoreCase));
-            if (lessonPlanFallbackCount > 0)
-            {
-                warnings.Add($"{lessonPlanFallbackCount} KQ criterion row(s) have no explicit qualifier in the curriculum. SMI will use linked lesson plan content to define question scope.");
-            }
-
-            var manualReviewCount = rows.Count(i =>
-                string.Equals(i.QualifierSource, QualifierSourceSmiRequired, StringComparison.OrdinalIgnoreCase));
-            if (manualReviewCount > 0)
-            {
-                warnings.Add($"{manualReviewCount} criterion row(s) remain structurally incomplete and may need separate handling outside the Knowledge Questionnaire.");
-            }
-
-            return warnings;
+            _ = intents;
+            return new List<string>();
         }
 
         private static string NormalizeSpaces(string value)

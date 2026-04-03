@@ -7,6 +7,7 @@ using ETD.Api.Utils;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace ETD.Api.Controllers
@@ -27,9 +28,15 @@ namespace ETD.Api.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetAll()
+        public IActionResult GetAll([FromQuery] int? qualificationId = null)
         {
-            var items = _context.LecturerToolkitEntries
+            var query = _context.LecturerToolkitEntries.AsQueryable();
+            if (qualificationId.HasValue && qualificationId.Value > 0)
+            {
+                query = query.Where(e => e.QualificationsId == qualificationId.Value);
+            }
+
+            var items = query
                 .OrderBy(e => e.Id)
                 .ToList();
             return Ok(items);
@@ -141,7 +148,7 @@ namespace ETD.Api.Controllers
                     });
                 }
 
-                var canonicalSource = PersistUploadedLessonPlanSource(filePath, ext);
+                var canonicalSource = PersistUploadedLessonPlanSource(filePath, ext, qualificationId);
 
                 return Ok(new
                 {
@@ -175,8 +182,8 @@ namespace ETD.Api.Controllers
         [HttpPost("import-csv")]
         public IActionResult ImportCsv([FromQuery] int? qualificationId, [FromQuery] bool replaceExisting = false)
         {
-            var path = ResolveTemplate("Lesson PLan.csv", "Lesson Plan.csv");
-            if (path == null) return NotFound("Template not found: Lesson PLan.csv");
+            var path = ResolveTemplate("Lesson Plan.csv", "Lesson PLan.csv", "LessonPlan.csv");
+            if (path == null) return NotFound("Template not found: Lesson Plan.csv");
             if (replaceExisting && (!qualificationId.HasValue || qualificationId.Value <= 0))
             {
                 return BadRequest("qualificationId is required when replaceExisting=true.");
@@ -196,6 +203,7 @@ namespace ETD.Api.Controllers
                     source = Path.GetFileName(path)
                 });
             }
+            PersistUploadedLessonPlanSource(path, Path.GetExtension(path), qualificationId);
             return Ok(new
             {
                 replaced = result.Replaced,
@@ -220,7 +228,7 @@ namespace ETD.Api.Controllers
                 return NotFound("Qualification not found.");
             }
 
-            var path = ResolveTemplate("Lesson Plan.xlsx", "LessonPlan.xlsx", "Lesson PLan.csv", "Lesson Plan.csv");
+            var path = ResolveTemplate("Lesson Plan.xlsx", "LessonPlan.xlsx", "Lesson Plan.csv", "Lesson PLan.csv", "LessonPlan.csv");
             if (path == null)
             {
                 return NotFound("Template not found: Lesson Plan source file.");
@@ -247,6 +255,8 @@ namespace ETD.Api.Controllers
             {
                 return BadRequest(new { error = ex.Message });
             }
+
+            PersistUploadedLessonPlanSource(path, Path.GetExtension(path), qualificationId);
 
             var daysScheduled = result.Created <= 0
                 ? 0
@@ -488,6 +498,10 @@ namespace ETD.Api.Controllers
                     continue;
                 }
 
+                var existingSeed = existingRows.Count > 0
+                    ? FindExistingSeed(existingRows, entry)
+                    : null;
+
                 var subjectCodeKey = NormalizeCodeKey(entry.SubjectCode);
                 var subjectDescriptionKey = NormalizeLooseText(entry.SubjectDescription);
                 SubjectImportReference? matchedSubject = null;
@@ -504,26 +518,41 @@ namespace ETD.Api.Controllers
                     matchedSubject = subjectDescriptionMatches[0];
                 }
 
-                if (matchedSubject == null)
+                if (matchedSubject == null && existingSeed != null)
                 {
-                    failed++;
-                    details.Add(new
+                    if (string.IsNullOrWhiteSpace(entry.SubjectCode))
                     {
-                        row = i,
-                        reason = $"Subject is not mapped to qualification {entry.QualificationsId}",
-                        subjectCode = entry.SubjectCode,
-                        subjectDescription = entry.SubjectDescription
-                    });
-                    continue;
+                        entry.SubjectCode = existingSeed.SubjectCode ?? string.Empty;
+                    }
+                    if (string.IsNullOrWhiteSpace(entry.SubjectDescription))
+                    {
+                        entry.SubjectDescription = existingSeed.SubjectDescription ?? string.Empty;
+                    }
                 }
 
-                if (string.IsNullOrWhiteSpace(entry.SubjectDescription))
+                if (matchedSubject == null)
+                {
+                    if (existingSeed == null)
+                    {
+                        failed++;
+                        details.Add(new
+                        {
+                            row = i,
+                            reason = $"Subject is not mapped to qualification {entry.QualificationsId}",
+                            subjectCode = entry.SubjectCode,
+                            subjectDescription = entry.SubjectDescription
+                        });
+                        continue;
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(entry.SubjectDescription) && matchedSubject != null)
                 {
                     entry.SubjectDescription = matchedSubject.SubjectDescription;
                 }
 
                 CriteriaImportReference? matchedCriteria = null;
-                if (entry.AssessmentCriteriaId.HasValue && entry.AssessmentCriteriaId.Value > 0)
+                if (matchedSubject != null && entry.AssessmentCriteriaId.HasValue && entry.AssessmentCriteriaId.Value > 0)
                 {
                     if (criteriaById.TryGetValue(entry.AssessmentCriteriaId.Value, out var criteriaByDirectId)
                         && criteriaByDirectId.QualificationId == entry.QualificationsId
@@ -533,7 +562,7 @@ namespace ETD.Api.Controllers
                     }
                 }
 
-                if (matchedCriteria == null && !string.IsNullOrWhiteSpace(entry.AssessmentCriteriaDescription))
+                if (matchedSubject != null && matchedCriteria == null && !string.IsNullOrWhiteSpace(entry.AssessmentCriteriaDescription))
                 {
                     var criteriaDescriptionKey = NormalizeLooseText(entry.AssessmentCriteriaDescription);
                     if (!string.IsNullOrWhiteSpace(criteriaDescriptionKey)
@@ -546,30 +575,36 @@ namespace ETD.Api.Controllers
                     }
                 }
 
-                if (entry.AssessmentCriteriaId.HasValue && entry.AssessmentCriteriaId.Value > 0 && matchedCriteria == null)
+                if (matchedCriteria == null && existingSeed != null)
+                {
+                    entry.AssessmentCriteriaId = existingSeed.AssessmentCriteriaId;
+                    entry.AssessmentCriteriaDescription = existingSeed.AssessmentCriteriaDescription;
+                }
+
+                if (entry.AssessmentCriteriaId.HasValue && entry.AssessmentCriteriaId.Value > 0 && matchedCriteria == null && existingSeed == null)
                 {
                     failed++;
-                    details.Add(new
-                    {
-                        row = i,
-                        reason = $"Assessment criteria is not mapped to qualification {entry.QualificationsId} subject {matchedSubject.SubjectCode}",
-                        subjectCode = entry.SubjectCode,
-                        assessmentCriteriaId = entry.AssessmentCriteriaId,
-                        assessmentCriteriaDescription = entry.AssessmentCriteriaDescription
-                    });
+                        details.Add(new
+                        {
+                            row = i,
+                            reason = $"Assessment criteria is not mapped to qualification {entry.QualificationsId} subject {(matchedSubject?.SubjectCode ?? entry.SubjectCode)}",
+                            subjectCode = entry.SubjectCode,
+                            assessmentCriteriaId = entry.AssessmentCriteriaId,
+                            assessmentCriteriaDescription = entry.AssessmentCriteriaDescription
+                        });
                     continue;
                 }
 
-                if (matchedCriteria == null && !string.IsNullOrWhiteSpace(entry.AssessmentCriteriaDescription))
+                if (matchedCriteria == null && !string.IsNullOrWhiteSpace(entry.AssessmentCriteriaDescription) && existingSeed == null)
                 {
                     failed++;
-                    details.Add(new
-                    {
-                        row = i,
-                        reason = $"Assessment criteria description is not mapped to qualification {entry.QualificationsId} subject {matchedSubject.SubjectCode}",
-                        subjectCode = entry.SubjectCode,
-                        assessmentCriteriaDescription = entry.AssessmentCriteriaDescription
-                    });
+                        details.Add(new
+                        {
+                            row = i,
+                            reason = $"Assessment criteria description is not mapped to qualification {entry.QualificationsId} subject {(matchedSubject?.SubjectCode ?? entry.SubjectCode)}",
+                            subjectCode = entry.SubjectCode,
+                            assessmentCriteriaDescription = entry.AssessmentCriteriaDescription
+                        });
                     continue;
                 }
 
@@ -579,13 +614,9 @@ namespace ETD.Api.Controllers
                     entry.AssessmentCriteriaDescription = matchedCriteria.Description;
                 }
 
-                if (existingRows.Count > 0)
+                if (existingSeed != null)
                 {
-                    var seed = FindExistingSeed(existingRows, entry);
-                    if (seed != null)
-                    {
-                        PreserveExistingScheduleFields(entry, seed);
-                    }
+                    PreserveExistingScheduleFields(entry, existingSeed);
                 }
 
                 TrimEntry(entry);
@@ -883,15 +914,74 @@ namespace ETD.Api.Controllers
                 || raw.StartsWith("Lesson activities for ", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string PersistUploadedLessonPlanSource(string filePath, string ext)
+        private static string PersistUploadedLessonPlanSource(string filePath, string ext, int? qualificationId = null)
         {
             var root = EnsureTemplateDirectory();
-            var canonicalName = string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase)
-                ? "Lesson Plan.xlsx"
-                : "Lesson Plan.csv";
+            var isSpreadsheet = string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase);
+            var canonicalName = isSpreadsheet ? "Lesson Plan.xlsx" : "Lesson Plan.csv";
             var canonicalPath = Path.Combine(root, canonicalName);
-            System.IO.File.Copy(filePath, canonicalPath, overwrite: true);
+            var sourceFullPath = Path.GetFullPath(filePath);
+            var canonicalFullPath = Path.GetFullPath(canonicalPath);
+            if (!string.Equals(sourceFullPath, canonicalFullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                System.IO.File.Copy(filePath, canonicalPath, overwrite: true);
+            }
+
+            var aliasNames = isSpreadsheet
+                ? new[] { "LessonPlan.xlsx" }
+                : new[] { "Lesson PLan.csv", "LessonPlan.csv" };
+            foreach (var alias in aliasNames)
+            {
+                var aliasPath = Path.Combine(root, alias);
+                if (string.Equals(aliasPath, canonicalPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                System.IO.File.Copy(canonicalPath, aliasPath, overwrite: true);
+            }
+
+            var stalePaths = isSpreadsheet
+                ? new[] { "Lesson Plan.csv", "Lesson PLan.csv", "LessonPlan.csv" }
+                : new[] { "Lesson Plan.xlsx", "LessonPlan.xlsx" };
+            foreach (var staleName in stalePaths)
+            {
+                var stalePath = Path.Combine(root, staleName);
+                if (string.Equals(stalePath, canonicalPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                if (!System.IO.File.Exists(stalePath)) continue;
+                try
+                {
+                    System.IO.File.Delete(stalePath);
+                    var staleMetadataPath = GetUploadedLessonPlanMetadataPath(stalePath);
+                    if (System.IO.File.Exists(staleMetadataPath))
+                    {
+                        System.IO.File.Delete(staleMetadataPath);
+                    }
+                }
+                catch
+                {
+                    // Best-effort cleanup so future imports resolve to the latest canonical source.
+                }
+            }
+
+            var metadata = new UploadedLessonPlanSourceMetadata
+            {
+                QualificationId = qualificationId.HasValue && qualificationId.Value > 0 ? qualificationId : null,
+                SourceFileName = Path.GetFileName(filePath),
+                UpdatedAtUtc = DateTime.UtcNow
+            };
+            var metadataPath = GetUploadedLessonPlanMetadataPath(canonicalPath);
+            var metadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
+            System.IO.File.WriteAllText(metadataPath, metadataJson);
+
             return canonicalPath;
+        }
+
+        private static string GetUploadedLessonPlanMetadataPath(string sourcePath)
+        {
+            return $"{sourcePath}.metadata.json";
         }
 
         private static string EnsureTemplateDirectory()
@@ -1081,6 +1171,13 @@ namespace ETD.Api.Controllers
             public int SubjectId { get; set; }
             public string SubjectCode { get; set; } = string.Empty;
             public string Description { get; set; } = string.Empty;
+        }
+
+        private sealed class UploadedLessonPlanSourceMetadata
+        {
+            public int? QualificationId { get; set; }
+            public string SourceFileName { get; set; } = string.Empty;
+            public DateTime UpdatedAtUtc { get; set; }
         }
     }
 }

@@ -11,6 +11,7 @@ using System.IO;
 using ETD.Api.Utils;
 using ETD.Api.Services;
 using System.IO.Compression;
+using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
 using DocumentFormat.OpenXml.Wordprocessing;
@@ -32,7 +33,9 @@ namespace ETD.Api.Controllers
         private readonly ApplicationDbContext _context;
         private readonly KnowledgeHierarchyService _knowledgeHierarchyService;
         private readonly OcrExtractionService _ocrExtractionService;
+        private readonly PdfVisualExtractionService _pdfVisualExtractionService;
         private static readonly HttpClient _http = new HttpClient();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Threading.SemaphoreSlim> QualificationFolderImportLocks = new(StringComparer.OrdinalIgnoreCase);
         private const string CurriculumBenchmarkMarker = "__CURRICULUM_BENCHMARK__";
         private const string CurriculumBenchmarkAssessmentMarker = "__WORKFLOW_CANONICAL__";
         private const string DefaultModeratorResponsesEndpoint = "";
@@ -68,11 +71,13 @@ namespace ETD.Api.Controllers
         public ContentController(
             ApplicationDbContext context,
             KnowledgeHierarchyService knowledgeHierarchyService,
-            OcrExtractionService ocrExtractionService)
+            OcrExtractionService ocrExtractionService,
+            PdfVisualExtractionService pdfVisualExtractionService)
         {
             _context = context;
             _knowledgeHierarchyService = knowledgeHierarchyService;
             _ocrExtractionService = ocrExtractionService;
+            _pdfVisualExtractionService = pdfVisualExtractionService;
         }
 
         [HttpGet("key-present")]
@@ -1449,6 +1454,12 @@ namespace ETD.Api.Controllers
                 "developer_kb" => "developer_knowledge_base",
                 "knowledge_base" => "developer_knowledge_base",
                 "kb" => "developer_knowledge_base",
+                "shared_agent" => "agent_shared",
+                "agent_shared_knowledge" => "agent_shared",
+                "mira_agent" => "agent_mira",
+                "agent_mira_knowledge" => "agent_mira",
+                "qwen_agent" => "agent_qwen",
+                "agent_qwen_knowledge" => "agent_qwen",
                 _ => s
             };
         }
@@ -3597,6 +3608,17 @@ namespace ETD.Api.Controllers
             public string Title { get; set; } = string.Empty;
             public string Type { get; set; } = string.Empty;
             public string BlobUrl { get; set; } = string.Empty;
+            public string QualificationCode { get; set; } = string.Empty;
+            public string QualificationDescription { get; set; } = string.Empty;
+            public string SourceType { get; set; } = string.Empty;
+            public string Status { get; set; } = string.Empty;
+            public string? Reason { get; set; }
+            public int? KnowledgeNumber { get; set; }
+            public string? ArchivePath { get; set; }
+            public string? QualificationRootPath { get; set; }
+            public string? CurriculumLibraryPath { get; set; }
+            public string? LocalInboxPath { get; set; }
+            public string? LocalArchivePath { get; set; }
         }
 
         public class CurriculumBenchmarkSummaryRequest
@@ -3674,6 +3696,14 @@ namespace ETD.Api.Controllers
             public bool ConsolidateLegacyFolders { get; set; } = true;
         }
 
+        public class SyncAgentKnowledgeRequest
+        {
+            public string? AgentMode { get; set; }
+            public bool IncludeSharedKnowledge { get; set; } = true;
+            public int MaxFilesPerInbox { get; set; } = 1000;
+            public bool RebuildReadme { get; set; } = true;
+        }
+
         public class ConsolidateKnowledgeHierarchyRequest
         {
             public string? QualificationCode { get; set; }
@@ -3741,6 +3771,323 @@ namespace ETD.Api.Controllers
             }
         }
 
+        private sealed class IndexedKnowledgeUploadResult
+        {
+            public SourceMaterial? Material { get; set; }
+            public KnowledgeHierarchyService.StructureInfo? Structure { get; set; }
+            public KnowledgeHierarchyService.SyncDetail? Detail { get; set; }
+            public string QualificationCode { get; set; } = string.Empty;
+            public string QualificationDescription { get; set; } = string.Empty;
+            public string SourceType { get; set; } = "local_source_upload";
+            public string StagedFileName { get; set; } = string.Empty;
+        }
+
+        private sealed class StagedKnowledgeUpload
+        {
+            public string OriginalFileName { get; set; } = string.Empty;
+            public string StagedFileName { get; set; } = string.Empty;
+            public string FileType { get; set; } = string.Empty;
+        }
+
+        private (Qualification? qualification, string qualificationCode, string qualificationDescription) ResolveKnowledgeUploadQualification(UploadMaterialRequest? meta)
+        {
+            Qualification? qualification = null;
+            if (meta?.QualificationId.HasValue == true && meta.QualificationId.Value > 0)
+            {
+                qualification = _context.Qualifications.Find(meta.QualificationId.Value);
+            }
+
+            var qualificationDescription = ResolveQualificationDescription(meta);
+            if (qualification == null && !string.IsNullOrWhiteSpace(qualificationDescription))
+            {
+                qualification = _context.Qualifications.FirstOrDefault(q => q.QualificationDescription == qualificationDescription)
+                    ?? _context.Qualifications.FirstOrDefault(q => q.QualificationDescription.Contains(qualificationDescription));
+            }
+
+            if (qualification == null && string.IsNullOrWhiteSpace(qualificationDescription))
+            {
+                return (null, string.Empty, string.Empty);
+            }
+
+            var qualificationCode = !string.IsNullOrWhiteSpace(qualification?.QualificationNumber)
+                ? qualification!.QualificationNumber.Trim()
+                : ResolveQualificationCode(qualificationDescription, meta?.QualificationId);
+            if (string.IsNullOrWhiteSpace(qualificationDescription))
+            {
+                qualificationDescription = qualification?.QualificationDescription?.Trim() ?? string.Empty;
+            }
+
+            return (qualification, qualificationCode, qualificationDescription);
+        }
+
+        private static string ResolveKnowledgeSourceRootPath(KnowledgeHierarchyService.StructureInfo structure, string sourceType)
+        {
+            return string.Equals(sourceType, "developer_knowledge_base", StringComparison.OrdinalIgnoreCase)
+                ? Path.Combine(structure.QualificationRootPath, "developer_knowledge_base")
+                : Path.Combine(structure.QualificationRootPath, "local_source_upload");
+        }
+
+        private static string ComposeKnowledgeSubjectDescription(string sourceType, string? subjectDescription)
+        {
+            var baseValue = $"KnowledgeBase:{sourceType}";
+            var subject = (subjectDescription ?? string.Empty).Trim();
+            return string.IsNullOrWhiteSpace(subject)
+                ? baseValue
+                : $"{baseValue} | Subject:{subject}";
+        }
+
+        private static string ComposeKnowledgeTopicDescription(int? knowledgeNumber, string? topicDescription)
+        {
+            var parts = new List<string>();
+            if (knowledgeNumber.HasValue && knowledgeNumber.Value > 0)
+            {
+                parts.Add($"KnowledgeNumber:{knowledgeNumber.Value:D4}");
+            }
+
+            var topic = (topicDescription ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(topic))
+            {
+                parts.Add($"Topic:{topic}");
+            }
+
+            return string.Join(" | ", parts);
+        }
+
+        private static string ComposeKnowledgeCriteriaDescription(string? existingValue, string? assessmentCriteriaDescription)
+        {
+            var parts = new List<string>();
+            var existing = (existingValue ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(existing))
+            {
+                parts.Add(existing);
+            }
+
+            var criteria = (assessmentCriteriaDescription ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(criteria))
+            {
+                parts.Add($"Criteria:{criteria}");
+            }
+
+            return string.Join(" | ", parts
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+        }
+
+        private void ApplyIndexedUploadMetadata(SourceMaterial material, UploadMaterialRequest? meta, string qualificationCode, string qualificationDescription, string sourceType)
+        {
+            if (material == null) return;
+
+            material.QualificationCode = qualificationCode;
+            material.QualificationDescription = qualificationDescription;
+            if (!string.IsNullOrWhiteSpace(meta?.Title))
+            {
+                material.Title = meta!.Title!.Trim();
+            }
+
+            material.SubjectDescription = ComposeKnowledgeSubjectDescription(sourceType, meta?.SubjectDescription);
+            material.TopicDescription = ComposeKnowledgeTopicDescription(material.KnowledgeNumber, meta?.TopicDescription);
+            material.AssessmentCriteriaDescription = ComposeKnowledgeCriteriaDescription(material.AssessmentCriteriaDescription, meta?.AssessmentCriteriaDescription);
+            material.KnowledgeLabel = BuildKnowledgeLabel(
+                string.IsNullOrWhiteSpace(meta?.Title) ? material.Title : meta!.Title,
+                material.FileName,
+                material.KnowledgeNumber);
+
+            if (string.Equals(sourceType, "local_source_upload", StringComparison.OrdinalIgnoreCase) &&
+                material.Id > 0 &&
+                string.IsNullOrWhiteSpace(material.Url))
+            {
+                material.Url = BuildLocalMaterialExportUrl(material.Id);
+            }
+        }
+
+        private KnowledgeHierarchyService.SyncDetail? FindIndexedUploadDetail(
+            KnowledgeHierarchyService.SyncResult? sync,
+            string qualificationCode,
+            string sourceType,
+            string stagedFileName)
+        {
+            if (sync == null || string.IsNullOrWhiteSpace(stagedFileName))
+            {
+                return null;
+            }
+
+            return sync.Details
+                .Where(d =>
+                    string.Equals(d.QualificationCode, qualificationCode, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(d.SourceType, sourceType, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(d.FileName, stagedFileName, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(d => string.Equals(d.Status, "created", StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(d => d.KnowledgeNumber ?? 0)
+                .FirstOrDefault();
+        }
+
+        private SourceMaterial? FindIndexedSourceMaterial(
+            string qualificationCode,
+            string sourceType,
+            string stagedFileName,
+            KnowledgeHierarchyService.SyncDetail? detail = null)
+        {
+            var baseQuery = _context.SourceMaterials.Where(s =>
+                (s.QualificationCode ?? string.Empty) == qualificationCode &&
+                (s.KnowledgeSourceType ?? string.Empty) == sourceType);
+
+            if (detail?.KnowledgeNumber is int knowledgeNumber)
+            {
+                var materialByKnowledgeNumber = baseQuery.FirstOrDefault(s => s.KnowledgeNumber == knowledgeNumber);
+                if (materialByKnowledgeNumber != null)
+                {
+                    return materialByKnowledgeNumber;
+                }
+            }
+
+            var normalizedArchivedPath = NormalizeMaterialIdentity(detail?.ArchivedPath);
+            if (!string.IsNullOrWhiteSpace(normalizedArchivedPath))
+            {
+                var materialByArchivedPath = baseQuery.FirstOrDefault(s =>
+                    (s.FilePath ?? string.Empty).Trim().ToLower() == normalizedArchivedPath);
+                if (materialByArchivedPath != null)
+                {
+                    return materialByArchivedPath;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(stagedFileName))
+            {
+                return null;
+            }
+
+            return baseQuery
+                .Where(s =>
+                    !((s.AssessmentCriteriaDescription ?? string.Empty).Contains("DerivedFromSource:")) &&
+                    (((s.AssessmentCriteriaDescription ?? string.Empty).StartsWith($"Source:{stagedFileName}")) ||
+                     ((s.AssessmentCriteriaDescription ?? string.Empty).Contains($";Source:{stagedFileName}"))))
+                .OrderByDescending(s => s.KnowledgeUploadedAtUtc ?? s.CreatedAt)
+                .FirstOrDefault();
+        }
+
+        private IActionResult? BuildIndexedUploadFailureResult(IndexedKnowledgeUploadResult result)
+        {
+            if (result.Detail != null && string.Equals(result.Detail.Status, "failed", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    qualificationCode = result.QualificationCode,
+                    qualificationDescription = result.QualificationDescription,
+                    sourceType = result.SourceType,
+                    status = result.Detail.Status,
+                    reason = result.Detail.Reason,
+                    knowledgeNumber = result.Detail.KnowledgeNumber,
+                    archivePath = result.Detail.ArchivedPath,
+                    localInboxPath = result.Structure?.LocalInboxPath,
+                    localArchivePath = result.Structure?.LocalArchivePath,
+                    qualificationRootPath = result.Structure?.QualificationRootPath,
+                    curriculumLibraryPath = result.Structure?.CurriculumLibraryPath
+                });
+            }
+
+            if (result.Material == null)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    qualificationCode = result.QualificationCode,
+                    qualificationDescription = result.QualificationDescription,
+                    sourceType = result.SourceType,
+                    status = result.Detail?.Status ?? "failed",
+                    reason = result.Detail?.Reason ?? "No indexed material record was created for the staged upload.",
+                    knowledgeNumber = result.Detail?.KnowledgeNumber,
+                    archivePath = result.Detail?.ArchivedPath,
+                    localInboxPath = result.Structure?.LocalInboxPath,
+                    localArchivePath = result.Structure?.LocalArchivePath,
+                    qualificationRootPath = result.Structure?.QualificationRootPath,
+                    curriculumLibraryPath = result.Structure?.CurriculumLibraryPath
+                });
+            }
+
+            return null;
+        }
+
+        private UploadMaterialToBlobResponse BuildIndexedUploadResponse(
+            IndexedKnowledgeUploadResult result,
+            string fallbackTitle,
+            string fallbackFileType)
+        {
+            var material = result.Material;
+            var blobUrl = material?.Url ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(blobUrl) && material?.Id > 0)
+            {
+                blobUrl = BuildLocalMaterialExportUrl(material.Id);
+            }
+
+            return new UploadMaterialToBlobResponse
+            {
+                Id = material?.Id ?? 0,
+                Title = material?.Title ?? fallbackTitle,
+                Type = material?.FileType ?? fallbackFileType,
+                BlobUrl = blobUrl,
+                QualificationCode = result.QualificationCode,
+                QualificationDescription = result.QualificationDescription,
+                SourceType = result.SourceType,
+                Status = result.Detail?.Status ?? (material != null ? "created" : "failed"),
+                Reason = result.Detail?.Reason,
+                KnowledgeNumber = result.Detail?.KnowledgeNumber ?? material?.KnowledgeNumber,
+                ArchivePath = result.Detail?.ArchivedPath ?? material?.FilePath,
+                QualificationRootPath = result.Structure?.QualificationRootPath,
+                CurriculumLibraryPath = result.Structure?.CurriculumLibraryPath,
+                LocalInboxPath = result.Structure?.LocalInboxPath,
+                LocalArchivePath = result.Structure?.LocalArchivePath
+            };
+        }
+
+        private async Task<IndexedKnowledgeUploadResult> UploadLocalKnowledgeViaHierarchyAsync(IFormFile file, UploadMaterialRequest? meta)
+        {
+            var (_, qualificationCode, qualificationDescription) = ResolveKnowledgeUploadQualification(meta);
+            if (string.IsNullOrWhiteSpace(qualificationCode) || string.IsNullOrWhiteSpace(qualificationDescription))
+            {
+                throw new InvalidOperationException("Qualification selection is required for curriculum-aligned local knowledge upload.");
+            }
+
+            var structure = _knowledgeHierarchyService.EnsureQualificationStructure(qualificationCode, qualificationDescription);
+            var safeName = Path.GetFileName(file.FileName);
+            var inboxPath = EnsureUniqueFilePath(Path.Combine(structure.LocalInboxPath, safeName));
+
+            await using (var fs = new FileStream(inboxPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                await file.CopyToAsync(fs);
+            }
+
+            var sync = _knowledgeHierarchyService.SyncKnowledgeHierarchy(new KnowledgeHierarchyService.SyncOptions
+            {
+                QualificationCode = qualificationCode,
+                QualificationDescription = qualificationDescription,
+                IncludeLocalSourceUploads = true,
+                IncludeDeveloperKnowledgeBase = false,
+                MaxFilesPerInbox = 2000,
+                RebuildUploadReadme = false,
+                ConsolidateLegacyFolders = false
+            });
+
+            var indexedFileName = Path.GetFileName(inboxPath);
+            var detail = FindIndexedUploadDetail(sync, qualificationCode, "local_source_upload", indexedFileName);
+            var material = FindIndexedSourceMaterial(qualificationCode, "local_source_upload", indexedFileName, detail);
+
+            if (material != null)
+            {
+                ApplyIndexedUploadMetadata(material, meta, qualificationCode, qualificationDescription, "local_source_upload");
+                _context.SaveChanges();
+            }
+
+            return new IndexedKnowledgeUploadResult
+            {
+                Material = material,
+                Structure = structure,
+                Detail = detail,
+                QualificationCode = qualificationCode,
+                QualificationDescription = qualificationDescription,
+                SourceType = "local_source_upload",
+                StagedFileName = indexedFileName
+            };
+        }
+
         private bool SourceMaterialExistsByPath(string? filePath)
         {
             var normalizedPath = NormalizeMaterialIdentity(filePath);
@@ -3755,16 +4102,34 @@ namespace ETD.Api.Controllers
             return _context.SourceMaterials.Any(s => (s.Url ?? string.Empty).Trim().ToLower() == normalizedUrl);
         }
 
-        private bool SourceMaterialExistsByFileIdentity(string? fileName, string? fileType)
+        private bool SourceMaterialExistsByFileIdentity(
+            string? fileName,
+            string? fileType,
+            string? qualificationCode = null,
+            string? qualificationDescription = null)
         {
             var normalizedFileName = NormalizeMaterialIdentity(fileName);
             var normalizedFileType = NormalizeMaterialIdentity(fileType);
             if (string.IsNullOrWhiteSpace(normalizedFileName) || string.IsNullOrWhiteSpace(normalizedFileType))
                 return false;
 
-            return _context.SourceMaterials.Any(s =>
+            var normalizedQualificationCode = NormalizeMaterialIdentity(qualificationCode);
+            var normalizedQualificationDescription = NormalizeMaterialIdentity(qualificationDescription);
+
+            var query = _context.SourceMaterials.Where(s =>
                 (s.FileName ?? string.Empty).Trim().ToLower() == normalizedFileName &&
                 (s.FileType ?? string.Empty).Trim().ToLower() == normalizedFileType);
+
+            if (!string.IsNullOrWhiteSpace(normalizedQualificationCode))
+            {
+                query = query.Where(s => (s.QualificationCode ?? string.Empty).Trim().ToLower() == normalizedQualificationCode);
+            }
+            else if (!string.IsNullOrWhiteSpace(normalizedQualificationDescription))
+            {
+                query = query.Where(s => (s.QualificationDescription ?? string.Empty).Trim().ToLower() == normalizedQualificationDescription);
+            }
+
+            return query.Any();
         }
 
         private bool SourceMaterialExistsForCurriculum(string? fileName, string? fileType, string? qualificationCode, string? qualificationDescription)
@@ -3802,66 +4167,26 @@ namespace ETD.Api.Controllers
             if (file == null || file.Length == 0) return BadRequest("No file");
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (!KnowledgeUploadExtensions.Contains(ext)) return BadRequest("Unsupported file type");
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var dir = Path.Combine(appData, "ETDP", "Sources");
-            Directory.CreateDirectory(dir);
+            var (_, qualificationCode, qualificationDescription) = ResolveKnowledgeUploadQualification(meta);
+            if (string.IsNullOrWhiteSpace(qualificationCode) || string.IsNullOrWhiteSpace(qualificationDescription))
+            {
+                return BadRequest("Qualification selection is required for curriculum-aligned local knowledge upload.");
+            }
             var safeName = Path.GetFileName(file.FileName);
             var fileType = ext.TrimStart('.');
-            // Safeguard: prevent duplicate upload by file identity.
-            if (SourceMaterialExistsByFileIdentity(safeName, fileType))
+            if (SourceMaterialExistsByFileIdentity(safeName, fileType, qualificationCode, qualificationDescription))
             {
                 return Conflict($"File '{safeName}' already uploaded.");
             }
-            var path = Path.Combine(dir, $"{Guid.NewGuid()}_{safeName}");
-            using (var fs = new FileStream(path, FileMode.CreateNew))
+
+            var result = await UploadLocalKnowledgeViaHierarchyAsync(file, meta);
+            var failure = BuildIndexedUploadFailureResult(result);
+            if (failure != null)
             {
-                await file.CopyToAsync(fs);
+                return failure;
             }
-            string text = "";
-            if (KnowledgeImageExtensions.Contains(ext))
-            {
-                text = ExtractTextFromImageFile(path);
-            }
-            else
-            {
-                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
-                text = await ExtractTextFromFileStreamAsync(fs, ext);
-            }
-            text = await ApplyOcrEnhancementAsync(path, ext, text, meta?.RunCognitiveClean ?? true);
-            var qualificationCode = ResolveQualificationCode(meta?.QualificationDescription, meta?.QualificationId);
-            var material = new SourceMaterial
-            {
-                Title = meta?.Title ?? safeName,
-                FileName = safeName,
-                FilePath = path,
-                FileType = fileType,
-                ExtractedText = text,
-                QualificationCode = qualificationCode,
-                QualificationDescription = meta?.QualificationDescription,
-                SubjectDescription = meta?.SubjectDescription,
-                TopicDescription = meta?.TopicDescription,
-                AssessmentCriteriaDescription = meta?.AssessmentCriteriaDescription
-            };
-            ApplyKnowledgeMetadata(material, "local_source_upload", qualificationCode);
-            _context.SourceMaterials.Add(material);
-            _context.SaveChanges();
-            try
-            {
-                var qual = !string.IsNullOrWhiteSpace(meta?.QualificationDescription)
-                    ? _context.Qualifications.FirstOrDefault(q => q.QualificationDescription == meta.QualificationDescription)
-                    : _context.Qualifications.FirstOrDefault();
-                var qualNumber = qual != null && !string.IsNullOrWhiteSpace(qual.QualificationNumber)
-                    ? qual.QualificationNumber
-                    : (meta?.QualificationDescription ?? "Unknown");
-                var safeFolder = Regex.Replace(qualNumber, @"[^\w\- ]+", "").Trim().Replace(" ", "_");
-                var importBase = GetConfiguredImportBasePath();
-                var qualDir = Path.Combine(importBase, safeFolder);
-                Directory.CreateDirectory(qualDir);
-                var localPath = Path.Combine(qualDir, safeName);
-                System.IO.File.Copy(path, localPath, true);
-            }
-            catch { }
-            return Ok(new { id = material.Id, title = material.Title, type = material.FileType });
+
+            return Ok(BuildIndexedUploadResponse(result, meta?.Title ?? safeName, fileType));
         }
 
         [HttpPost("upload-developer-knowledge")]
@@ -3911,13 +4236,7 @@ namespace ETD.Api.Controllers
                 .ThenByDescending(d => d.KnowledgeNumber ?? 0)
                 .FirstOrDefault();
 
-            var material = _context.SourceMaterials
-                .Where(s =>
-                    (s.QualificationCode ?? string.Empty) == qualificationCode &&
-                    (s.KnowledgeSourceType ?? string.Empty) == "developer_knowledge_base" &&
-                    (s.AssessmentCriteriaDescription ?? string.Empty).Contains($"Source:{indexedFileName}"))
-                .OrderByDescending(s => s.KnowledgeUploadedAtUtc ?? s.CreatedAt)
-                .FirstOrDefault();
+            var material = FindIndexedSourceMaterial(qualificationCode, "developer_knowledge_base", indexedFileName, detail);
 
             if (detail != null && string.Equals(detail.Status, "failed", StringComparison.OrdinalIgnoreCase))
             {
@@ -3962,84 +4281,26 @@ namespace ETD.Api.Controllers
             if (file == null || file.Length == 0) return BadRequest("No file");
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (!KnowledgeUploadExtensions.Contains(ext)) return BadRequest("Unsupported file type");
-
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var dir = Path.Combine(appData, "ETDP", "Sources");
-            Directory.CreateDirectory(dir);
+            var (_, qualificationCode, qualificationDescription) = ResolveKnowledgeUploadQualification(meta);
+            if (string.IsNullOrWhiteSpace(qualificationCode) || string.IsNullOrWhiteSpace(qualificationDescription))
+            {
+                return BadRequest("Qualification selection is required for curriculum-aligned local knowledge upload.");
+            }
             var safeName = Path.GetFileName(file.FileName);
             var fileType = ext.TrimStart('.');
-            if (SourceMaterialExistsByFileIdentity(safeName, fileType))
+            if (SourceMaterialExistsByFileIdentity(safeName, fileType, qualificationCode, qualificationDescription))
             {
                 return Conflict($"File '{safeName}' already uploaded.");
             }
 
-            var path = Path.Combine(dir, $"{Guid.NewGuid()}_{safeName}");
-            using (var fs = new FileStream(path, FileMode.CreateNew))
+            var result = await UploadLocalKnowledgeViaHierarchyAsync(file, meta);
+            var failure = BuildIndexedUploadFailureResult(result);
+            if (failure != null)
             {
-                await file.CopyToAsync(fs);
+                return failure;
             }
 
-            string text = "";
-            if (KnowledgeImageExtensions.Contains(ext))
-            {
-                text = ExtractTextFromImageFile(path);
-            }
-            else
-            {
-                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
-                text = await ExtractTextFromFileStreamAsync(fs, ext);
-            }
-            text = await ApplyOcrEnhancementAsync(path, ext, text, meta?.RunCognitiveClean ?? true);
-
-            var qualificationCode = ResolveQualificationCode(meta?.QualificationDescription, meta?.QualificationId);
-            var material = new SourceMaterial
-            {
-                Title = meta?.Title ?? safeName,
-                FileName = safeName,
-                FilePath = path,
-                FileType = fileType,
-                Url = string.Empty,
-                ExtractedText = text,
-                QualificationCode = qualificationCode,
-                QualificationDescription = meta?.QualificationDescription,
-                SubjectDescription = meta?.SubjectDescription,
-                TopicDescription = meta?.TopicDescription,
-                AssessmentCriteriaDescription = meta?.AssessmentCriteriaDescription
-            };
-            ApplyKnowledgeMetadata(material, "local_source_upload", qualificationCode);
-
-            _context.SourceMaterials.Add(material);
-            _context.SaveChanges();
-            var localMaterialUrl = BuildLocalMaterialExportUrl(material.Id);
-            material.Url = localMaterialUrl;
-            _context.SaveChanges();
-
-            try
-            {
-                var qual = !string.IsNullOrWhiteSpace(meta?.QualificationDescription)
-                    ? _context.Qualifications.FirstOrDefault(q => q.QualificationDescription == meta.QualificationDescription)
-                    : _context.Qualifications.FirstOrDefault();
-                var qualNumber = qual != null && !string.IsNullOrWhiteSpace(qual.QualificationNumber)
-                    ? qual.QualificationNumber
-                    : (meta?.QualificationDescription ?? "Unknown");
-                var safeFolder = Regex.Replace(qualNumber, @"[^\w\- ]+", "").Trim().Replace(" ", "_");
-                var importBase = GetConfiguredImportBasePath();
-                var qualDir = Path.Combine(importBase, safeFolder);
-                Directory.CreateDirectory(qualDir);
-                var localPath = Path.Combine(qualDir, safeName);
-                System.IO.File.Copy(path, localPath, true);
-            }
-            catch { }
-
-            var response = new UploadMaterialToBlobResponse
-            {
-                Id = material.Id,
-                Title = material.Title,
-                Type = material.FileType,
-                BlobUrl = localMaterialUrl
-            };
-
-            return Ok(response);
+            return Ok(BuildIndexedUploadResponse(result, meta?.Title ?? safeName, fileType));
         }
 
         [HttpPost("upload-curriculum-to-blob")]
@@ -4056,6 +4317,7 @@ namespace ETD.Api.Controllers
             if (string.IsNullOrWhiteSpace(qualificationDescription))
                 return BadRequest("Qualification selection is required for curriculum benchmark upload.");
             var qualificationCode = ResolveQualificationCode(qualificationDescription, meta?.QualificationId);
+            var structure = _knowledgeHierarchyService.EnsureQualificationStructure(qualificationCode, qualificationDescription);
 
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             var dir = Path.Combine(appData, "ETDP", "Sources");
@@ -4108,12 +4370,25 @@ namespace ETD.Api.Controllers
             material.Url = localMaterialUrl;
             _context.SaveChanges();
 
+            var curriculumBenchmarkPath = EnsureUniqueFilePath(Path.Combine(structure.CurriculumLibraryPath, safeName));
+            System.IO.File.Copy(path, curriculumBenchmarkPath, overwrite: false);
+
             return Ok(new UploadMaterialToBlobResponse
             {
                 Id = material.Id,
                 Title = material.Title,
                 Type = material.FileType,
-                BlobUrl = localMaterialUrl
+                BlobUrl = localMaterialUrl,
+                QualificationCode = qualificationCode,
+                QualificationDescription = qualificationDescription,
+                SourceType = "local_source_upload",
+                Status = "created",
+                KnowledgeNumber = material.KnowledgeNumber,
+                ArchivePath = material.FilePath,
+                QualificationRootPath = structure.QualificationRootPath,
+                CurriculumLibraryPath = structure.CurriculumLibraryPath,
+                LocalInboxPath = structure.LocalInboxPath,
+                LocalArchivePath = structure.LocalArchivePath
             });
         }
 
@@ -4185,27 +4460,17 @@ namespace ETD.Api.Controllers
         public async Task<IActionResult> UploadMaterialsBulk([FromForm] List<IFormFile> files, [FromForm] UploadMaterialRequest meta)
         {
             if (files == null || files.Count == 0) return BadRequest("No files");
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var srcDir = Path.Combine(appData, "ETDP", "Sources");
-            Directory.CreateDirectory(srcDir);
+            var (_, qualificationCode, qualificationDescription) = ResolveKnowledgeUploadQualification(meta);
+            if (string.IsNullOrWhiteSpace(qualificationCode) || string.IsNullOrWhiteSpace(qualificationDescription))
+            {
+                return BadRequest("Qualification selection is required for curriculum-aligned local knowledge upload.");
+            }
 
-            var importBase = GetConfiguredImportBasePath();
-
-            var qual = !string.IsNullOrWhiteSpace(meta?.QualificationDescription)
-                ? _context.Qualifications.FirstOrDefault(q => q.QualificationDescription == meta.QualificationDescription)
-                : _context.Qualifications.FirstOrDefault();
-            var qualificationCode = !string.IsNullOrWhiteSpace(qual?.QualificationNumber)
-                ? qual!.QualificationNumber.Trim()
-                : ResolveQualificationCode(meta?.QualificationDescription, meta?.QualificationId);
-            var qualNumber = qual != null && !string.IsNullOrWhiteSpace(qual?.QualificationNumber)
-                ? qual!.QualificationNumber
-                : (meta?.QualificationDescription ?? "Unknown");
-            var safeFolder = Regex.Replace(qualNumber, @"[^\w\- ]+", "").Trim().Replace(" ", "_");
-            var qualDir = Path.Combine(importBase, safeFolder);
-            Directory.CreateDirectory(qualDir);
+            var structure = _knowledgeHierarchyService.EnsureQualificationStructure(qualificationCode, qualificationDescription);
 
             int created = 0, failed = 0, skipped = 0;
             var items = new List<object>();
+            var stagedUploads = new List<StagedKnowledgeUpload>();
             var existingFileKeys = _context.SourceMaterials
                 .Select(s => new { s.FileName, s.FileType })
                 .ToList()
@@ -4223,54 +4488,101 @@ namespace ETD.Api.Controllers
                     var fileType = ext.TrimStart('.');
                     var fileKey = BuildFileIdentityKey(safeName, fileType);
                     if (string.IsNullOrWhiteSpace(fileKey) || existingFileKeys.Contains(fileKey)) { skipped++; continue; }
-                    var destPath = Path.Combine(srcDir, $"{Guid.NewGuid()}_{safeName}");
-                    using (var fs = new FileStream(destPath, FileMode.CreateNew))
+                    var inboxPath = EnsureUniqueFilePath(Path.Combine(structure.LocalInboxPath, safeName));
+                    using (var fs = new FileStream(inboxPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                     {
                         await file.CopyToAsync(fs);
                     }
-                    string text = "";
-                    if (KnowledgeImageExtensions.Contains(ext))
+                    stagedUploads.Add(new StagedKnowledgeUpload
                     {
-                        text = ExtractTextFromImageFile(destPath);
-                    }
-                    else
-                    {
-                        using var fs = new FileStream(destPath, FileMode.Open, FileAccess.Read);
-                        text = await ExtractTextFromFileStreamAsync(fs, ext);
-                    }
-                    text = await ApplyOcrEnhancementAsync(destPath, ext, text, meta?.RunCognitiveClean ?? true);
-                    var material = new SourceMaterial
-                    {
-                        Title = meta?.Title ?? safeName,
-                        FileName = safeName,
-                        FilePath = destPath,
-                        FileType = fileType,
-                        ExtractedText = text ?? "",
-                        QualificationCode = qualificationCode,
-                        QualificationDescription = meta?.QualificationDescription,
-                        SubjectDescription = meta?.SubjectDescription,
-                        TopicDescription = meta?.TopicDescription,
-                        AssessmentCriteriaDescription = meta?.AssessmentCriteriaDescription
-                    };
-                    ApplyKnowledgeMetadata(material, "local_source_upload", qualificationCode);
-                    _context.SourceMaterials.Add(material);
+                        OriginalFileName = safeName,
+                        StagedFileName = Path.GetFileName(inboxPath),
+                        FileType = fileType
+                    });
                     existingFileKeys.Add(fileKey);
-                    created++;
-                    items.Add(new { file = safeName, id = material.Id, type = material.FileType });
-                    try
-                    {
-                        var localPath = Path.Combine(qualDir, safeName);
-                        System.IO.File.Copy(destPath, localPath, true);
-                    }
-                    catch { }
                 }
                 catch
                 {
                     failed++;
                 }
             }
-            _context.SaveChanges();
-            return Ok(new { created, failed, skipped, items });
+
+            KnowledgeHierarchyService.SyncResult? sync = null;
+            if (stagedUploads.Count > 0)
+            {
+                sync = _knowledgeHierarchyService.SyncKnowledgeHierarchy(new KnowledgeHierarchyService.SyncOptions
+                {
+                    QualificationCode = qualificationCode,
+                    QualificationDescription = qualificationDescription,
+                    IncludeLocalSourceUploads = true,
+                    IncludeDeveloperKnowledgeBase = false,
+                    MaxFilesPerInbox = 2000,
+                    RebuildUploadReadme = false,
+                    ConsolidateLegacyFolders = false
+                });
+            }
+
+            foreach (var staged in stagedUploads)
+            {
+                var detail = FindIndexedUploadDetail(sync, qualificationCode, "local_source_upload", staged.StagedFileName);
+                var material = FindIndexedSourceMaterial(qualificationCode, "local_source_upload", staged.StagedFileName, detail);
+                if (material != null)
+                {
+                    ApplyIndexedUploadMetadata(material, meta, qualificationCode, qualificationDescription, "local_source_upload");
+                }
+
+                var status = detail?.Status ?? (material != null ? "created" : "failed");
+                var reason = detail?.Reason;
+                if (!string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase) && material == null)
+                {
+                    status = "failed";
+                    reason = string.IsNullOrWhiteSpace(reason) ? "indexed_material_not_found" : reason;
+                }
+
+                if (string.Equals(status, "created", StringComparison.OrdinalIgnoreCase))
+                {
+                    created++;
+                }
+                else if (string.Equals(status, "skipped", StringComparison.OrdinalIgnoreCase))
+                {
+                    skipped++;
+                }
+                else
+                {
+                    failed++;
+                }
+
+                items.Add(new
+                {
+                    file = staged.OriginalFileName,
+                    id = material?.Id,
+                    type = material?.FileType ?? staged.FileType,
+                    status,
+                    reason,
+                    knowledgeNumber = detail?.KnowledgeNumber ?? material?.KnowledgeNumber,
+                    archivePath = detail?.ArchivedPath ?? material?.FilePath
+                });
+            }
+
+            if (stagedUploads.Count > 0)
+            {
+                _context.SaveChanges();
+            }
+
+            return Ok(new
+            {
+                created,
+                failed,
+                skipped,
+                items,
+                qualificationCode,
+                qualificationDescription,
+                sourceType = "local_source_upload",
+                localInboxPath = structure.LocalInboxPath,
+                localArchivePath = structure.LocalArchivePath,
+                qualificationRootPath = structure.QualificationRootPath,
+                curriculumLibraryPath = structure.CurriculumLibraryPath
+            });
         }
 
         private static string CleanExtractedText(string text)
@@ -4388,13 +4700,12 @@ namespace ETD.Api.Controllers
             return baseLabel;
         }
 
-        private static string BuildKnowledgeRootPath(string? qualificationCode, string? qualificationDescription, string? knowledgeSourceType)
+        private string BuildKnowledgeRootPath(string? qualificationCode, string? qualificationDescription, string? knowledgeSourceType)
         {
-            var rootBase = Path.Combine(GetConfiguredImportBasePath(), "KnowledgeHierarchy");
-            var qCode = MakeSafeFilePart(qualificationCode, "unknown_code");
-            var qDesc = MakeSafeFilePart(qualificationDescription, "unknown_qualification");
-            var source = MakeSafeFilePart(NormalizeKnowledgeSourceType(knowledgeSourceType), "local_source_upload");
-            return Path.Combine(rootBase, $"{qCode}_{qDesc}", source);
+            var qCode = string.IsNullOrWhiteSpace(qualificationCode) ? "UNASSIGNED" : qualificationCode.Trim();
+            var qDesc = string.IsNullOrWhiteSpace(qualificationDescription) ? qCode : qualificationDescription.Trim();
+            var structure = _knowledgeHierarchyService.EnsureQualificationStructure(qCode, qDesc);
+            return ResolveKnowledgeSourceRootPath(structure, NormalizeKnowledgeSourceType(knowledgeSourceType));
         }
 
         private void ApplyKnowledgeMetadata(
@@ -4422,6 +4733,129 @@ namespace ETD.Api.Controllers
             material.KnowledgeLabel = string.IsNullOrWhiteSpace(knowledgeLabel)
                 ? BuildKnowledgeLabel(material.Title, material.FileName, material.KnowledgeNumber)
                 : knowledgeLabel.Trim();
+        }
+
+        private sealed class DerivedPdfVisualImportResult
+        {
+            public List<SourceMaterial> Materials { get; } = new();
+            public string SummaryText { get; set; } = string.Empty;
+        }
+
+        private DerivedPdfVisualImportResult ExtractDerivedPdfVisualMaterials(
+            string archivedPdfPath,
+            string originalName,
+            string sourceType,
+            string qualificationCode,
+            string qualificationDescription,
+            string sourceRootPath,
+            string parentKnowledgeUrl,
+            ref int nextKnowledgeNumber)
+        {
+            var result = new DerivedPdfVisualImportResult();
+            try
+            {
+                var outputFolderName = MakeSafeFilePart(Path.GetFileNameWithoutExtension(archivedPdfPath), "pdf_visuals");
+                var outputDirectory = Path.Combine(sourceRootPath, "visual_archive", outputFolderName);
+                var extracted = _pdfVisualExtractionService.ExtractAndPersist(archivedPdfPath, new PdfVisualExtractionService.PersistOptions
+                {
+                    OutputDirectory = outputDirectory,
+                    OutputNamePrefix = "visual",
+                    SourceDocumentName = originalName
+                });
+                result.SummaryText = extracted.SummaryText;
+
+                foreach (var visual in extracted.Visuals)
+                {
+                    var visualFileName = Path.GetFileName(visual.FilePath);
+                    var imageText = ExtractTextFromImageFile(visual.FilePath, FindImageSidecarPaths(visual.FilePath));
+                    imageText = _ocrExtractionService.EnhanceExtractedText(visual.FilePath, Path.GetExtension(visual.FilePath), imageText);
+
+                    var material = new SourceMaterial
+                    {
+                        Title = BuildDerivedPdfVisualTitle(originalName, visual.Caption, visual.PageNumber, nextKnowledgeNumber),
+                        FileName = visualFileName,
+                        FilePath = visual.FilePath,
+                        FileType = visual.FileType,
+                        Url = $"knowledge://{Uri.EscapeDataString(qualificationCode)}/{Uri.EscapeDataString(sourceType)}/kb-{nextKnowledgeNumber:D4}/{Uri.EscapeDataString(visualFileName)}",
+                        QualificationCode = qualificationCode,
+                        QualificationDescription = qualificationDescription,
+                        SubjectDescription = $"KnowledgeBase:{sourceType}",
+                        TopicDescription = $"KnowledgeNumber:{nextKnowledgeNumber:D4};DerivedVisualPage:{visual.PageNumber}",
+                        AssessmentCriteriaDescription = BuildDerivedPdfVisualAssessmentNote(
+                            originalName,
+                            archivedPdfPath,
+                            parentKnowledgeUrl,
+                            visual.PageNumber,
+                            visual.PlaceholderTag,
+                            visual.Caption),
+                        ExtractedText = imageText
+                    };
+
+                    ApplyKnowledgeMetadata(
+                        material,
+                        sourceType,
+                        qualificationCode,
+                        knowledgeNumber: nextKnowledgeNumber,
+                        uploadedAtUtc: DateTime.UtcNow,
+                        knowledgeRootPath: sourceRootPath,
+                        knowledgeLabel: BuildDerivedPdfVisualLabel(originalName, visual.PageNumber, nextKnowledgeNumber));
+
+                    result.Materials.Add(material);
+                    nextKnowledgeNumber++;
+                }
+            }
+            catch
+            {
+                // PDF visual extraction is best-effort and must not block the parent document import.
+            }
+
+            return result;
+        }
+
+        private static string AppendPdfVisualSummary(string extractedText, string summaryText)
+        {
+            if (string.IsNullOrWhiteSpace(summaryText))
+            {
+                return extractedText;
+            }
+
+            if (string.IsNullOrWhiteSpace(extractedText))
+            {
+                return CleanExtractedText(summaryText);
+            }
+
+            return CleanExtractedText($"{extractedText}\n\n[PDF_VISUAL_REFERENCES]\n{summaryText}");
+        }
+
+        private static string BuildDerivedPdfVisualTitle(string originalName, string caption, int pageNumber, int knowledgeNumber)
+        {
+            var preferredCaption = string.IsNullOrWhiteSpace(caption)
+                ? $"Visual from {Path.GetFileNameWithoutExtension(originalName)}"
+                : caption.Trim();
+            return LimitMetadataValue($"{preferredCaption} (page {pageNumber})", 240);
+        }
+
+        private static string BuildDerivedPdfVisualLabel(string originalName, int pageNumber, int knowledgeNumber)
+        {
+            return $"Knowledge Base {knowledgeNumber}: Visual from {originalName} page {pageNumber}";
+        }
+
+        private static string BuildDerivedPdfVisualAssessmentNote(
+            string originalName,
+            string archivedPdfPath,
+            string parentKnowledgeUrl,
+            int pageNumber,
+            string placeholderTag,
+            string caption)
+        {
+            return $"DerivedFromSource:{originalName};DerivedFromPath:{archivedPdfPath};DerivedFromUrl:{parentKnowledgeUrl};Page:{pageNumber};Placeholder:{placeholderTag};Caption:{LimitMetadataValue(caption, 180)}";
+        }
+
+        private static string LimitMetadataValue(string? value, int maxLen)
+        {
+            var cleaned = Regex.Replace(value ?? string.Empty, @"\s+", " ").Trim();
+            if (cleaned.Length <= maxLen) return cleaned;
+            return cleaned.Substring(0, maxLen).Trim();
         }
 
         private static async Task<(bool deleted, string message)> DeleteBlobViaSasAsync(string blobUrl)
@@ -4479,74 +4913,102 @@ namespace ETD.Api.Controllers
         {
             if (req == null || string.IsNullOrWhiteSpace(req.QualificationNumber))
                 return BadRequest("Provide QualificationNumber");
-            var baseDir = GetConfiguredImportBasePath();
-            var safeFolder = Regex.Replace(req.QualificationNumber, @"[^\w\- ]+", "").Trim().Replace(" ", "_");
-            var dir = Path.Combine(baseDir, safeFolder);
-            if (!Directory.Exists(dir)) return NotFound($"Folder not found: {dir}");
-            var qual = _context.Qualifications.FirstOrDefault(q => q.QualificationNumber == req.QualificationNumber)
-                       ?? _context.Qualifications.FirstOrDefault(q => (q.QualificationDescription ?? "").Contains(req.QualificationNumber));
-            var qualificationCode = !string.IsNullOrWhiteSpace(qual?.QualificationNumber)
-                ? qual!.QualificationNumber.Trim()
-                : req.QualificationNumber.Trim();
-            int created = 0, skipped = 0;
-            var existingFileKeys = _context.SourceMaterials
-                .Select(s => new { s.FileName, s.FileType })
-                .ToList()
-                .Select(s => BuildFileIdentityKey(s.FileName, s.FileType))
-                .Where(k => !string.IsNullOrWhiteSpace(k))
-                .ToHashSet(StringComparer.Ordinal);
-            var existingPathKeys = _context.SourceMaterials
-                .Select(s => s.FilePath)
-                .ToList()
-                .Select(NormalizeMaterialIdentity)
-                .Where(k => !string.IsNullOrWhiteSpace(k))
-                .ToHashSet(StringComparer.Ordinal);
-            foreach (var path in Directory.GetFiles(dir))
+            var normalizedQualificationNumber = req.QualificationNumber.Trim();
+            var importGate = QualificationFolderImportLocks.GetOrAdd(
+                normalizedQualificationNumber,
+                _ => new System.Threading.SemaphoreSlim(1, 1));
+
+            await importGate.WaitAsync();
+            try
             {
-                var ext = Path.GetExtension(path).ToLowerInvariant();
-                if (!KnowledgeUploadExtensions.Contains(ext) || IsImageSidecarFile(path)) { skipped++; continue; }
-                var safeName = Path.GetFileName(path);
-                var fileType = ext.TrimStart('.');
-                var normalizedPath = NormalizeMaterialIdentity(path);
-                var fileKey = BuildFileIdentityKey(safeName, fileType);
-                if (existingPathKeys.Contains(normalizedPath) || (!string.IsNullOrWhiteSpace(fileKey) && existingFileKeys.Contains(fileKey)))
+                var baseDir = GetConfiguredImportBasePath();
+                var safeFolder = Regex.Replace(req.QualificationNumber, @"[^\w\- ]+", "").Trim().Replace(" ", "_");
+                var dir = Path.Combine(baseDir, safeFolder);
+                if (!Directory.Exists(dir)) return NotFound($"Folder not found: {dir}");
+
+                var qual = _context.Qualifications.FirstOrDefault(q => q.QualificationNumber == req.QualificationNumber)
+                           ?? _context.Qualifications.FirstOrDefault(q => (q.QualificationDescription ?? "").Contains(req.QualificationNumber));
+                var qualificationCode = !string.IsNullOrWhiteSpace(qual?.QualificationNumber)
+                    ? qual!.QualificationNumber.Trim()
+                    : req.QualificationNumber.Trim();
+                var qualificationDescription = qual?.QualificationDescription;
+
+                int created = 0, skipped = 0;
+                var scopedMaterials = _context.SourceMaterials
+                    .Where(s =>
+                        (s.QualificationCode ?? string.Empty) == qualificationCode ||
+                        (!string.IsNullOrWhiteSpace(qualificationDescription) &&
+                         (s.QualificationDescription ?? string.Empty) == qualificationDescription))
+                    .Select(s => new { s.FileName, s.FileType, s.FilePath })
+                    .ToList();
+
+                var existingFileKeys = scopedMaterials
+                    .Select(s => BuildFileIdentityKey(s.FileName, s.FileType))
+                    .Where(k => !string.IsNullOrWhiteSpace(k))
+                    .ToHashSet(StringComparer.Ordinal);
+                var existingPathKeys = scopedMaterials
+                    .Select(s => NormalizeMaterialIdentity(s.FilePath))
+                    .Where(k => !string.IsNullOrWhiteSpace(k))
+                    .ToHashSet(StringComparer.Ordinal);
+
+                foreach (var path in Directory.GetFiles(dir))
                 {
-                    skipped++;
-                    continue;
-                }
-                string text = "";
-                try
-                {
-                    if (KnowledgeImageExtensions.Contains(ext))
+                    var ext = Path.GetExtension(path).ToLowerInvariant();
+                    if (!KnowledgeUploadExtensions.Contains(ext) || IsImageSidecarFile(path)) { skipped++; continue; }
+
+                    var safeName = Path.GetFileName(path);
+                    var fileType = ext.TrimStart('.');
+                    var normalizedPath = NormalizeMaterialIdentity(path);
+                    var fileKey = BuildFileIdentityKey(safeName, fileType);
+                    if (existingPathKeys.Contains(normalizedPath) ||
+                        (!string.IsNullOrWhiteSpace(fileKey) && existingFileKeys.Contains(fileKey)) ||
+                        SourceMaterialExistsByPath(path) ||
+                        SourceMaterialExistsByFileIdentity(safeName, fileType, qualificationCode, qualificationDescription))
                     {
-                        text = ExtractTextFromImageFile(path, FindImageSidecarPaths(path));
+                        skipped++;
+                        continue;
                     }
-                    else
+
+                    string text = "";
+                    try
                     {
-                        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                        text = await ExtractTextFromFileStreamAsync(fs, ext);
+                        if (KnowledgeImageExtensions.Contains(ext))
+                        {
+                            text = ExtractTextFromImageFile(path, FindImageSidecarPaths(path));
+                        }
+                        else
+                        {
+                            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                            text = await ExtractTextFromFileStreamAsync(fs, ext);
+                        }
+                        text = await ApplyOcrEnhancementAsync(path, ext, text);
                     }
-                    text = await ApplyOcrEnhancementAsync(path, ext, text);
+                    catch { }
+
+                    var material = new SourceMaterial
+                    {
+                        Title = safeName,
+                        FileName = safeName,
+                        FilePath = path,
+                        FileType = fileType,
+                        ExtractedText = text ?? "",
+                        QualificationCode = qualificationCode,
+                        QualificationDescription = qualificationDescription
+                    };
+                    ApplyKnowledgeMetadata(material, "local_source_upload", qualificationCode);
+                    _context.SourceMaterials.Add(material);
+                    if (!string.IsNullOrWhiteSpace(fileKey)) existingFileKeys.Add(fileKey);
+                    if (!string.IsNullOrWhiteSpace(normalizedPath)) existingPathKeys.Add(normalizedPath);
+                    created++;
                 }
-                catch { }
-                var material = new SourceMaterial
-                {
-                    Title = safeName,
-                    FileName = safeName,
-                    FilePath = path,
-                    FileType = fileType,
-                    ExtractedText = text ?? "",
-                    QualificationCode = qualificationCode,
-                    QualificationDescription = qual?.QualificationDescription
-                };
-                ApplyKnowledgeMetadata(material, "local_source_upload", qualificationCode);
-                _context.SourceMaterials.Add(material);
-                if (!string.IsNullOrWhiteSpace(fileKey)) existingFileKeys.Add(fileKey);
-                if (!string.IsNullOrWhiteSpace(normalizedPath)) existingPathKeys.Add(normalizedPath);
-                created++;
+
+                _context.SaveChanges();
+                return Ok(new { created, skipped });
             }
-            _context.SaveChanges();
-            return Ok(new { created, skipped });
+            finally
+            {
+                importGate.Release();
+            }
         }
 
         [HttpPost("import-github-repo")]
@@ -5344,6 +5806,51 @@ namespace ETD.Api.Controllers
             return Ok(sync);
         }
 
+        [HttpGet("agent-knowledge-structure")]
+        public IActionResult AgentKnowledgeStructure()
+        {
+            var structures = _knowledgeHierarchyService.EnsureAgentKnowledgeStructures();
+            return Ok(new
+            {
+                rootPath = _knowledgeHierarchyService.GetAgentKnowledgeRootPath(),
+                readmePath = _knowledgeHierarchyService.GetAgentKnowledgeReadmePath(),
+                shared = new
+                {
+                    rootPath = structures["shared"].ScopeRootPath,
+                    inbox = structures["shared"].InboxPath,
+                    archive = structures["shared"].ArchivePath,
+                    duplicates = structures["shared"].DuplicatePath
+                },
+                mira = new
+                {
+                    rootPath = structures["mira"].ScopeRootPath,
+                    inbox = structures["mira"].InboxPath,
+                    archive = structures["mira"].ArchivePath,
+                    duplicates = structures["mira"].DuplicatePath
+                },
+                qwen = new
+                {
+                    rootPath = structures["qwen"].ScopeRootPath,
+                    inbox = structures["qwen"].InboxPath,
+                    archive = structures["qwen"].ArchivePath,
+                    duplicates = structures["qwen"].DuplicatePath
+                }
+            });
+        }
+
+        [HttpPost("sync-agent-knowledge")]
+        public IActionResult SyncAgentKnowledge([FromBody] SyncAgentKnowledgeRequest? req)
+        {
+            var sync = _knowledgeHierarchyService.SyncAgentKnowledge(new KnowledgeHierarchyService.AgentKnowledgeSyncOptions
+            {
+                Scope = req?.AgentMode,
+                IncludeSharedKnowledge = req?.IncludeSharedKnowledge ?? true,
+                MaxFilesPerInbox = req?.MaxFilesPerInbox ?? 1000,
+                RebuildReadme = req?.RebuildReadme ?? true
+            });
+            return Ok(sync);
+        }
+
         [HttpPost("consolidate-knowledge-hierarchy")]
         public IActionResult ConsolidateKnowledgeHierarchy([FromBody] ConsolidateKnowledgeHierarchyRequest? req)
         {
@@ -5441,6 +5948,7 @@ namespace ETD.Api.Controllers
                 candidateFiles = Directory.GetFiles(requestedPath, "*", searchOption)
                     .Where(p => allowedExtensions.Contains(Path.GetExtension(p)))
                     .Where(p => !IsImageSidecarFile(p))
+                    .Where(p => !IsManagedKnowledgeArtifactPath(p))
                     .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
                     .Take(maxFiles)
                     .ToList();
@@ -5545,6 +6053,22 @@ namespace ETD.Api.Controllers
                     }
                     text = await ApplyOcrEnhancementAsync(archivedPath, ext, text);
 
+                    var derivedVisualResult = new DerivedPdfVisualImportResult();
+                    if (string.Equals(ext, ".pdf", StringComparison.OrdinalIgnoreCase))
+                    {
+                        derivedVisualResult = ExtractDerivedPdfVisualMaterials(
+                            archivedPath,
+                            originalName,
+                            sourceType,
+                            qualificationCode,
+                            qualificationDescription,
+                            knowledgeSourceRootPath,
+                            knowledgeUrl,
+                            ref nextKnowledgeNumber);
+                        text = AppendPdfVisualSummary(text, derivedVisualResult.SummaryText);
+                    }
+                    var derivedVisualMaterials = derivedVisualResult.Materials;
+
                     var material = new SourceMaterial
                     {
                         Title = $"[KB {knowledgeNumber:D4}] {qualificationCode} - {qualificationDescription} :: {originalName}",
@@ -5570,6 +6094,21 @@ namespace ETD.Api.Controllers
                         knowledgeLabel: BuildKnowledgeLabel(originalName, originalName, knowledgeNumber));
 
                     _context.SourceMaterials.Add(material);
+                    if (derivedVisualMaterials.Count > 0)
+                    {
+                        _context.SourceMaterials.AddRange(derivedVisualMaterials);
+                        created += derivedVisualMaterials.Count;
+                        foreach (var visualMaterial in derivedVisualMaterials)
+                        {
+                            details.Add(new
+                            {
+                                file = visualMaterial.FileName,
+                                status = "created_visual",
+                                knowledgeNumber = visualMaterial.KnowledgeNumber,
+                                archivedPath = visualMaterial.FilePath
+                            });
+                        }
+                    }
                     created++;
                     details.Add(new { file = originalName, status = "created", knowledgeNumber, archivedPath });
                 }
@@ -6634,6 +7173,13 @@ namespace ETD.Api.Controllers
             return KnowledgeImageExtensions.Contains(innerExt);
         }
 
+        private static bool IsManagedKnowledgeArtifactPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            var normalized = path.Replace('/', Path.DirectorySeparatorChar).Trim();
+            return normalized.IndexOf($"{Path.DirectorySeparatorChar}visual_archive{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private static List<string> FindImageSidecarPaths(string imagePath)
         {
             var results = new List<string>();
@@ -6714,13 +7260,12 @@ namespace ETD.Api.Controllers
             if (qualificationId.HasValue && qualificationId.Value > 0)
             {
                 var q = _context.Qualifications.Find(qualificationId.Value);
-                if (q != null)
-                {
-                    if (string.IsNullOrWhiteSpace(resolvedQualificationCode))
-                        resolvedQualificationCode = (q.QualificationNumber ?? string.Empty).Trim();
-                    if (string.IsNullOrWhiteSpace(resolvedQualificationDescription))
-                        resolvedQualificationDescription = (q.QualificationDescription ?? string.Empty).Trim();
-                }
+                if (q == null) return NotFound("Qualification not found.");
+
+                if (string.IsNullOrWhiteSpace(resolvedQualificationCode))
+                    resolvedQualificationCode = (q.QualificationNumber ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(resolvedQualificationDescription))
+                    resolvedQualificationDescription = (q.QualificationDescription ?? string.Empty).Trim();
             }
 
             if (string.IsNullOrWhiteSpace(resolvedQualificationCode) && !string.IsNullOrWhiteSpace(resolvedQualificationDescription))
@@ -6814,6 +7359,22 @@ namespace ETD.Api.Controllers
                 if (derived.Count > 0) linked.AddRange(derived);
             }
 
+            var derivedVisuals = _context.SourceMaterials
+                .Where(x => x.Id != s.Id &&
+                            ((x.QualificationCode ?? string.Empty) == (s.QualificationCode ?? string.Empty) ||
+                             (x.QualificationDescription ?? string.Empty) == (s.QualificationDescription ?? string.Empty)))
+                .AsEnumerable()
+                .Where(x =>
+                    (!string.IsNullOrWhiteSpace(s.Url) &&
+                     (x.AssessmentCriteriaDescription ?? string.Empty).Contains($"DerivedFromUrl:{s.Url}", StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrWhiteSpace(s.FilePath) &&
+                     (x.AssessmentCriteriaDescription ?? string.Empty).Contains($"DerivedFromPath:{s.FilePath}", StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            if (derivedVisuals.Count > 0)
+            {
+                linked.AddRange(derivedVisuals);
+            }
+
             linked = linked.GroupBy(x => x.Id).Select(g => g.First()).ToList();
 
             var localDeleted = false;
@@ -6845,6 +7406,21 @@ namespace ETD.Api.Controllers
                 catch (Exception ex)
                 {
                     blobDeleteMessage = $"Local file delete failed: {ex.Message}";
+                }
+
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(material.FilePath))
+                    {
+                        foreach (var sidecarPath in FindImageSidecarPaths(material.FilePath).Where(System.IO.File.Exists))
+                        {
+                            System.IO.File.Delete(sidecarPath);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Sidecar cleanup is best-effort only.
                 }
 
                 try
@@ -7128,50 +7704,60 @@ namespace ETD.Api.Controllers
 
             var topic = _context.Topics.Find(topicId);
             if (topic == null) return NotFound("Topic not found");
-
-            var bullets = ResolveSlideBulletsForTopic(topic);
-            if (bullets.Count == 0) return BadRequest("No slide bullet lines found for topic.");
-
-            var exportDir = Path.Combine("C:\\ETDP\\ETDP", "Exports", "Slides");
-            Directory.CreateDirectory(exportDir);
-
-            var safeCode = MakeSafeFilePart(topic.TopicCode, "Topic");
-            var safeDesc = MakeSafeFilePart(topic.TopicDescription, "Slides");
-            var fileName = $"{safeCode}_{safeDesc}_{DateTime.Now:yyyyMMdd_HHmmss}.pptx";
-            var fullPath = GetUniquePath(exportDir, fileName);
-
-            var requestedTitle = (req.TitleOverride ?? "").Trim();
-            var title = !string.IsNullOrWhiteSpace(requestedTitle)
-                ? requestedTitle
-                : ((topic.TopicDescription ?? "Topic").Trim());
-            var localVisualSlides = req.IncludeVisualResourceSlides
-                ? ResolveSlideVisualResourcesForTopic(topic, req.MaxVisualSlides)
-                : new List<SlideVisualResource>();
-            var generatedVisualResult = req.IncludeGeneratedImageSlides
-                ? await ResolveGeneratedSlideVisualResourcesForTopicAsync(topic, bullets, req, cancellationToken)
-                : new GeneratedSlideVisualResourcesResult();
-            var visualSlides = CombineSlideVisualResources(localVisualSlides, generatedVisualResult.Resources);
-
-            var options = new SimpleSlideDeckOptions
+            SlideDeckArtifact artifact;
+            try
             {
-                BulletsPerSlide = req.BulletsPerSlide.GetValueOrDefault(8),
-                IncludeCoverSlide = req.IncludeCoverSlide,
-                CoverSubtitle = string.IsNullOrWhiteSpace(topic.TopicCode) ? null : topic.TopicCode.Trim().ToUpperInvariant(),
-                VisualSlides = visualSlides
-            };
-
-            CreateSimpleSlideDeck(fullPath, title, bullets, options);
-
-            if (!System.IO.File.Exists(fullPath))
+                artifact = await BuildTopicSlideDeckArtifactAsync(topic, req, cancellationToken);
+            }
+            catch (InvalidOperationException ex)
             {
-                return StatusCode(500, "Slide deck generation failed.");
+                return BadRequest(ex.Message);
+            }
+            return File(
+                artifact.FileBytes,
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                artifact.FileName);
+        }
+
+        [HttpPost("export-slides-topic-save")]
+        public async Task<IActionResult> ExportSlidesTopicSave([FromBody] ExportSlidesTopicDownloadRequest req, CancellationToken cancellationToken)
+        {
+            if (req == null) return BadRequest("Request body is required.");
+
+            var topicId = req.TopicId;
+            if (topicId <= 0) return BadRequest("TopicId is required.");
+
+            var topic = _context.Topics.Find(topicId);
+            if (topic == null) return NotFound("Topic not found");
+
+            var qualification = ResolveQualificationForTopic(topic);
+            if (qualification == null)
+            {
+                return BadRequest("No qualification linked to this topic.");
             }
 
-            var bytes = System.IO.File.ReadAllBytes(fullPath);
-            return File(
-                bytes,
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                Path.GetFileName(fullPath));
+            SlideDeckArtifact artifact;
+            try
+            {
+                artifact = await BuildTopicSlideDeckArtifactAsync(topic, req, cancellationToken);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            var savedPath = LearningMaterialWorkspacePaths.SaveBytes(
+                qualification,
+                qualification.Id,
+                "SlideShows",
+                artifact.FileName,
+                artifact.FileBytes);
+
+            return Ok(new
+            {
+                fileName = Path.GetFileName(savedPath),
+                savedPath,
+                folderPath = Path.GetDirectoryName(savedPath)
+            });
         }
 
         [HttpPost("preview-slides-topic")]
@@ -7185,97 +7771,14 @@ namespace ETD.Api.Controllers
             var topic = _context.Topics.Find(topicId);
             if (topic == null) return NotFound("Topic not found");
 
-            var bullets = ResolveSlideBulletsForTopic(topic);
-            if (bullets.Count == 0) return BadRequest("No slide bullet lines found for topic.");
-
-            var requestedTitle = (req.TitleOverride ?? "").Trim();
-            var title = !string.IsNullOrWhiteSpace(requestedTitle)
-                ? requestedTitle
-                : ((topic.TopicDescription ?? "Topic").Trim());
-            var topicCode = (topic.TopicCode ?? string.Empty).Trim().ToUpperInvariant();
-            var bulletsPerSlide = Math.Clamp(req.BulletsPerSlide.GetValueOrDefault(8), 1, 20);
-            var localVisualSlides = req.IncludeVisualResourceSlides
-                ? ResolveSlideVisualResourcesForTopic(topic, req.MaxVisualSlides)
-                : new List<SlideVisualResource>();
-            var generatedVisualResult = req.IncludeGeneratedImageSlides
-                ? await ResolveGeneratedSlideVisualResourcesForTopicAsync(topic, bullets, req, cancellationToken)
-                : new GeneratedSlideVisualResourcesResult();
-            var visualSlides = CombineSlideVisualResources(localVisualSlides, generatedVisualResult.Resources);
-            var warnings = new List<string>();
-            if (!string.IsNullOrWhiteSpace(generatedVisualResult.Warning))
+            try
             {
-                warnings.Add(generatedVisualResult.Warning.Trim());
+                return Ok(await BuildPreviewSlidesTopicResponseAsync(topic, req, cancellationToken));
             }
-
-            var slides = new List<PreviewSlidesTopicSlide>();
-            var slideNumber = 1;
-            if (req.IncludeCoverSlide)
+            catch (InvalidOperationException ex)
             {
-                slides.Add(new PreviewSlidesTopicSlide
-                {
-                    Number = slideNumber++,
-                    Type = "cover",
-                    Title = title,
-                    Subtitle = topicCode,
-                    Bullets = new List<string>()
-                });
+                return BadRequest(ex.Message);
             }
-
-            foreach (var visual in visualSlides)
-            {
-                var visualCaption = string.IsNullOrWhiteSpace(visual.Caption)
-                    ? (IsGeneratedSlideVisual(visual) ? "AI-generated visual resource" : "Local visual resource")
-                    : visual.Caption;
-                slides.Add(new PreviewSlidesTopicSlide
-                {
-                    Number = slideNumber++,
-                    Type = "visual",
-                    Title = title,
-                    Subtitle = topicCode,
-                    ImageFileName = visual.FileName,
-                    ImageSource = string.IsNullOrWhiteSpace(visual.Source) ? "local" : visual.Source,
-                    ImageCaption = visualCaption,
-                    Bullets = new List<string> { visualCaption }
-                });
-            }
-
-            for (var i = 0; i < bullets.Count; i += bulletsPerSlide)
-            {
-                var slice = bullets.Skip(i).Take(bulletsPerSlide).ToList();
-                slides.Add(new PreviewSlidesTopicSlide
-                {
-                    Number = slideNumber++,
-                    Type = "content",
-                    Title = title,
-                    Subtitle = topicCode,
-                    Bullets = slice
-                });
-            }
-
-            var response = new PreviewSlidesTopicResponse
-            {
-                TopicId = topicId,
-                TopicCode = topicCode,
-                Title = title,
-                BulletsPerSlide = bulletsPerSlide,
-                IncludeCoverSlide = req.IncludeCoverSlide,
-                VisualResourcesMatched = visualSlides.Count,
-                LocalVisualResourcesMatched = localVisualSlides.Count,
-                GeneratedVisualResourcesMatched = generatedVisualResult.Resources.Count,
-                VisualResources = visualSlides
-                    .Select(v => new SlideVisualResourceInfo
-                    {
-                        MaterialId = v.MaterialId,
-                        FileName = v.FileName,
-                        Caption = v.Caption,
-                        Source = string.IsNullOrWhiteSpace(v.Source) ? "local" : v.Source
-                    })
-                    .ToList(),
-                Warnings = warnings,
-                Slides = slides
-            };
-
-            return Ok(response);
         }
 
         public class ExportSlidesBatchRequest
@@ -7288,41 +7791,114 @@ namespace ETD.Api.Controllers
         }
 
         [HttpPost("export-slides-batch")]
-        public IActionResult ExportSlidesBatch([FromBody] ExportSlidesBatchRequest req)
+        public async Task<IActionResult> ExportSlidesBatch([FromBody] ExportSlidesBatchRequest req, CancellationToken cancellationToken)
         {
-            var paths = GenerateSlidesBatchPaths(req, out var error);
+            var topics = ResolveSlideExportTopics(req, out var error);
             if (!string.IsNullOrEmpty(error)) return BadRequest(error);
-            return Ok(new { paths });
+
+            var artifacts = new List<object>();
+            foreach (var topic in topics)
+            {
+                try
+                {
+                    var artifact = await BuildTopicSlideDeckArtifactAsync(
+                        topic,
+                        BuildDefaultSlideExportRequest(topic.Id),
+                        cancellationToken);
+                    artifacts.Add(new { fileName = artifact.FileName });
+                }
+                catch (InvalidOperationException)
+                {
+                    // Skip topics without enough slide content.
+                }
+            }
+
+            if (artifacts.Count == 0) return BadRequest("No slides generated for the selected scope.");
+            return Ok(new { files = artifacts });
         }
 
         [HttpPost("export-slides-batch-download")]
-        public IActionResult ExportSlidesBatchDownload([FromBody] ExportSlidesBatchRequest req)
+        public async Task<IActionResult> ExportSlidesBatchDownload([FromBody] ExportSlidesBatchRequest req, CancellationToken cancellationToken)
         {
-            var paths = GenerateSlidesBatchPaths(req, out var error);
+            var topics = ResolveSlideExportTopics(req, out var error);
             if (!string.IsNullOrEmpty(error)) return BadRequest(error);
-            if (paths.Count == 0) return BadRequest("No slides generated for the selected scope.");
-            if (paths.Count == 1)
-            {
-                var single = paths[0];
-                if (!System.IO.File.Exists(single)) return NotFound("Generated slide not found.");
-                var bytes = System.IO.File.ReadAllBytes(single);
-                return File(bytes, "application/vnd.openxmlformats-officedocument.presentationml.presentation", Path.GetFileName(single));
-            }
+            if (topics.Count == 0) return BadRequest("No slides generated for the selected scope.");
 
-            using var ms = new MemoryStream();
-            using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
+            var artifacts = new List<SlideDeckArtifact>();
+            foreach (var topic in topics)
             {
-                foreach (var p in paths.Where(System.IO.File.Exists))
+                try
                 {
-                    var entry = zip.CreateEntry(Path.GetFileName(p), CompressionLevel.Fastest);
-                    using var es = entry.Open();
-                    using var fs = new FileStream(p, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    fs.CopyTo(es);
+                    artifacts.Add(await BuildTopicSlideDeckArtifactAsync(
+                        topic,
+                        BuildDefaultSlideExportRequest(topic.Id),
+                        cancellationToken));
+                }
+                catch (InvalidOperationException)
+                {
+                    // Skip topics without enough slide content.
                 }
             }
-            ms.Position = 0;
-            var zipName = $"slides_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
-            return File(ms.ToArray(), "application/zip", zipName);
+
+            if (artifacts.Count == 0) return BadRequest("No slides generated for the selected scope.");
+
+            if (artifacts.Count == 1)
+            {
+                var single = artifacts[0];
+                return File(single.FileBytes, "application/vnd.openxmlformats-officedocument.presentationml.presentation", single.FileName);
+            }
+
+            var zipName = BuildQualificationSlidesArchiveFileName(req, topics);
+            return File(CreateSlideArchiveBytes(artifacts), "application/zip", zipName);
+        }
+
+        [HttpPost("export-slides-batch-save")]
+        public async Task<IActionResult> ExportSlidesBatchSave([FromBody] ExportSlidesBatchRequest req, CancellationToken cancellationToken)
+        {
+            var topics = ResolveSlideExportTopics(req, out var error);
+            if (!string.IsNullOrEmpty(error)) return BadRequest(error);
+            if (topics.Count == 0) return BadRequest("No slides generated for the selected scope.");
+
+            var qualification = ResolveQualificationForSlideExport(req, topics);
+            if (qualification == null)
+            {
+                return BadRequest("No qualification linked to this slide export scope.");
+            }
+
+            var artifacts = new List<SlideDeckArtifact>();
+            foreach (var topic in topics)
+            {
+                try
+                {
+                    artifacts.Add(await BuildTopicSlideDeckArtifactAsync(
+                        topic,
+                        BuildDefaultSlideExportRequest(topic.Id),
+                        cancellationToken));
+                }
+                catch (InvalidOperationException)
+                {
+                    // Skip topics without enough slide content.
+                }
+            }
+
+            if (artifacts.Count == 0) return BadRequest("No slides generated for the selected scope.");
+
+            var zipName = BuildQualificationSlidesArchiveFileName(req, topics, qualification);
+            var zipBytes = CreateSlideArchiveBytes(artifacts);
+            var savedPath = LearningMaterialWorkspacePaths.SaveBytes(
+                qualification,
+                qualification.Id,
+                "SlideShows",
+                zipName,
+                zipBytes);
+
+            return Ok(new
+            {
+                fileName = Path.GetFileName(savedPath),
+                savedPath,
+                folderPath = Path.GetDirectoryName(savedPath),
+                generatedCount = artifacts.Count
+            });
         }
 
         [HttpPost("export-slides-by-lpn")]
@@ -7439,6 +8015,300 @@ namespace ETD.Api.Controllers
                 reportPath,
                 files = saved
             });
+        }
+
+        private sealed class SlideDeckArtifact
+        {
+            public string FileName { get; set; } = string.Empty;
+            public byte[] FileBytes { get; set; } = Array.Empty<byte>();
+        }
+
+        private ExportSlidesTopicDownloadRequest BuildDefaultSlideExportRequest(int topicId)
+        {
+            return new ExportSlidesTopicDownloadRequest
+            {
+                TopicId = topicId,
+                BulletsPerSlide = 8,
+                IncludeCoverSlide = true,
+                IncludeVisualResourceSlides = false,
+                IncludeGeneratedImageSlides = false,
+                MaxVisualSlides = 3,
+                MaxGeneratedImageSlides = 2
+            };
+        }
+
+        private Qualification? ResolveQualificationForTopic(Topic topic)
+        {
+            if (topic == null || topic.SubjectId <= 0) return null;
+
+            var qualificationId = _context.Subjects
+                .Where(s => s.Id == topic.SubjectId)
+                .Select(s => (int?)s.QualificationId)
+                .FirstOrDefault();
+
+            if (!qualificationId.HasValue || qualificationId.Value <= 0) return null;
+            return _context.Qualifications.FirstOrDefault(q => q.Id == qualificationId.Value);
+        }
+
+        private Qualification? ResolveQualificationForSlideExport(ExportSlidesBatchRequest req, List<Topic> topics)
+        {
+            if (req.QualificationId.HasValue && req.QualificationId.Value > 0)
+            {
+                var qualification = _context.Qualifications.FirstOrDefault(q => q.Id == req.QualificationId.Value);
+                if (qualification != null) return qualification;
+            }
+
+            var firstTopic = topics.FirstOrDefault();
+            return firstTopic == null ? null : ResolveQualificationForTopic(firstTopic);
+        }
+
+        private List<Topic> ResolveSlideExportTopics(ExportSlidesBatchRequest req, out string? error)
+        {
+            error = null;
+            List<Topic> topics;
+
+            if (req.TopicIds != null && req.TopicIds.Length > 0)
+            {
+                topics = _context.Topics
+                    .Where(t => req.TopicIds.Contains(t.Id))
+                    .ToList();
+            }
+            else if (req.SubjectId.HasValue)
+            {
+                topics = _context.Topics
+                    .Where(t => t.SubjectId == req.SubjectId.Value)
+                    .ToList();
+            }
+            else if ((req.SubjectFromId.HasValue || req.SubjectToId.HasValue) && req.QualificationId.HasValue)
+            {
+                var subjectRangeIds = ResolveSubjectIdRange(req.QualificationId.Value, req.SubjectFromId, req.SubjectToId);
+                topics = _context.Topics
+                    .Where(t => subjectRangeIds.Contains(t.SubjectId))
+                    .ToList();
+            }
+            else if (req.QualificationId.HasValue)
+            {
+                var subjectIds = _context.Subjects
+                    .Where(s => s.QualificationId == req.QualificationId.Value)
+                    .Select(s => s.Id)
+                    .ToList();
+                topics = _context.Topics
+                    .Where(t => subjectIds.Contains(t.SubjectId))
+                    .ToList();
+            }
+            else
+            {
+                error = "Provide TopicIds, SubjectId, QualificationId, or a subject range.";
+                return new List<Topic>();
+            }
+
+            if (topics.Count == 0)
+            {
+                return topics;
+            }
+
+            var topicSubjectIds = topics
+                .Select(t => t.SubjectId)
+                .Distinct()
+                .ToList();
+            var subjectMeta = _context.Subjects
+                .Where(s => topicSubjectIds.Contains(s.Id))
+                .Select(s => new { s.Id, s.SubjectCode, s.SubjectDescription })
+                .ToList()
+                .ToDictionary(
+                    x => x.Id,
+                    x => new
+                    {
+                        Code = (x.SubjectCode ?? string.Empty).Trim(),
+                        Description = (x.SubjectDescription ?? string.Empty).Trim()
+                    });
+
+            return topics
+                .OrderBy(t => subjectMeta.TryGetValue(t.SubjectId, out var subject) ? subject.Code : string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(t => subjectMeta.TryGetValue(t.SubjectId, out var subject) ? subject.Description : string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(t => (t.TopicCode ?? string.Empty).Trim(), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(t => (t.TopicDescription ?? string.Empty).Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private async Task<SlideDeckArtifact> BuildTopicSlideDeckArtifactAsync(
+            Topic topic,
+            ExportSlidesTopicDownloadRequest req,
+            CancellationToken cancellationToken)
+        {
+            var preview = await BuildPreviewSlidesTopicResponseAsync(topic, req, cancellationToken);
+            return new SlideDeckArtifact
+            {
+                FileName = BuildSlideTopicFileName(topic, preview.Title),
+                FileBytes = CreatePreviewStyledSlideDeckBytes(preview)
+            };
+        }
+
+        private async Task<PreviewSlidesTopicResponse> BuildPreviewSlidesTopicResponseAsync(
+            Topic topic,
+            ExportSlidesTopicDownloadRequest req,
+            CancellationToken cancellationToken)
+        {
+            var bullets = ResolveSlideBulletsForTopic(topic);
+            if (bullets.Count == 0)
+            {
+                throw new InvalidOperationException("No slide bullet lines found for topic.");
+            }
+
+            var requestedTitle = (req.TitleOverride ?? string.Empty).Trim();
+            var title = !string.IsNullOrWhiteSpace(requestedTitle)
+                ? requestedTitle
+                : ((topic.TopicDescription ?? "Topic").Trim());
+            var topicCode = (topic.TopicCode ?? string.Empty).Trim().ToUpperInvariant();
+            var bulletsPerSlide = Math.Clamp(req.BulletsPerSlide.GetValueOrDefault(8), 1, 20);
+            var localVisualSlides = req.IncludeVisualResourceSlides
+                ? ResolveSlideVisualResourcesForTopic(topic, req.MaxVisualSlides)
+                : new List<SlideVisualResource>();
+            var generatedVisualResult = req.IncludeGeneratedImageSlides
+                ? await ResolveGeneratedSlideVisualResourcesForTopicAsync(topic, bullets, req, cancellationToken)
+                : new GeneratedSlideVisualResourcesResult();
+            var visualSlides = CombineSlideVisualResources(localVisualSlides, generatedVisualResult.Resources);
+
+            var warnings = new List<string>();
+            if (!string.IsNullOrWhiteSpace(generatedVisualResult.Warning))
+            {
+                warnings.Add(generatedVisualResult.Warning.Trim());
+            }
+
+            return BuildSlidePreviewModel(
+                topic.Id,
+                topicCode,
+                title,
+                bulletsPerSlide,
+                req.IncludeCoverSlide,
+                visualSlides,
+                warnings,
+                localVisualSlides.Count,
+                generatedVisualResult.Resources.Count,
+                bullets);
+        }
+
+        private static PreviewSlidesTopicResponse BuildSlidePreviewModel(
+            int topicId,
+            string topicCode,
+            string title,
+            int bulletsPerSlide,
+            bool includeCoverSlide,
+            List<SlideVisualResource> visualSlides,
+            List<string> warnings,
+            int localVisualCount,
+            int generatedVisualCount,
+            List<string> bullets)
+        {
+            var safeBulletsPerSlide = Math.Clamp(bulletsPerSlide <= 0 ? 8 : bulletsPerSlide, 1, 20);
+            var safeTitle = string.IsNullOrWhiteSpace(title) ? "Topic" : title.Trim();
+            var safeTopicCode = (topicCode ?? string.Empty).Trim().ToUpperInvariant();
+
+            var slides = new List<PreviewSlidesTopicSlide>();
+            var slideNumber = 1;
+
+            if (includeCoverSlide)
+            {
+                slides.Add(new PreviewSlidesTopicSlide
+                {
+                    Number = slideNumber++,
+                    Type = "cover",
+                    Title = safeTitle,
+                    Subtitle = safeTopicCode,
+                    Bullets = new List<string>()
+                });
+            }
+
+            foreach (var visual in (visualSlides ?? new List<SlideVisualResource>()).Take(8))
+            {
+                var visualCaption = string.IsNullOrWhiteSpace(visual.Caption)
+                    ? (IsGeneratedSlideVisual(visual) ? "AI-generated visual resource" : "Local visual resource")
+                    : visual.Caption.Trim();
+                slides.Add(new PreviewSlidesTopicSlide
+                {
+                    Number = slideNumber++,
+                    Type = "visual",
+                    Title = safeTitle,
+                    Subtitle = safeTopicCode,
+                    ImageFileName = visual.FileName,
+                    ImageSource = string.IsNullOrWhiteSpace(visual.Source) ? "local" : visual.Source,
+                    ImageCaption = visualCaption,
+                    Bullets = new List<string> { visualCaption }
+                });
+            }
+
+            for (var i = 0; i < bullets.Count; i += safeBulletsPerSlide)
+            {
+                slides.Add(new PreviewSlidesTopicSlide
+                {
+                    Number = slideNumber++,
+                    Type = "content",
+                    Title = safeTitle,
+                    Subtitle = safeTopicCode,
+                    Bullets = bullets.Skip(i).Take(safeBulletsPerSlide).ToList()
+                });
+            }
+
+            return new PreviewSlidesTopicResponse
+            {
+                TopicId = topicId,
+                TopicCode = safeTopicCode,
+                Title = safeTitle,
+                BulletsPerSlide = safeBulletsPerSlide,
+                IncludeCoverSlide = includeCoverSlide,
+                VisualResourcesMatched = visualSlides?.Count ?? 0,
+                LocalVisualResourcesMatched = localVisualCount,
+                GeneratedVisualResourcesMatched = generatedVisualCount,
+                VisualResources = (visualSlides ?? new List<SlideVisualResource>())
+                    .Select(v => new SlideVisualResourceInfo
+                    {
+                        MaterialId = v.MaterialId,
+                        FileName = v.FileName,
+                        Caption = v.Caption,
+                        Source = string.IsNullOrWhiteSpace(v.Source) ? "local" : v.Source
+                    })
+                    .ToList(),
+                Warnings = (warnings ?? new List<string>())
+                    .Select(w => (w ?? string.Empty).Trim())
+                    .Where(w => w.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                Slides = slides
+            };
+        }
+
+        private static string BuildSlideTopicFileName(Topic topic, string? titleOverride = null)
+        {
+            var safeCode = MakeSafeFilePart(topic.TopicCode, "Topic");
+            var safeDesc = MakeSafeFilePart(titleOverride ?? topic.TopicDescription, "Slides");
+            return $"{safeCode}_{safeDesc}_{DateTime.Now:yyyyMMdd_HHmmss}.pptx";
+        }
+
+        private string BuildQualificationSlidesArchiveFileName(
+            ExportSlidesBatchRequest req,
+            List<Topic> topics,
+            Qualification? qualification = null)
+        {
+            qualification ??= ResolveQualificationForSlideExport(req, topics);
+            var safeCode = MakeSafeFilePart(qualification?.QualificationNumber, "Qualification");
+            var safeTitle = MakeSafeFilePart(qualification?.QualificationDescription, "SlideShows");
+            return $"{safeCode}_{safeTitle}_SlideShows_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+        }
+
+        private static byte[] CreateSlideArchiveBytes(List<SlideDeckArtifact> artifacts)
+        {
+            using var ms = new MemoryStream();
+            using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
+            {
+                foreach (var artifact in artifacts.Where(a => a.FileBytes.Length > 0))
+                {
+                    var entry = zip.CreateEntry(artifact.FileName, CompressionLevel.Fastest);
+                    using var entryStream = entry.Open();
+                    entryStream.Write(artifact.FileBytes, 0, artifact.FileBytes.Length);
+                }
+            }
+
+            return ms.ToArray();
         }
 
         private List<string> GenerateSlidesBatchPaths(ExportSlidesBatchRequest req, out string? error)
@@ -8588,12 +9458,14 @@ namespace ETD.Api.Controllers
             return lineParts
                 .Select(CleanSlideBulletLine)
                 .Where(x => x.Length > 0)
-                .Where(x => !IsOperationalScheduleLine(x));
+                .Where(x => !IsOperationalScheduleLine(x))
+                .Where(x => !IsReferenceNoiseSlideLine(x));
         }
 
         private static string CleanSlideBulletLine(string value)
         {
-            var cleaned = Regex.Replace(value ?? string.Empty, @"^[\-\*\u2022\d\.\)\(]+\s*", "");
+            var cleaned = Regex.Replace(value ?? string.Empty, @"^[\-\*\u2022\d\.\)\(\[\]]+\s*", "");
+            cleaned = Regex.Replace(cleaned, @"^\[\d+\]\s*", "");
             cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
             if (cleaned.Length > 320) cleaned = $"{cleaned.Substring(0, 317).TrimEnd()}...";
             return cleaned;
@@ -8606,6 +9478,21 @@ namespace ETD.Api.Controllers
             return Regex.IsMatch(
                 text,
                 @"^(lesson activities?\s+for|lecturer actions?|learner actions?|learning aids?|schedule|date|time\s*start|time\s*end)\b",
+                RegexOptions.IgnoreCase);
+        }
+
+        private static bool IsReferenceNoiseSlideLine(string line)
+        {
+            var text = (line ?? string.Empty).Trim();
+            if (text.Length == 0) return true;
+            if (Regex.IsMatch(text, @"^(citations?|bibliography|references|assessment alignment|overview|key concepts)\b", RegexOptions.IgnoreCase))
+            {
+                return true;
+            }
+
+            return Regex.IsMatch(
+                text,
+                @"[A-Za-z]:\\|\.pdf\b|\.docx\b|\.pptx\b|\.xlsx\b|##\s*Page\b|https?://|\bsource\s+excerpt\b|\bcurriculum\s+content\s+map\b",
                 RegexOptions.IgnoreCase);
         }
 
@@ -8692,52 +9579,296 @@ namespace ETD.Api.Controllers
             public List<SlideVisualResource> VisualSlides { get; set; } = new();
         }
 
+        private const long PreviewSlideWidthEmu = 12192000L;
+        private const long PreviewSlideHeightEmu = 6858000L;
+        private const string PreviewDarkBackgroundHex = "17375F";
+        private const string PreviewDarkBackgroundAltHex = "0F2645";
+        private const string PreviewLightBackgroundHex = "EEF4FB";
+        private const string PreviewDarkTextHex = "17375F";
+        private const string PreviewLightTextHex = "FFFFFF";
+        private const string PreviewAccentOutlineHex = "7A94B3";
+
         private static void CreateSimpleSlideDeck(string path, string topicTitle, List<string> bullets, SimpleSlideDeckOptions? options = null)
         {
+            System.IO.File.WriteAllBytes(path, CreateSimpleSlideDeckBytes(topicTitle, bullets, options));
+        }
+
+        private static byte[] CreateSimpleSlideDeckBytes(string topicTitle, List<string> bullets, SimpleSlideDeckOptions? options = null)
+        {
             var config = options ?? new SimpleSlideDeckOptions();
-            var bulletsPerSlide = config.BulletsPerSlide <= 0 ? 8 : Math.Clamp(config.BulletsPerSlide, 1, 20);
-            using var pres = PresentationDocument.Create(path, DocumentFormat.OpenXml.PresentationDocumentType.Presentation);
-            var presentationPart = pres.AddPresentationPart();
-            var slideLayoutPart = InitializePresentationScaffold(presentationPart);
-            var slideIndex = 256U;
-            var pageTitle = string.IsNullOrWhiteSpace(topicTitle) ? "TOPIC" : topicTitle.Trim().ToUpperInvariant();
+            var preview = BuildSlidePreviewModel(
+                0,
+                config.CoverSubtitle ?? string.Empty,
+                topicTitle,
+                config.BulletsPerSlide,
+                config.IncludeCoverSlide,
+                config.VisualSlides ?? new List<SlideVisualResource>(),
+                new List<string>(),
+                0,
+                0,
+                bullets ?? new List<string>());
 
-            if (config.IncludeCoverSlide)
+            return CreatePreviewStyledSlideDeckBytes(preview);
+        }
+
+        private static byte[] CreatePreviewStyledSlideDeckBytes(PreviewSlidesTopicResponse preview)
+        {
+            using var stream = new MemoryStream();
+            using (var pres = PresentationDocument.Create(stream, DocumentFormat.OpenXml.PresentationDocumentType.Presentation))
             {
-                var coverSlidePart = AddSimpleCoverSlidePart(
-                    presentationPart,
-                    slideLayoutPart,
-                    pageTitle,
-                    config.CoverSubtitle);
-                var coverSlideId = new SlideId() { Id = slideIndex, RelationshipId = presentationPart.GetIdOfPart(coverSlidePart) };
-                presentationPart.Presentation.SlideIdList!.Append(coverSlideId);
-                slideIndex += 1U;
+                var presentationPart = pres.AddPresentationPart();
+                var slideLayoutPart = InitializePresentationScaffold(presentationPart);
+                uint slideIndex = 256U;
+
+                foreach (var slide in (preview.Slides ?? new List<PreviewSlidesTopicSlide>()))
+                {
+                    var slidePart = CreatePreviewSlidePart(presentationPart, slideLayoutPart, slide);
+                    var slideId = new SlideId
+                    {
+                        Id = slideIndex,
+                        RelationshipId = presentationPart.GetIdOfPart(slidePart)
+                    };
+                    presentationPart.Presentation.SlideIdList!.Append(slideId);
+                    slideIndex += 1U;
+                }
+
+                presentationPart.Presentation.Save();
             }
 
-            foreach (var visual in (config.VisualSlides ?? new List<SlideVisualResource>())
-                .Where(v => !string.IsNullOrWhiteSpace(v.ImagePath) && System.IO.File.Exists(v.ImagePath))
-                .Take(8))
+            return stream.ToArray();
+        }
+
+        private static SlidePart CreatePreviewSlidePart(
+            PresentationPart presentationPart,
+            SlideLayoutPart slideLayoutPart,
+            PreviewSlidesTopicSlide slide)
+        {
+            var slideType = (slide.Type ?? "content").Trim().ToLowerInvariant();
+            return slideType switch
             {
-                var imageSlide = AddVisualResourceSlidePart(
-                    presentationPart,
-                    slideLayoutPart,
-                    pageTitle,
-                    visual);
-                var imageSlideId = new SlideId() { Id = slideIndex, RelationshipId = presentationPart.GetIdOfPart(imageSlide) };
-                presentationPart.Presentation.SlideIdList!.Append(imageSlideId);
-                slideIndex += 1U;
+                "cover" => AddPreviewCoverSlidePart(presentationPart, slideLayoutPart, slide),
+                "visual" => AddPreviewVisualSlidePart(presentationPart, slideLayoutPart, slide),
+                _ => AddPreviewContentSlidePart(presentationPart, slideLayoutPart, slide)
+            };
+        }
+
+        private static SlidePart AddPreviewCoverSlidePart(
+            PresentationPart presentationPart,
+            SlideLayoutPart slideLayoutPart,
+            PreviewSlidesTopicSlide slide)
+        {
+            var slidePart = CreateBaseSlidePart(presentationPart, slideLayoutPart);
+            var tree = slidePart.Slide.CommonSlideData!.ShapeTree!;
+            tree.Append(CreateBackgroundShape(2U, PreviewDarkBackgroundHex));
+            tree.Append(CreateTextShape(3U, "SlideLabel", 396240L, 182880L, 1524000L, 320040L,
+                new[] { CreateParagraph($"Slide {slide.Number}", PreviewLightTextHex, 1600, false) }));
+            tree.Append(CreateTextShape(4U, "Title", 396240L, 426720L, 11125200L, 1432560L,
+                new[] { CreateParagraph(slide.Title, PreviewLightTextHex, 3400, true) }));
+
+            if (!string.IsNullOrWhiteSpace(slide.Subtitle))
+            {
+                tree.Append(CreateTextShape(5U, "Subtitle", 396240L, 1524000L, 9753600L, 426720L,
+                    new[] { CreateParagraph(slide.Subtitle, PreviewLightTextHex, 1900, false) }));
             }
 
-            for (int i = 0; i < bullets.Count; i += bulletsPerSlide)
+            tree.Append(CreateTextShape(6U, "CoverNote", 396240L, 5638800L, 3048000L, 396240L,
+                new[] { CreateParagraph("Cover slide", PreviewLightTextHex, 1500, false) }));
+
+            slidePart.Slide.Save();
+            return slidePart;
+        }
+
+        private static SlidePart AddPreviewContentSlidePart(
+            PresentationPart presentationPart,
+            SlideLayoutPart slideLayoutPart,
+            PreviewSlidesTopicSlide slide)
+        {
+            var slidePart = CreateBaseSlidePart(presentationPart, slideLayoutPart);
+            var tree = slidePart.Slide.CommonSlideData!.ShapeTree!;
+            tree.Append(CreateBackgroundShape(2U, PreviewDarkBackgroundHex));
+            tree.Append(CreateTextShape(3U, "SlideLabel", 396240L, 182880L, 1524000L, 320040L,
+                new[] { CreateParagraph($"Slide {slide.Number}", PreviewLightTextHex, 1600, false) }));
+            tree.Append(CreateTextShape(4U, "Title", 396240L, 426720L, 11125200L, 1432560L,
+                new[] { CreateParagraph(slide.Title, PreviewLightTextHex, 3400, true) }));
+
+            if (!string.IsNullOrWhiteSpace(slide.Subtitle))
             {
-                var slice = bullets.Skip(i).Take(bulletsPerSlide).ToList();
-                var slidePart = AddContentSlidePart(presentationPart, slideLayoutPart, pageTitle, slice);
-                var slideId = new SlideId() { Id = slideIndex, RelationshipId = presentationPart.GetIdOfPart(slidePart) };
-                presentationPart.Presentation.SlideIdList!.Append(slideId);
-                slideIndex += 1U;
+                tree.Append(CreateTextShape(5U, "Subtitle", 396240L, 1524000L, 9753600L, 426720L,
+                    new[] { CreateParagraph(slide.Subtitle, PreviewLightTextHex, 1900, false) }));
             }
 
-            presentationPart.Presentation.Save();
+            var bulletParagraphs = (slide.Bullets ?? new List<string>())
+                .Select(line => CreateParagraph($"• {line}", PreviewLightTextHex, 2000, false))
+                .ToList();
+            if (bulletParagraphs.Count == 0)
+            {
+                bulletParagraphs.Add(CreateParagraph(string.Empty, PreviewLightTextHex, 2000, false));
+            }
+
+            tree.Append(CreateTextShape(6U, "Body", 396240L, 2011680L, 11125200L, 4145280L, bulletParagraphs));
+
+            slidePart.Slide.Save();
+            return slidePart;
+        }
+
+        private static SlidePart AddPreviewVisualSlidePart(
+            PresentationPart presentationPart,
+            SlideLayoutPart slideLayoutPart,
+            PreviewSlidesTopicSlide slide)
+        {
+            var slidePart = CreateBaseSlidePart(presentationPart, slideLayoutPart);
+            var tree = slidePart.Slide.CommonSlideData!.ShapeTree!;
+            tree.Append(CreateBackgroundShape(2U, PreviewLightBackgroundHex));
+            tree.Append(CreateTextShape(3U, "SlideLabel", 396240L, 182880L, 1524000L, 320040L,
+                new[] { CreateParagraph($"Slide {slide.Number}", PreviewDarkTextHex, 1600, false) }));
+            tree.Append(CreateTextShape(4U, "Title", 396240L, 426720L, 11125200L, 1432560L,
+                new[] { CreateParagraph(slide.Title, PreviewDarkTextHex, 3400, true) }));
+
+            if (!string.IsNullOrWhiteSpace(slide.Subtitle))
+            {
+                tree.Append(CreateTextShape(5U, "Subtitle", 396240L, 1524000L, 9753600L, 426720L,
+                    new[] { CreateParagraph(slide.Subtitle, PreviewDarkTextHex, 1900, false) }));
+            }
+
+            var visualLabel = !string.IsNullOrWhiteSpace(slide.ImageFileName)
+                ? $"{(string.Equals(slide.ImageSource, "generated", StringComparison.OrdinalIgnoreCase) ? "AI image slide" : "Local image slide")}: {slide.ImageFileName}"
+                : "Visual resource";
+            tree.Append(CreatePanelShape(6U, "VisualPanel", 777240L, 2103120L, 10698480L, 2743200L, "FFFFFF", PreviewAccentOutlineHex,
+                new[] { CreateParagraph(visualLabel, "406389", 1800, false, A.TextAlignmentTypeValues.Center) }));
+
+            var caption = !string.IsNullOrWhiteSpace(slide.ImageCaption)
+                ? slide.ImageCaption
+                : (slide.Bullets?.FirstOrDefault() ?? "Visual resource");
+            tree.Append(CreateTextShape(7U, "VisualCaption", 777240L, 5029200L, 10698480L, 457200L,
+                new[] { CreateParagraph(caption, PreviewDarkTextHex, 1700, true) }));
+
+            slidePart.Slide.Save();
+            return slidePart;
+        }
+
+        private static SlidePart CreateBaseSlidePart(PresentationPart presentationPart, SlideLayoutPart slideLayoutPart)
+        {
+            var slidePart = presentationPart.AddNewPart<SlidePart>();
+            slidePart.AddPart(slideLayoutPart);
+            slidePart.Slide = new Slide(new CommonSlideData(new ShapeTree()), new ColorMapOverride(new A.MasterColorMapping()));
+
+            var common = slidePart.Slide.CommonSlideData ??= new CommonSlideData(new ShapeTree());
+            var tree = common.ShapeTree ??= new ShapeTree();
+            tree.Append(new NonVisualGroupShapeProperties(
+                new NonVisualDrawingProperties() { Id = 1U, Name = "Slide" },
+                new NonVisualGroupShapeDrawingProperties(),
+                new ApplicationNonVisualDrawingProperties()));
+            tree.Append(new GroupShapeProperties(new A.TransformGroup()));
+            return slidePart;
+        }
+
+        private static Shape CreateBackgroundShape(uint id, string colorHex)
+        {
+            return new Shape(
+                new NonVisualShapeProperties(
+                    new NonVisualDrawingProperties() { Id = id, Name = "Background" },
+                    new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
+                    new ApplicationNonVisualDrawingProperties()),
+                new ShapeProperties(
+                    new A.Transform2D(
+                        new A.Offset() { X = 0L, Y = 0L },
+                        new A.Extents() { Cx = PreviewSlideWidthEmu, Cy = PreviewSlideHeightEmu }),
+                    new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle },
+                    new A.SolidFill(new A.RgbColorModelHex() { Val = colorHex })),
+                new TextBody(
+                    new A.BodyProperties(),
+                    new A.ListStyle(),
+                    new A.Paragraph(new A.Run(new A.Text(string.Empty)))));
+        }
+
+        private static Shape CreateTextShape(
+            uint id,
+            string name,
+            long x,
+            long y,
+            long cx,
+            long cy,
+            IEnumerable<A.Paragraph> paragraphs)
+        {
+            var body = new TextBody(new A.BodyProperties(), new A.ListStyle());
+            foreach (var paragraph in paragraphs)
+            {
+                body.Append(paragraph);
+            }
+
+            return new Shape(
+                new NonVisualShapeProperties(
+                    new NonVisualDrawingProperties() { Id = id, Name = name },
+                    new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
+                    new ApplicationNonVisualDrawingProperties()),
+                CreateRectangleShapeProperties(x, y, cx, cy),
+                body);
+        }
+
+        private static Shape CreatePanelShape(
+            uint id,
+            string name,
+            long x,
+            long y,
+            long cx,
+            long cy,
+            string fillHex,
+            string outlineHex,
+            IEnumerable<A.Paragraph> paragraphs)
+        {
+            var body = new TextBody(new A.BodyProperties(), new A.ListStyle());
+            foreach (var paragraph in paragraphs)
+            {
+                body.Append(paragraph);
+            }
+
+            return new Shape(
+                new NonVisualShapeProperties(
+                    new NonVisualDrawingProperties() { Id = id, Name = name },
+                    new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
+                    new ApplicationNonVisualDrawingProperties()),
+                CreateRectangleShapeProperties(
+                    x,
+                    y,
+                    cx,
+                    cy,
+                    new A.SolidFill(new A.RgbColorModelHex() { Val = fillHex }),
+                    new A.Outline(
+                        new A.SolidFill(new A.RgbColorModelHex() { Val = outlineHex }))
+                    { Width = 19050 }),
+                body);
+        }
+
+        private static ShapeProperties CreateRectangleShapeProperties(long x, long y, long cx, long cy, params OpenXmlElement[] extraChildren)
+        {
+            var props = new ShapeProperties(
+                new A.Transform2D(
+                    new A.Offset() { X = x, Y = y },
+                    new A.Extents() { Cx = cx, Cy = cy }),
+                new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle });
+
+            foreach (var child in extraChildren)
+            {
+                props.Append(child);
+            }
+
+            return props;
+        }
+
+        private static A.Paragraph CreateParagraph(
+            string text,
+            string colorHex,
+            int fontSize,
+            bool bold,
+            A.TextAlignmentTypeValues alignment = A.TextAlignmentTypeValues.Left)
+        {
+            var runProps = new A.RunProperties() { FontSize = fontSize, Bold = bold };
+            runProps.Append(new A.SolidFill(new A.RgbColorModelHex() { Val = colorHex }));
+            runProps.Append(new A.LatinFont() { Typeface = "Calibri" });
+
+            return new A.Paragraph(
+                new A.ParagraphProperties() { Alignment = alignment },
+                new A.Run(runProps, new A.Text(text ?? string.Empty)));
         }
 
         private static SlidePart AddVisualResourceSlidePart(
@@ -8765,10 +9896,11 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 2U, Name = "Background" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(
-                    new A.Transform2D(
-                        new A.Offset() { X = 0, Y = 0 },
-                        new A.Extents() { Cx = 9144000, Cy = 6858000 }),
+                CreateRectangleShapeProperties(
+                    0,
+                    0,
+                    9144000,
+                    6858000,
                     new A.SolidFill(new A.RgbColorModelHex() { Val = "F4F8FD" })),
                 new TextBody(
                     new A.BodyProperties(),
@@ -8788,7 +9920,7 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 3U, Name = "VisualTitle" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(new A.Transform2D(new A.Offset() { X = 457200, Y = 228600 }, new A.Extents() { Cx = 8229600, Cy = 609600 })),
+                CreateRectangleShapeProperties(457200, 228600, 8229600, 609600),
                 titleBody);
             tree.Append(titleShape);
 
@@ -8832,7 +9964,7 @@ namespace ETD.Api.Controllers
                         new NonVisualDrawingProperties() { Id = 4U, Name = "VisualPlaceholder" },
                         new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                         new ApplicationNonVisualDrawingProperties()),
-                    new ShapeProperties(new A.Transform2D(new A.Offset() { X = 914400, Y = 960120 }, new A.Extents() { Cx = 7315200, Cy = 4297680 })),
+                    CreateRectangleShapeProperties(914400, 960120, 7315200, 4297680),
                     placeholderBody);
                 tree.Append(placeholderShape);
             }
@@ -8852,7 +9984,7 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 5U, Name = "VisualCaption" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(new A.Transform2D(new A.Offset() { X = 685800, Y = 5448300 }, new A.Extents() { Cx = 7772400, Cy = 838200 })),
+                CreateRectangleShapeProperties(685800, 5448300, 7772400, 838200),
                 captionBody);
             tree.Append(captionShape);
 
@@ -8901,10 +10033,11 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 2U, Name = "Background" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(
-                    new A.Transform2D(
-                        new A.Offset() { X = 0, Y = 0 },
-                        new A.Extents() { Cx = 9144000, Cy = 6858000 }),
+                CreateRectangleShapeProperties(
+                    0,
+                    0,
+                    9144000,
+                    6858000,
                     new A.SolidFill(new A.RgbColorModelHex() { Val = "0B2447" })),
                 new TextBody(
                     new A.BodyProperties(),
@@ -8925,7 +10058,7 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 3U, Name = "CoverTitle" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(new A.Transform2D(new A.Offset() { X = 914400, Y = 2560320 }, new A.Extents() { Cx = 7315200, Cy = 914400 })),
+                CreateRectangleShapeProperties(914400, 2560320, 7315200, 914400),
                 titleTextBody);
             tree.Append(titleShape);
 
@@ -8944,7 +10077,7 @@ namespace ETD.Api.Controllers
                         new NonVisualDrawingProperties() { Id = 4U, Name = "CoverSubtitle" },
                         new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                         new ApplicationNonVisualDrawingProperties()),
-                    new ShapeProperties(new A.Transform2D(new A.Offset() { X = 914400, Y = 3535680 }, new A.Extents() { Cx = 7315200, Cy = 533400 })),
+                    CreateRectangleShapeProperties(914400, 3535680, 7315200, 533400),
                     subtitleBody);
                 tree.Append(subtitleShape);
             }
@@ -8985,10 +10118,11 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 2U, Name = "Background" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(
-                    new A.Transform2D(
-                        new A.Offset() { X = 0, Y = 0 },
-                        new A.Extents() { Cx = 9144000, Cy = 6858000 }),
+                CreateRectangleShapeProperties(
+                    0,
+                    0,
+                    9144000,
+                    6858000,
                     new A.SolidFill(new A.RgbColorModelHex() { Val = "0B2447" })),
                 new TextBody(new A.BodyProperties(), new A.ListStyle(), new A.Paragraph(new A.Run(new A.Text("")))));
             coverTree.Append(coverBg);
@@ -9047,7 +10181,7 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 4U, Name = "CoverTopic" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(new A.Transform2D(new A.Offset() { X = 914400, Y = 2438400 }, new A.Extents() { Cx = 7315200, Cy = 914400 })),
+                CreateRectangleShapeProperties(914400, 2438400, 7315200, 914400),
                 topicTextBody);
             coverTree.Append(topicShape);
 
@@ -9064,7 +10198,7 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 5U, Name = "CoverLpnLesson" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(new A.Transform2D(new A.Offset() { X = 914400, Y = 3352800 }, new A.Extents() { Cx = 7315200, Cy = 685800 })),
+                CreateRectangleShapeProperties(914400, 3352800, 7315200, 685800),
                 subtitleTextBody);
             coverTree.Append(subtitleShape);
 
@@ -9088,9 +10222,6 @@ namespace ETD.Api.Controllers
 
         private static SlideLayoutPart InitializePresentationScaffold(PresentationPart presentationPart)
         {
-            var fromTemplate = TryInitializePresentationFromTemplate(presentationPart);
-            if (fromTemplate != null) return fromTemplate;
-
             var slideMasterPart = presentationPart.AddNewPart<SlideMasterPart>();
             var slideLayoutPart = slideMasterPart.AddNewPart<SlideLayoutPart>();
 
@@ -9137,7 +10268,7 @@ namespace ETD.Api.Controllers
             presentationPart.Presentation = new Presentation(
                 new SlideMasterIdList(new SlideMasterId() { Id = 2147483648U, RelationshipId = masterRelId }),
                 new SlideIdList(),
-                new SlideSize() { Cx = 9144000, Cy = 6858000, Type = SlideSizeValues.Screen4x3 },
+                new SlideSize() { Cx = (int)PreviewSlideWidthEmu, Cy = (int)PreviewSlideHeightEmu, Type = SlideSizeValues.Screen16x9 },
                 new NotesSize() { Cx = 6858000, Cy = 9144000 });
             presentationPart.Presentation.Save();
 
@@ -9252,10 +10383,11 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 2U, Name = "Background" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(
-                    new A.Transform2D(
-                        new A.Offset() { X = 0, Y = 0 },
-                        new A.Extents() { Cx = 9144000, Cy = 6858000 }),
+                CreateRectangleShapeProperties(
+                    0,
+                    0,
+                    9144000,
+                    6858000,
                     new A.SolidFill(new A.RgbColorModelHex() { Val = "0B2447" })),
                 new TextBody(
                     new A.BodyProperties(),
@@ -9273,7 +10405,7 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 3U, Name = "Title" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(new A.Transform2D(new A.Offset() { X = 457200, Y = 457200 }, new A.Extents() { Cx = 8229600, Cy = 914400 })),
+                CreateRectangleShapeProperties(457200, 457200, 8229600, 914400),
                 titleTextBody);
             tree.Append(titleShape);
 
@@ -9298,7 +10430,7 @@ namespace ETD.Api.Controllers
                     new NonVisualDrawingProperties() { Id = 4U, Name = "Body" },
                     new NonVisualShapeDrawingProperties(new A.ShapeLocks() { NoGrouping = true }),
                     new ApplicationNonVisualDrawingProperties()),
-                new ShapeProperties(new A.Transform2D(new A.Offset() { X = 457200, Y = 1645920 }, new A.Extents() { Cx = 8229600, Cy = 4572000 })),
+                CreateRectangleShapeProperties(457200, 1645920, 8229600, 4572000),
                 bodyTextBody);
             tree.Append(bodyShape);
 
@@ -9518,11 +10650,11 @@ namespace ETD.Api.Controllers
         private static string BuildDraftSystemPrompt()
         {
             return
-                "You are an educational content generator for a vocational Learner Guide.\n" +
-                "Goals:\n- Draft Lesson Plan Content for a specific Topic within a Subject.\n- Align content with the provided Assessment Criteria Description.\n- Use ONLY the provided source excerpts for factual details; do not invent facts.\n- If sources are insufficient, produce a structured outline and clearly mark gaps.\n" +
-                "Style:\n- Clear, textbook-style prose suitable for TVET learners.\n- Paraphrase; do not copy verbatim except short definitions.\n- Include inline citations [1], [2], etc., and a Bibliography section listing source URLs.\n- Prefer practical examples, step-by-step procedures, diagrams references (text), and classroom activities.\n" +
-                "Structure:\n1) Title\n2) Learning Objectives\n3) Background & Key Concepts\n4) Main Content (subsections)\n5) Worked Examples / Demonstrations\n6) Classroom Activities (Lecturer & Learner actions)\n7) Assessment Alignment\n8) Summary\n9) Bibliography\n" +
-                "Constraints:\n- Match the requested length.\n- Avoid sensitive or personal data.\n- If contradictory sources appear, flag them and prefer the most reputable.";
+                "You are a vocational learning designer and subject-matter explainer for South African TVET courseware.\n" +
+                "Goals:\n- Draft Lesson Plan Content for a specific Topic within a Subject.\n- Transform the provided source excerpts into coherent teaching content that helps the learner understand and apply the topic.\n- Align content with the provided Assessment Criteria Description, but do not merely restate curriculum wording.\n- Use the provided source excerpts for factual details; do not invent facts outside the evidence.\n- If the evidence is thin, do not pad with generic filler. Return a short explicit coverage-gap note instead.\n" +
+                "Style:\n- Clear, textbook-style prose suitable for TVET learners.\n- Address the learner directly as 'you' whenever instructional guidance is needed.\n- Write the assessment criteria out in full when they need to be referenced; do not reduce them to codes.\n- Paraphrase and digest the evidence; do not copy verbatim except short technical terms or definitions.\n- Do NOT mention file paths, relative paths, source IDs, bracket citations, bibliography labels, or URLs inside the lesson content.\n- Do NOT say phrases such as 'according to the source', 'the cited text', 'the lesson plan content', or 'the curriculum content map'.\n- Write as if an experienced lecturer is teaching vocational learners, not as if you are auditing a document.\n" +
+                "Structure:\n- Use the title, the mapped subject, the topic, and the full assessment criteria as anchors when relevant.\n- Let the explanation expand naturally from definitions and component knowledge into sequence, application, checks, examples, and workplace meaning according to the actual source material.\n- Do not force fixed sections such as Procedure and Application, Safety and Quality Checks, Common Faults / Errors, or Summary unless the operator explicitly asks for that format.\n" +
+                "Constraints:\n- Match the requested length.\n- Avoid sensitive or personal data.\n- If contradictory sources appear, flag them and prefer the most reputable.\n- Do not pad with filler such as 'learn this topic', 'focus your study', 'you must understand', or 'study the explanation below' unless you immediately provide the actual grounded explanation.\n- If the provided excerpts do not contain enough grounded subject matter to answer the topic directly, return a short note that starts with 'INSUFFICIENT_SOURCE_COVERAGE:' and say what content is still missing.";
         }
 
         private static string BuildDraftUserPrompt(DraftRequest req)
@@ -9531,7 +10663,11 @@ namespace ETD.Api.Controllers
             var sourcesText = new System.Text.StringBuilder();
             for (int i = 0; i < sources.Length; i++)
             {
-                sourcesText.AppendLine($"[{i + 1}] {sources[i]}");
+                var cleaned = SanitizeDraftSourceExcerpt(sources[i]);
+                if (!string.IsNullOrWhiteSpace(cleaned))
+                {
+                    sourcesText.AppendLine($"Source Excerpt {i + 1}: {cleaned}");
+                }
             }
 
             return
@@ -9540,7 +10676,14 @@ namespace ETD.Api.Controllers
                 $"Lesson Plan Description: {req.LessonPlanDescription}\nAssessment Criteria Description: {req.AssessmentCriteriaDescription}\n\n" +
                 $"Requested Length: {req.Length}\nReading Level: {req.Level}\n\n" +
                 $"Lecturer Actions: {req.LecturerActions}\nLearner Actions: {req.LearnerActions}\n\n" +
-                $"Sources:\n{sourcesText}";
+                "Writing Directives:\n" +
+                "- Digest the evidence into teaching prose.\n" +
+                "- Name the real technical concept, tool, process, component, safety rule, or fault explicitly.\n" +
+                "- Do not echo source labels or navigation text.\n" +
+                "- Answer the topic and assessment criteria directly instead of telling the learner to go and study the topic somewhere else.\n" +
+                "- If coverage is too thin, output 'INSUFFICIENT_SOURCE_COVERAGE:' and state what subject matter is missing.\n" +
+                "- The learner should be able to study this section and apply the topic afterwards.\n\n" +
+                $"Source Excerpts:\n{sourcesText}";
         }
 
         private async Task<string?> TryGenerateDraftWithLocalLlmAsync(string systemPrompt, string userPrompt)
@@ -9628,53 +10771,61 @@ namespace ETD.Api.Controllers
             var topic = string.IsNullOrWhiteSpace(req.TopicDescription) ? "Current Topic" : req.TopicDescription;
             var criteria = string.IsNullOrWhiteSpace(req.AssessmentCriteriaDescription) ? "Use current assessment criteria." : req.AssessmentCriteriaDescription;
             var lesson = string.IsNullOrWhiteSpace(req.LessonPlanDescription) ? topic : req.LessonPlanDescription;
-            var lecturer = string.IsNullOrWhiteSpace(req.LecturerActions) ? "Introduce the topic, model examples, and facilitate guided practice." : req.LecturerActions;
-            var learner = string.IsNullOrWhiteSpace(req.LearnerActions) ? "Participate in class tasks, complete guided exercises, and reflect on outcomes." : req.LearnerActions;
-            var sources = (req.Sources ?? Array.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            var groundedSources = (req.Sources ?? Array.Empty<string>())
+                .Select(SanitizeDraftSourceExcerpt)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Take(3)
+                .ToList();
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"Title: {lesson}");
+            sb.AppendLine($"Assessment Criteria: {criteria}");
             sb.AppendLine();
-            sb.AppendLine("Learning Objectives");
-            sb.AppendLine($"- Explain and apply key concepts in {topic} within {subject}.");
-            sb.AppendLine($"- Demonstrate evidence for: {criteria}");
-            sb.AppendLine();
-            sb.AppendLine("Background and Key Concepts");
-            sb.AppendLine($"This lesson introduces {topic} in practical TVET context. Build from existing subject foundations and connect each explanation to observable assessment evidence.");
-            sb.AppendLine();
-            sb.AppendLine("Main Content");
-            sb.AppendLine($"1. Concept Overview: define the core principles for {topic}.");
-            sb.AppendLine("2. Procedure and Application: move from explanation to worked classroom steps.");
-            sb.AppendLine("3. Quality and Safety Checks: include standards, common errors, and correction steps.");
-            sb.AppendLine();
-            sb.AppendLine("Worked Examples and Demonstrations");
-            sb.AppendLine("- Present one complete worked example with step-by-step reasoning.");
-            sb.AppendLine("- Provide one short variation activity to test transfer of learning.");
-            sb.AppendLine();
-            sb.AppendLine("Classroom Activities");
-            sb.AppendLine($"- Lecturer Actions: {lecturer}");
-            sb.AppendLine($"- Learner Actions: {learner}");
-            sb.AppendLine();
-            sb.AppendLine("Assessment Alignment");
-            sb.AppendLine($"Map learner outputs directly to: {criteria}");
-            sb.AppendLine();
-            sb.AppendLine("Summary");
-            sb.AppendLine("Review the key concepts, confirm understanding with short checks, and assign practice aligned to assessment criteria.");
-            sb.AppendLine();
-            sb.AppendLine("Bibliography");
-            if (sources.Count == 0)
+
+            if (groundedSources.Count == 0)
             {
-                sb.AppendLine("- No source excerpts supplied. Add local library excerpts and regenerate for source-grounded content.");
+                sb.AppendLine($"INSUFFICIENT_SOURCE_COVERAGE: ETDP does not yet have enough grounded source material to answer {criteria} directly for {topic} in {subject}. Upload subject matter that explains the topic in detail.");
+                return sb.ToString().Trim();
             }
-            else
+
+            foreach (var source in groundedSources)
             {
-                for (var i = 0; i < Math.Min(sources.Count, 8); i++)
-                {
-                    sb.AppendLine($"- [{i + 1}] {sources[i]}");
-                }
+                sb.AppendLine(source);
+                sb.AppendLine();
             }
 
             return sb.ToString().Trim();
+        }
+
+        private static string SanitizeDraftSourceExcerpt(string? value)
+        {
+            var text = (value ?? string.Empty)
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n');
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return string.Empty;
+            }
+
+            var cleanedLines = text
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Where(line => !Regex.IsMatch(line, @"^(citations?|bibliography|references)\s*:?\s*$", RegexOptions.IgnoreCase))
+                .Where(line => !Regex.IsMatch(line, @"^\[\d+\]\s*"))
+                .Where(line => !Regex.IsMatch(line, @"^[A-Za-z]:\\", RegexOptions.IgnoreCase))
+                .Where(line => !Regex.IsMatch(line, @"\bhttps?://", RegexOptions.IgnoreCase))
+                .Take(12)
+                .ToList();
+
+            var cleaned = string.Join(" ", cleanedLines);
+            cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
+            if (cleaned.Length > 1600)
+            {
+                cleaned = cleaned[..1600].TrimEnd();
+            }
+
+            return cleaned;
         }
 
         private static string? TryExtractChatCompletionText(string json)

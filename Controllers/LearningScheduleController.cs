@@ -6,6 +6,7 @@ using DW = DocumentFormat.OpenXml.Drawing.Wordprocessing;
 using PIC = DocumentFormat.OpenXml.Drawing.Pictures;
 using ETD.Api.Data;
 using ETD.Api.Models;
+using ETD.Api.Utils;
 using Microsoft.AspNetCore.Mvc;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -23,6 +24,9 @@ namespace ETD.Api.Controllers
         private const string TableBodyFontSizeHalfPt = "18"; // 9 pt
         private const string TableHeaderFontSizeHalfPt = "20"; // 10 pt
         private const string PageNumberFontSizeHalfPt = "20"; // 10 pt
+        private const uint PortraitA4PageWidthTwips = 11906U;
+        private const uint PortraitA4PageHeightTwips = 16838U;
+        private static readonly uint HeaderRowMinHeightTwips = (uint)CentimetresToTwips(0.8d);
 
         private static readonly int[] ColumnWidthsTwips =
         {
@@ -58,30 +62,8 @@ namespace ETD.Api.Controllers
             var subjectFilters = ResolveSubjectCodeRange(qualificationId, subjectFromId, subjectToId);
             var rows = BuildRows(qualificationId, startDate, subjectFilters);
             if (rows.Count == 0) return BadRequest("No toolkit data found for learning schedule export.");
-
-            var sb = new StringBuilder();
-            sb.AppendLine("Date,Day,Period,TimeStart,TimeEnd,TopicCode,TopicDescription,LPN,LessonPlanDescription,AssessmentCriteriaDescription,LecturerActions,LearnerActions,LearningAids");
-            foreach (var r in rows)
-            {
-                sb.AppendLine(string.Join(",",
-                    EscapeCsv(r.Date),
-                    EscapeCsv(r.Day),
-                    r.Period.ToString(),
-                    EscapeCsv(r.TimeStart),
-                    EscapeCsv(r.TimeEnd),
-                    EscapeCsv(r.TopicCode),
-                    EscapeCsv(r.TopicDescription),
-                    EscapeCsv(r.Lpn),
-                    EscapeCsv(r.LessonPlanDescription),
-                    EscapeCsv(r.AssessmentCriteriaDescription),
-                    EscapeCsv(r.LecturerActions),
-                    EscapeCsv(r.LearnerActions),
-                    EscapeCsv(r.LearningAids)));
-            }
-
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
             var suffix = BuildScheduleSuffix(qualificationId, subjectFilters);
-            return File(bytes, "text/csv", $"learning_schedule{suffix}.csv");
+            return File(BuildCsvBytes(rows), "text/csv", $"learning_schedule{suffix}.csv");
         }
 
         [HttpGet("download-docx")]
@@ -95,68 +77,70 @@ namespace ETD.Api.Controllers
             var rows = BuildRows(qualificationId, startDate, subjectFilters);
             if (rows.Count == 0) return BadRequest("No toolkit data found for learning schedule export.");
             var qualification = ResolveQualification(qualificationId);
-
-            using var ms = new MemoryStream();
-            using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document, true))
-            {
-                var main = doc.AddMainDocumentPart();
-                main.Document = new Document(new Body());
-                var body = main.Document.Body ?? (main.Document.Body = new Body());
-                var settingsPart = main.AddNewPart<DocumentSettingsPart>();
-                settingsPart.Settings = new Settings(new UpdateFieldsOnOpen() { Val = true });
-                settingsPart.Settings.Save();
-                var headerPart = main.AddNewPart<HeaderPart>();
-                headerPart.Header = new Header(BuildPageNumberHeaderParagraph());
-                headerPart.Header.Save();
-                var headerPartId = main.GetIdOfPart(headerPart);
-
-                var lecturerDisplayName = ResolveCoverLecturerDisplayName(qualificationId, qualification);
-                AppendCoverPage(body, main, qualification, lecturerDisplayName);
-                body.Append(new Paragraph(new Run(new Break() { Type = BreakValues.Page })));
-                AppendLegalDisclaimerPage(body, qualification);
-                body.Append(new Paragraph(new Run(new Break() { Type = BreakValues.Page })));
-
-                var table = new Table();
-                table.Append(new TableProperties(
-                    new TableWidth() { Type = TableWidthUnitValues.Pct, Width = "5000" },
-                    new TableLayout() { Type = TableLayoutValues.Fixed },
-                    new TableCellMarginDefault(
-                        new TopMargin() { Width = "12", Type = TableWidthUnitValues.Dxa },
-                        new BottomMargin() { Width = "12", Type = TableWidthUnitValues.Dxa },
-                        new TableCellLeftMargin() { Width = 12, Type = TableWidthValues.Dxa },
-                        new TableCellRightMargin() { Width = 12, Type = TableWidthValues.Dxa }),
-                    new TableBorders(
-                        new TopBorder() { Val = BorderValues.Single, Size = 6 },
-                        new BottomBorder() { Val = BorderValues.Single, Size = 6 },
-                        new LeftBorder() { Val = BorderValues.Single, Size = 6 },
-                        new RightBorder() { Val = BorderValues.Single, Size = 6 },
-                        new InsideHorizontalBorder() { Val = BorderValues.Single, Size = 6 },
-                        new InsideVerticalBorder() { Val = BorderValues.Single, Size = 6 })));
-                var tableGrid = new TableGrid();
-                foreach (var width in ColumnWidthsTwips)
-                {
-                    tableGrid.Append(new GridColumn() { Width = width.ToString() });
-                }
-                table.Append(tableGrid);
-
-                table.Append(MakeRow(new[]
-                {
-                    "Date","Day","Period","Time Start","Time End","Topic Code","Topic Description","LPN","Lesson Plan Description","Assessment Criteria Description","Lecturer Actions","Learner Actions","Learning Aids"
-                }, true));
-
-                foreach (var r in rows)
-                {
-                    table.Append(MakeRow(BuildDocxRowCells(r), false));
-                }
-
-                body.Append(table);
-                body.Append(BuildLandscapeSectionProperties(headerPartId));
-                main.Document.Save();
-            }
-
-            ms.Position = 0;
             var suffix = BuildScheduleSuffix(qualificationId, subjectFilters);
-            return File(ms.ToArray(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", $"learning_schedule{suffix}.docx");
+            return File(BuildDocxBytes(rows, qualificationId, qualification), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", $"learning_schedule{suffix}.docx");
+        }
+
+        [HttpGet("save")]
+        public IActionResult SaveCsv(
+            [FromQuery] int? qualificationId = null,
+            [FromQuery] DateTime? startDate = null,
+            [FromQuery] int? subjectFromId = null,
+            [FromQuery] int? subjectToId = null)
+        {
+            var subjectFilters = ResolveSubjectCodeRange(qualificationId, subjectFromId, subjectToId);
+            var rows = BuildRows(qualificationId, startDate, subjectFilters);
+            if (rows.Count == 0) return BadRequest("No toolkit data found for learning schedule export.");
+
+            var qualification = ResolveQualification(qualificationId);
+            if (qualification == null) return BadRequest("No qualification available for learning schedule export.");
+
+            var suffix = BuildScheduleSuffix(qualificationId, subjectFilters);
+            var fileName = $"learning_schedule{suffix}.csv";
+            var savedPath = LearningMaterialWorkspacePaths.SaveBytes(
+                qualification,
+                qualification.Id,
+                "Learning Schedule",
+                fileName,
+                BuildCsvBytes(rows));
+
+            return Ok(new
+            {
+                fileName,
+                savedPath,
+                folderPath = Path.GetDirectoryName(savedPath)
+            });
+        }
+
+        [HttpGet("save-docx")]
+        public IActionResult SaveDocx(
+            [FromQuery] int? qualificationId = null,
+            [FromQuery] DateTime? startDate = null,
+            [FromQuery] int? subjectFromId = null,
+            [FromQuery] int? subjectToId = null)
+        {
+            var subjectFilters = ResolveSubjectCodeRange(qualificationId, subjectFromId, subjectToId);
+            var rows = BuildRows(qualificationId, startDate, subjectFilters);
+            if (rows.Count == 0) return BadRequest("No toolkit data found for learning schedule export.");
+
+            var qualification = ResolveQualification(qualificationId);
+            if (qualification == null) return BadRequest("No qualification available for learning schedule export.");
+
+            var suffix = BuildScheduleSuffix(qualificationId, subjectFilters);
+            var fileName = $"learning_schedule{suffix}.docx";
+            var savedPath = LearningMaterialWorkspacePaths.SaveBytes(
+                qualification,
+                qualification.Id,
+                "Learning Schedule",
+                fileName,
+                BuildDocxBytes(rows, qualificationId, qualification));
+
+            return Ok(new
+            {
+                fileName,
+                savedPath,
+                folderPath = Path.GetDirectoryName(savedPath)
+            });
         }
 
         private Qualification? ResolveQualification(int? qualificationId)
@@ -191,85 +175,164 @@ namespace ETD.Api.Controllers
             return "LECTURER NAME SURNAME";
         }
 
+        private byte[] BuildCsvBytes(IReadOnlyList<ScheduleRow> rows)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Date,Day,Period,TimeStart,TimeEnd,TopicCode,TopicDescription,LPN,LessonPlanDescription,AssessmentCriteriaDescription,LecturerActions,LearnerActions,LearningAids");
+            foreach (var r in rows)
+            {
+                sb.AppendLine(string.Join(",",
+                    EscapeCsv(r.Date),
+                    EscapeCsv(r.Day),
+                    r.Period.ToString(),
+                    EscapeCsv(r.TimeStart),
+                    EscapeCsv(r.TimeEnd),
+                    EscapeCsv(r.TopicCode),
+                    EscapeCsv(r.TopicDescription),
+                    EscapeCsv(r.Lpn),
+                    EscapeCsv(r.LessonPlanDescription),
+                    EscapeCsv(r.AssessmentCriteriaDescription),
+                    EscapeCsv(r.LecturerActions),
+                    EscapeCsv(r.LearnerActions),
+                    EscapeCsv(r.LearningAids)));
+            }
+
+            return Encoding.UTF8.GetBytes(sb.ToString());
+        }
+
+        private byte[] BuildDocxBytes(IReadOnlyList<ScheduleRow> rows, int? qualificationId, Qualification? qualification)
+        {
+            using var ms = new MemoryStream();
+            using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document, true))
+            {
+                var main = doc.AddMainDocumentPart();
+                main.Document = new Document(new Body());
+                var body = main.Document.Body ?? (main.Document.Body = new Body());
+                var settingsPart = main.AddNewPart<DocumentSettingsPart>();
+                settingsPart.Settings = new Settings(new UpdateFieldsOnOpen() { Val = true });
+                settingsPart.Settings.Save();
+                var headerPart = main.AddNewPart<HeaderPart>();
+                headerPart.Header = new Header(BuildPageNumberHeaderParagraph());
+                headerPart.Header.Save();
+                var headerPartId = main.GetIdOfPart(headerPart);
+
+                var lecturerDisplayName = ResolveCoverLecturerDisplayName(qualificationId, qualification);
+                AppendCoverPage(body, main, qualification, lecturerDisplayName);
+                body.Append(new Paragraph(new Run(new Break() { Type = BreakValues.Page })));
+                AppendLegalDisclaimerPage(body, qualification);
+                body.Append(BuildPortraitSectionBreakParagraph(headerPartId));
+
+                var table = new Table();
+                table.Append(new TableProperties(
+                    new TableWidth() { Type = TableWidthUnitValues.Pct, Width = "5000" },
+                    new TableLayout() { Type = TableLayoutValues.Fixed },
+                    new TableCellMarginDefault(
+                        new TopMargin() { Width = "12", Type = TableWidthUnitValues.Dxa },
+                        new BottomMargin() { Width = "12", Type = TableWidthUnitValues.Dxa },
+                        new TableCellLeftMargin() { Width = 12, Type = TableWidthValues.Dxa },
+                        new TableCellRightMargin() { Width = 12, Type = TableWidthValues.Dxa }),
+                    new TableBorders(
+                        new TopBorder() { Val = BorderValues.Single, Size = 6 },
+                        new BottomBorder() { Val = BorderValues.Single, Size = 6 },
+                        new LeftBorder() { Val = BorderValues.Single, Size = 6 },
+                        new RightBorder() { Val = BorderValues.Single, Size = 6 },
+                        new InsideHorizontalBorder() { Val = BorderValues.Single, Size = 6 },
+                        new InsideVerticalBorder() { Val = BorderValues.Single, Size = 6 })));
+                var tableGrid = new TableGrid();
+                foreach (var width in ColumnWidthsTwips)
+                {
+                    tableGrid.Append(new GridColumn() { Width = width.ToString() });
+                }
+                table.Append(tableGrid);
+
+                table.Append(MakeRow(new[]
+                {
+                    "Date","Day","Period","Time Start","Time End","Topic Code","Topic Description","LPN","Lesson Plan Description","Assessment Criteria Description","Lecturer Actions","Learner Actions","Learning Aids"
+                }, true));
+
+                foreach (var row in rows)
+                {
+                    table.Append(MakeRow(BuildDocxRowCells(row), false));
+                }
+
+                body.Append(table);
+                body.Append(BuildLandscapeSectionProperties(headerPartId));
+                main.Document.Save();
+            }
+
+            return ms.ToArray();
+        }
+
         private static void AppendCoverPage(Body body, MainDocumentPart main, Qualification? qualification, string lecturerDisplayName)
         {
             var institution = (qualification?.LearningInstitutionName ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(institution)) institution = "LEARNING INSTITUTION NAME";
-            var lecturer = string.IsNullOrWhiteSpace(lecturerDisplayName) ? "LECTURER NAME SURNAME" : lecturerDisplayName.Trim();
-            var qualificationNumber = (qualification?.QualificationNumber ?? string.Empty).Trim();
-            var qualificationDescription = (qualification?.QualificationDescription ?? string.Empty).Trim();
-            var coverQualificationLine = "QUALIFICATION NUMBER: QUALIFICATION NAME / DESCRIPTION";
-            if (!string.IsNullOrWhiteSpace(qualificationNumber) || !string.IsNullOrWhiteSpace(qualificationDescription))
+            _ = lecturerDisplayName;
+            var coverQualificationLine = BuildCoverQualificationLine(qualification);
+            const string coverTextColor = "000000";
+            var topBlockStartTwips = CentimetresToTwips(7.0d);
+            var titleBlockGapTwips = string.IsNullOrWhiteSpace(coverQualificationLine)
+                ? CentimetresToTwips(12.0d)
+                : CentimetresToTwips(10.4d);
+
+            var coverLines = new List<DocxCoverPageOverlay.CoverTextLine>
             {
-                coverQualificationLine = "QUALIFICATION NUMBER: ";
-                if (!string.IsNullOrWhiteSpace(qualificationNumber))
+                new()
                 {
-                    coverQualificationLine += qualificationNumber;
-                }
-                if (!string.IsNullOrWhiteSpace(qualificationDescription))
+                    Text = institution.ToUpperInvariant(),
+                    FontSizeHalfPt = 52,
+                    Bold = true,
+                    BeforeTwips = topBlockStartTwips,
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
+                },
+                new()
                 {
-                    if (!string.IsNullOrWhiteSpace(qualificationNumber))
-                    {
-                        coverQualificationLine += " - ";
-                    }
-                    coverQualificationLine += qualificationDescription;
+                    Text = "LEARNING SCHEDULE",
+                    FontSizeHalfPt = 48,
+                    Bold = true,
+                    BeforeTwips = titleBlockGapTwips,
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
                 }
+            };
+            if (!string.IsNullOrWhiteSpace(coverQualificationLine))
+            {
+                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+                {
+                    Text = coverQualificationLine,
+                    FontSizeHalfPt = 50,
+                    Bold = true,
+                    BeforeTwips = 520,
+                    AfterTwips = 0,
+                    ColorHex = coverTextColor
+                });
             }
 
-            var titleTable = new Table(
-                new TableProperties(
-                    new TableWidth { Type = TableWidthUnitValues.Dxa, Width = "9800" },
-                    new TableLayout { Type = TableLayoutValues.Fixed },
-                    new TableJustification { Val = TableRowAlignmentValues.Center },
-                    new TableCellMarginDefault(
-                        new TopMargin() { Width = "100", Type = TableWidthUnitValues.Dxa },
-                        new BottomMargin() { Width = "100", Type = TableWidthUnitValues.Dxa },
-                        new TableCellLeftMargin() { Width = 100, Type = TableWidthValues.Dxa },
-                        new TableCellRightMargin() { Width = 100, Type = TableWidthValues.Dxa }),
-                    new TableBorders(
-                        new TopBorder() { Val = BorderValues.Single, Size = 18 },
-                        new BottomBorder() { Val = BorderValues.Single, Size = 18 },
-                        new LeftBorder() { Val = BorderValues.Single, Size = 18 },
-                        new RightBorder() { Val = BorderValues.Single, Size = 18 })),
-                new TableRow(
-                    new TableCell(
-                        new TableCellProperties(new TableCellWidth { Type = TableWidthUnitValues.Dxa, Width = "9800" }),
-                        CoverCenteredParagraph(institution.ToUpperInvariant(), "58", true, before: "280", after: "20"),
-                        CoverCenteredParagraph(lecturer.ToUpperInvariant(), "52", true, before: "0", after: "220"),
-                        CoverCenteredParagraph("LEARNING SCHEDULE", "74", true, before: "0", after: "40"),
-                        CoverCenteredParagraph(coverQualificationLine.ToUpperInvariant(), "34", true, before: "0", after: "180")
-                    ))
-            );
+            coverLines = coverLines
+                .OrderBy(line => string.Equals(line.Text, institution.ToUpperInvariant(), StringComparison.Ordinal) ? 0 :
+                    string.Equals(line.Text, coverQualificationLine, StringComparison.Ordinal) ? 1 : 2)
+                .ToList();
 
-            var institutionLogoPath = ResolveExistingPath(qualification?.LogoPath);
-            var qctoLogoPath = ResolveQctoLogoPath();
+            var appended = DocxCoverPageOverlay.TryAppendCenteredPortraitCoverPage(
+                body,
+                main,
+                ResolveLearningScheduleCoverPath(),
+                coverLines,
+                PortraitA4PageWidthTwips,
+                1U);
 
-            var logosTable = new Table(
-                new TableProperties(
-                    new TableWidth { Type = TableWidthUnitValues.Dxa, Width = "9800" },
-                    new TableLayout { Type = TableLayoutValues.Fixed },
-                    new TableJustification { Val = TableRowAlignmentValues.Center }),
-                new TableGrid(
-                    new GridColumn() { Width = "4900" },
-                    new GridColumn() { Width = "4900" }),
-                new TableRow(
-                    new TableCell(
-                        new TableCellProperties(new TableCellWidth { Type = TableWidthUnitValues.Dxa, Width = "4900" }),
-                        BuildLogoParagraph(main, institutionLogoPath, "Learning institution logo", 3_000_000L, 1_100_000L, 3001U)),
-                    new TableCell(
-                        new TableCellProperties(new TableCellWidth { Type = TableWidthUnitValues.Dxa, Width = "4900" }),
-                        BuildLogoParagraph(main, qctoLogoPath, "QCTO Logo", 3_800_000L, 1_200_000L, 3002U))
-                )
-            );
+            if (appended)
+            {
+                return;
+            }
 
-            body.Append(new Paragraph(
-                new ParagraphProperties(
-                    new Justification { Val = JustificationValues.Center },
-                    new SpacingBetweenLines { Before = "2500", After = "120" }),
-                new Run(new Text(" "))));
-            body.Append(titleTable);
-            body.Append(new Paragraph(new ParagraphProperties(new SpacingBetweenLines { Before = "120", After = "120" }), new Run(new Text(" "))));
-            body.Append(logosTable);
+            body.Append(CoverCenteredParagraph(institution.ToUpperInvariant(), "52", true, before: topBlockStartTwips.ToString(), after: "120"));
+            if (!string.IsNullOrWhiteSpace(coverQualificationLine))
+            {
+                body.Append(CoverCenteredParagraph(coverQualificationLine, "50", true, before: "520", after: "120"));
+            }
+            body.Append(CoverCenteredParagraph("LEARNING SCHEDULE", "48", true, before: titleBlockGapTwips.ToString(), after: "120"));
         }
 
         private List<ScheduleRow> BuildRows(int? qualificationId, DateTime? startDate, IReadOnlyList<string>? subjectCodes = null)
@@ -603,13 +666,16 @@ namespace ETD.Api.Controllers
             var row = new TableRow();
             if (header)
             {
-                row.AppendChild(new TableRowProperties(new TableHeader()));
+                row.AppendChild(new TableRowProperties(
+                    new TableHeader(),
+                    new TableRowHeight { Val = HeaderRowMinHeightTwips, HeightType = HeightRuleValues.AtLeast }));
             }
 
             var values = cells?.ToList() ?? new List<string>();
             for (var i = 0; i < values.Count; i++)
             {
                 var value = values[i] ?? string.Empty;
+                var isPeriodColumn = i == 2;
                 var isVerticalColumn = (header && VerticalHeaderColumnIndexes.Contains(i))
                     || (!header && VerticalBodyColumnIndexes.Contains(i));
                 var runProps = new RunProperties
@@ -622,9 +688,9 @@ namespace ETD.Api.Controllers
                     runProps.Bold = new Bold();
                 }
 
-                var paragraphAlignment = header
+                var paragraphAlignment = header || isVerticalColumn || isPeriodColumn
                     ? JustificationValues.Center
-                    : (isVerticalColumn ? JustificationValues.Center : JustificationValues.Left);
+                    : JustificationValues.Left;
                 var spacing = isVerticalColumn
                     ? new SpacingBetweenLines { Before = "0", After = "0" }
                     : new SpacingBetweenLines { Before = "0", After = "0", Line = "200", LineRule = LineSpacingRuleValues.Auto };
@@ -645,7 +711,12 @@ namespace ETD.Api.Controllers
                 {
                     cellProps.Append(new Shading() { Val = ShadingPatternValues.Clear, Color = "auto", Fill = "EDEDED" });
                 }
-                cellProps.Append(new TableCellVerticalAlignment { Val = TableVerticalAlignmentValues.Top });
+                cellProps.Append(new TableCellVerticalAlignment
+                {
+                    Val = header || isVerticalColumn || isPeriodColumn
+                        ? TableVerticalAlignmentValues.Center
+                        : TableVerticalAlignmentValues.Top
+                });
                 if (NoWrapColumnIndexes.Contains(i))
                 {
                     cellProps.Append(new NoWrap());
@@ -660,6 +731,28 @@ namespace ETD.Api.Controllers
             }
 
             return row;
+        }
+
+        private static Paragraph BuildPortraitSectionBreakParagraph(string headerPartId)
+        {
+            var sectionProperties = new SectionProperties(
+                new HeaderReference() { Type = HeaderFooterValues.Default, Id = headerPartId },
+                new SectionType() { Val = SectionMarkValues.NextPage },
+                new PageSize() { Orient = PageOrientationValues.Portrait, Width = PortraitA4PageWidthTwips, Height = PortraitA4PageHeightTwips },
+                new PageMargin
+                {
+                    Top = 720,
+                    Bottom = 720,
+                    Left = 720,
+                    Right = 720,
+                    Header = 240,
+                    Footer = 240,
+                    Gutter = 0
+                });
+
+            return new Paragraph(
+                new ParagraphProperties(sectionProperties),
+                new Run(new Text(string.Empty)));
         }
 
         private static SectionProperties BuildLandscapeSectionProperties(string headerPartId)
@@ -677,6 +770,18 @@ namespace ETD.Api.Controllers
                     Footer = 240,
                     Gutter = 0
                 });
+        }
+
+        private static int CentimetresToTwips(double centimetres)
+        {
+            return Math.Max(0, (int)Math.Round(centimetres * 1440d / 2.54d));
+        }
+
+        private static string BuildCoverQualificationLine(Qualification? qualification)
+        {
+            var qualificationDescription = (qualification?.QualificationDescription ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(qualificationDescription)) return qualificationDescription;
+            return (qualification?.QualificationNumber ?? string.Empty).Trim();
         }
 
         private static Paragraph BuildPageNumberHeaderParagraph()
@@ -871,6 +976,23 @@ namespace ETD.Api.Controllers
                         return ext is ".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif";
                     });
                 if (!string.IsNullOrWhiteSpace(match)) return match;
+            }
+
+            return null;
+        }
+
+        private static string? ResolveLearningScheduleCoverPath()
+        {
+            var candidates = new[]
+            {
+                Path.Combine("Imports", "Coverpages", "clean coverpage.jpg"),
+                Path.Combine("ETDP", "Imports", "Coverpages", "clean coverpage.jpg")
+            };
+
+            foreach (var relative in candidates)
+            {
+                var resolved = ResolveFromCurrentOrParents(relative, 6);
+                if (!string.IsNullOrWhiteSpace(resolved)) return resolved;
             }
 
             return null;

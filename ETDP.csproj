@@ -9,7 +9,7 @@
     <DockerfileContext>.</DockerfileContext>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <!-- Prevent recursive temp build snapshots from being scanned as project items -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);**\_tmpbuild*\**;Imports\**;Exports\**;Requests\**;Processed\**;SystemData\**;Backups\**;Bing\**;Google\**;AzureAgent\**;dotnetbuilder\**;api-etd\**;API's\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**\_tmp*\**;Imports\**;Exports\**;Requests\**;Processed\**;SystemData\**;Backups\**;Bing\**;Google\**;AzureAgent\**;dotnetbuilder\**;api-etd\**;API's\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,6 +36,13 @@
     <Compile Remove="dotnetbuilder\CurriculumRipTool\**\*.cs" />
     <EmbeddedResource Remove="dotnetbuilder\CurriculumRipTool\**\*" />
     <None Remove="dotnetbuilder\CurriculumRipTool\**\*" />
+    <!-- Exclude standalone simulation tooling -->
+    <Compile Remove="tools\KqSimulationHarness\**\*.cs" />
+    <EmbeddedResource Remove="tools\KqSimulationHarness\**\*" />
+    <None Remove="tools\KqSimulationHarness\**\*" />
+    <Compile Remove="tools\WorkbookSimulationHarness\**\*.cs" />
+    <EmbeddedResource Remove="tools\WorkbookSimulationHarness\**\*" />
+    <None Remove="tools\WorkbookSimulationHarness\**\*" />
   </ItemGroup>
 
   <ItemGroup>

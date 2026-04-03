@@ -15,6 +15,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Xml;
 
@@ -29,7 +30,7 @@ namespace ETD.Api.Controllers
         private readonly KnowledgeQuestionnaireV1Service _knowledgeQuestionnaireV1Service;
         private readonly SemanticKernelQuestionService _semanticKernelQuestionService;
         private const int FixedTotalMarks = 100;
-        private const int TrueFalseOptionCount = 4;
+        private const int TrueFalseOptionCount = 2;
         private const int DefaultMcqDistractors = 3;
         private const string DefaultSmiBaseUrl = "http://127.0.0.1:8099";
         private const int DefaultSmiTimeoutSeconds = 30;
@@ -43,6 +44,9 @@ namespace ETD.Api.Controllers
         private const uint PortraitA4PageHeightTwips = 16838U;
         private const uint PortraitCoverUsableWidthTwips = 9866U;
         private const string QuestionnaireUsableWidthTwips = "9866";
+        private const uint QuestionnairePageMarginTwips = 907U; // 1.6 cm
+        private const string QuestionnaireQuestionTableWidthTwips = "9960";
+        private const string QuestionnaireQuestionTableWrapperWidthTwips = "10020";
         private static readonly HttpClient _http = new HttpClient();
 
         public KnowledgeQuestionnaireController(
@@ -177,6 +181,8 @@ namespace ETD.Api.Controllers
             public int MultipleChoiceCount { get; set; }
             public int McqDistractors { get; set; } = DefaultMcqDistractors;
             public string? LessonPlanContent { get; set; }
+            public bool PersistToDatabase { get; set; }
+            public string? QuestionnaireTitle { get; set; }
         }
 
         public sealed class PhaseSmiDraftRequest
@@ -190,6 +196,24 @@ namespace ETD.Api.Controllers
             public int? MinimumQuestionsPerCriterion { get; set; }
             public int? MinimumTotalQuestions { get; set; }
             public int McqDistractors { get; set; } = DefaultMcqDistractors;
+            public bool PersistToDatabase { get; set; }
+            public string? QuestionnaireTitle { get; set; }
+            public string? MainCategoryCode { get; set; }
+            public string? MainCategoryLabel { get; set; }
+        }
+
+        public sealed class ContentPhaseSmiDraftRequest
+        {
+            public int QualificationId { get; set; }
+            public int PhaseId { get; set; }
+            public List<int> SubjectIds { get; set; } = new();
+            public int TrueFalseCount { get; set; }
+            public int MultipleChoiceCount { get; set; }
+            public int McqDistractors { get; set; } = DefaultMcqDistractors;
+            public bool PersistToDatabase { get; set; }
+            public string? QuestionnaireTitle { get; set; }
+            public string? MainCategoryCode { get; set; }
+            public string? MainCategoryLabel { get; set; }
         }
 
         public sealed class PhaseQuestionnaireDocxQuestionRow
@@ -256,6 +280,8 @@ namespace ETD.Api.Controllers
             public int MultipleChoiceQuestions { get; set; }
             public List<SmiDraftQuestionDto> Questions { get; set; } = new();
             public List<string> LearningResourceSuggestions { get; set; } = new();
+            public int PersistedQuestionnaireCount { get; set; }
+            public List<int> PersistedQuestionnaireIds { get; set; } = new();
         }
 
         [HttpPost("smi-draft")]
@@ -283,7 +309,8 @@ namespace ETD.Api.Controllers
             }
 
             var distractorCount = DefaultMcqDistractors;
-            var items = AssessmentDrivenQuestionGenerator.BuildOrderedLessonEvidence(_context, subject.Id);
+            var items = BuildLessonPlanContentOnlyItems(
+                AssessmentDrivenQuestionGenerator.BuildOrderedLessonEvidence(_context, subject.Id));
             if (payload.TopicId.HasValue && payload.TopicId.Value > 0)
             {
                 items = items.Where(i => i.TopicId == payload.TopicId.Value).ToList();
@@ -292,13 +319,24 @@ namespace ETD.Api.Controllers
             var lessonPlanOverride = (payload.LessonPlanContent ?? string.Empty).Trim();
             if (!string.IsNullOrWhiteSpace(lessonPlanOverride) && items.Count > 0)
             {
-                items = ApplyLessonContentOverride(items, lessonPlanOverride);
+                items = BuildLessonPlanContentOnlyItems(ApplyLessonContentOverride(items, lessonPlanOverride));
             }
 
             if (items.Count == 0)
             {
-                return BadRequest("No lesson evidence was resolved for the selected scope.");
+                return BadRequest("No non-empty lesson plan content was resolved for the selected scope.");
             }
+
+            var itemLookup = items
+                .Where(item => !string.IsNullOrWhiteSpace(item.BundleKey))
+                .GroupBy(item => item.BundleKey, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group
+                        .OrderBy(item => item.LessonSortOrder)
+                        .ThenBy(item => item.LessonPlanLabel, StringComparer.OrdinalIgnoreCase)
+                        .First(),
+                    StringComparer.OrdinalIgnoreCase);
 
             var smiResult = await TryBuildQuestionsWithSmiAsync(
                 items,
@@ -318,32 +356,66 @@ namespace ETD.Api.Controllers
             {
                 Success = true,
                 QuestionSource = smiResult.UsedDeterministicFallback
-                    ? "Generated with SMI lesson-content workflow (deterministic fallback used for non-parseable responses)."
-                    : "Generated with SMI lesson-content workflow",
+                    ? "Generated with the lesson-plan-content-only SMI workflow (deterministic fallback used for non-parseable responses)."
+                    : "Generated with the lesson-plan-content-only SMI workflow",
                 TotalQuestions = smiResult.Questions.Count,
                 TrueFalseQuestions = smiResult.Questions.Count(q => string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
                 MultipleChoiceQuestions = smiResult.Questions.Count(q => !string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
                 Questions = smiResult.Questions
-                    .Select(q => new SmiDraftQuestionDto
+                    .Select(q =>
                     {
-                        Number = q.Number,
-                        Type = q.Type,
-                        Prompt = q.Prompt,
-                        Options = q.Options ?? new List<string>(),
-                        CorrectAnswer = q.CorrectAnswer,
-                        SubjectCode = (subject.SubjectCode ?? string.Empty).Trim(),
-                        SubjectDescription = (subject.SubjectDescription ?? string.Empty).Trim(),
-                        TopicCode = q.TopicCode,
-                        TopicDescription = q.TopicDescription,
-                        AssessmentCriteriaNumber = string.Empty,
-                        LessonPlanLabel = q.LessonPlanLabel,
-                        AssessmentCriteriaDescription = q.AssessmentCriteriaDescription,
-                        Rationale = q.Rationale,
-                        Marks = q.Marks
+                        itemLookup.TryGetValue(q.BundleKey ?? string.Empty, out var item);
+                        return new SmiDraftQuestionDto
+                        {
+                            Number = q.Number,
+                            Type = q.Type,
+                            Prompt = q.Prompt,
+                            Options = q.Options ?? new List<string>(),
+                            CorrectAnswer = q.CorrectAnswer,
+                            SubjectCode = (subject.SubjectCode ?? string.Empty).Trim(),
+                            SubjectDescription = (subject.SubjectDescription ?? string.Empty).Trim(),
+                            TopicCode = q.TopicCode,
+                            TopicDescription = q.TopicDescription,
+                            AssessmentCriteriaNumber = item?.AssessmentCriteriaId > 0 ? $"AC-{item.AssessmentCriteriaId}" : string.Empty,
+                            LessonPlanLabel = q.LessonPlanLabel,
+                            AssessmentCriteriaDescription = string.IsNullOrWhiteSpace(q.AssessmentCriteriaDescription)
+                                ? item?.AssessmentCriteriaDescription ?? string.Empty
+                                : q.AssessmentCriteriaDescription,
+                            Rationale = q.Rationale,
+                            Marks = q.Marks
+                        };
                     })
                     .ToList(),
                 LearningResourceSuggestions = smiResult.ResourceSuggestions
             };
+
+            if (payload.PersistToDatabase)
+            {
+                response.PersistedQuestionnaireIds = await UpsertGeneratedQuestionnairesAsync(
+                    qualification,
+                    new List<PersistedSubjectQuestionnaire>
+                    {
+                        new()
+                        {
+                            Subject = subject,
+                            Title = ResolvePersistedQuestionnaireTitle(
+                                payload.QuestionnaireTitle,
+                                subject.SubjectCode,
+                                subject.SubjectDescription,
+                                null,
+                                null),
+                            QuestionSource = response.QuestionSource,
+                            Questions = response.Questions
+                        }
+                    },
+                    phaseId: null,
+                    phaseName: string.Empty,
+                    phaseDescription: string.Empty,
+                    mainCategoryCode: string.Empty,
+                    mainCategoryLabel: string.Empty,
+                    HttpContext.RequestAborted);
+                response.PersistedQuestionnaireCount = response.PersistedQuestionnaireIds.Count;
+            }
 
             return Ok(response);
         }
@@ -468,7 +540,7 @@ namespace ETD.Api.Controllers
             var phaseSeeds = BuildPhaseCriterionSeeds(subjects, draft);
             if (phaseSeeds.Count == 0)
             {
-                return BadRequest("No KQ-routed lesson evidence was resolved for the selected curriculum phase.");
+                return BadRequest("No non-empty lesson plan content rows were resolved for the selected curriculum phase.");
             }
 
             var smiResult = await TryBuildPhaseQuestionsWithSmiAsync(
@@ -490,20 +562,14 @@ namespace ETD.Api.Controllers
                 row => row,
                 StringComparer.OrdinalIgnoreCase);
 
-            var response = new SmiDraftResponse
-            {
-                Success = true,
-                QuestionSource = smiResult.UsedDeterministicFallback
-                    ? "Generated with the consolidated phase-wide SMI workflow (deterministic fallback used where SMI output was not parseable)."
-                    : "Generated with the consolidated phase-wide SMI workflow",
-                TotalQuestions = smiResult.Questions.Count,
-                TrueFalseQuestions = smiResult.Questions.Count(q => string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
-                MultipleChoiceQuestions = smiResult.Questions.Count(q => !string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
-                Questions = smiResult.Questions
-                    .Select(q =>
+            var mappedQuestions = smiResult.Questions
+                .Select(q =>
+                {
+                    seedLookup.TryGetValue(q.BundleKey ?? string.Empty, out var seed);
+                    return new
                     {
-                        seedLookup.TryGetValue(q.BundleKey ?? string.Empty, out var seed);
-                        return new SmiDraftQuestionDto
+                        Seed = seed,
+                        Question = new SmiDraftQuestionDto
                         {
                             Number = q.Number,
                             Type = q.Type,
@@ -519,11 +585,250 @@ namespace ETD.Api.Controllers
                             AssessmentCriteriaDescription = q.AssessmentCriteriaDescription,
                             Rationale = q.Rationale,
                             Marks = q.Marks
-                        };
-                    })
+                        }
+                    };
+                })
+                .ToList();
+
+            var response = new SmiDraftResponse
+            {
+                Success = true,
+                QuestionSource = smiResult.UsedDeterministicFallback
+                    ? "Generated with the consolidated lesson-plan-content-only SMI workflow (deterministic fallback used where SMI output was not parseable)."
+                    : "Generated with the consolidated lesson-plan-content-only SMI workflow",
+                TotalQuestions = smiResult.Questions.Count,
+                TrueFalseQuestions = smiResult.Questions.Count(q => string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
+                MultipleChoiceQuestions = smiResult.Questions.Count(q => !string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
+                Questions = mappedQuestions
+                    .Select(row => row.Question)
                     .ToList(),
                 LearningResourceSuggestions = smiResult.ResourceSuggestions
             };
+
+            if (payload.PersistToDatabase)
+            {
+                var persistedEntries = mappedQuestions
+                    .Where(row => row.Seed?.Subject != null)
+                    .GroupBy(row => row.Seed!.Subject.Id)
+                    .Select(group =>
+                    {
+                        var subject = group.First().Seed!.Subject;
+                        return new PersistedSubjectQuestionnaire
+                        {
+                            Subject = subject,
+                            Title = ResolvePersistedQuestionnaireTitle(
+                                payload.QuestionnaireTitle,
+                                subject.SubjectCode,
+                                subject.SubjectDescription,
+                                payload.MainCategoryCode,
+                                payload.MainCategoryLabel),
+                            QuestionSource = response.QuestionSource,
+                            Questions = group
+                                .Select(row => row.Question)
+                                .OrderBy(row => row.Number)
+                                .ToList()
+                        };
+                    })
+                    .Where(row => row.Questions.Count > 0)
+                    .ToList();
+
+                response.PersistedQuestionnaireIds = await UpsertGeneratedQuestionnairesAsync(
+                    qualification,
+                    persistedEntries,
+                    payload.PhaseId,
+                    draft.PhaseCode,
+                    draft.PhaseDescription,
+                    payload.MainCategoryCode,
+                    payload.MainCategoryLabel,
+                    HttpContext.RequestAborted);
+                response.PersistedQuestionnaireCount = response.PersistedQuestionnaireIds.Count;
+            }
+
+            return Ok(response);
+        }
+
+        [HttpPost("v1-phase-content-smi-draft")]
+        public async Task<IActionResult> GeneratePhaseContentSmiDraft([FromBody] ContentPhaseSmiDraftRequest? request)
+        {
+            if (!IsSmiIntegrationEnabled())
+            {
+                return BadRequest("SMI integration is disabled. Set SMI_ENABLED=true to enable SMI-first generation.");
+            }
+
+            var payload = request ?? new ContentPhaseSmiDraftRequest();
+            if (payload.QualificationId <= 0) return BadRequest("qualificationId is required.");
+            if (payload.PhaseId <= 0) return BadRequest("phaseId is required.");
+
+            KnowledgeQuestionnaireV1Service.KnowledgeQuestionnaireV1Draft draft;
+            try
+            {
+                draft = _knowledgeQuestionnaireV1Service.BuildPhaseDraft(payload.QualificationId, payload.PhaseId);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+
+            var requestedSubjectIds = (payload.SubjectIds ?? new List<int>())
+                .Where(id => id > 0)
+                .Distinct()
+                .ToHashSet();
+
+            var draftSubjectIds = (draft.Subjects ?? new List<KnowledgeQuestionnaireV1Service.KnowledgeQuestionnaireV1SubjectScope>())
+                .Select(s => s.SubjectId)
+                .Where(id => id > 0)
+                .Distinct()
+                .ToHashSet();
+
+            if (requestedSubjectIds.Count == 0)
+            {
+                requestedSubjectIds = draftSubjectIds;
+            }
+            else
+            {
+                requestedSubjectIds.IntersectWith(draftSubjectIds);
+            }
+
+            if (requestedSubjectIds.Count == 0)
+            {
+                return BadRequest("No subjects were resolved for the selected content-only scope.");
+            }
+
+            var subjects = _context.Subjects
+                .AsNoTracking()
+                .Include(s => s.Qualification)
+                .Where(s => s.QualificationId == draft.QualificationId && requestedSubjectIds.Contains(s.Id))
+                .Where(HasSubjectIdentity)
+                .OrderBy(s => s.SubjectCode)
+                .ThenBy(s => s.Id)
+                .ToList();
+
+            if (subjects.Count == 0)
+            {
+                return BadRequest("No subjects were found for the selected content-only scope.");
+            }
+
+            var qualification = subjects
+                .Select(s => s.Qualification)
+                .FirstOrDefault(q => q != null);
+            if (qualification == null)
+            {
+                return BadRequest("No qualification available for SMI draft generation.");
+            }
+
+            var trueFalseCount = Math.Max(0, payload.TrueFalseCount);
+            var multipleChoiceCount = Math.Max(0, payload.MultipleChoiceCount);
+            if ((trueFalseCount + multipleChoiceCount) == 0)
+            {
+                trueFalseCount = 6;
+                multipleChoiceCount = 6;
+            }
+
+            var phaseSeeds = BuildPhaseContentSeeds(subjects);
+            if (phaseSeeds.Count == 0)
+            {
+                return BadRequest("No non-empty lesson plan content rows were resolved for the selected content-only scope.");
+            }
+
+            var smiResult = await TryBuildPhaseContentQuestionsWithSmiAsync(
+                phaseSeeds,
+                qualification,
+                trueFalseCount,
+                multipleChoiceCount,
+                payload.McqDistractors,
+                HttpContext.RequestAborted);
+
+            if (smiResult.Questions.Count == 0)
+            {
+                return BadRequest("SMI did not return parseable questionnaire JSON for the selected lesson-plan content.");
+            }
+
+            var seedLookup = phaseSeeds.ToDictionary(
+                row => row.Item.BundleKey,
+                row => row,
+                StringComparer.OrdinalIgnoreCase);
+
+            var mappedQuestions = smiResult.Questions
+                .Select(q =>
+                {
+                    seedLookup.TryGetValue(q.BundleKey ?? string.Empty, out var seed);
+                    return new
+                    {
+                        Seed = seed,
+                        Question = new SmiDraftQuestionDto
+                        {
+                            Number = q.Number,
+                            Type = q.Type,
+                            Prompt = q.Prompt,
+                            Options = q.Options ?? new List<string>(),
+                            CorrectAnswer = q.CorrectAnswer,
+                            SubjectCode = seed?.SubjectCode ?? string.Empty,
+                            SubjectDescription = seed?.SubjectDescription ?? string.Empty,
+                            TopicCode = q.TopicCode,
+                            TopicDescription = q.TopicDescription,
+                            AssessmentCriteriaNumber = string.Empty,
+                            LessonPlanLabel = q.LessonPlanLabel,
+                            AssessmentCriteriaDescription = string.Empty,
+                            Rationale = q.Rationale,
+                            Marks = q.Marks
+                        }
+                    };
+                })
+                .ToList();
+
+            var response = new SmiDraftResponse
+            {
+                Success = true,
+                QuestionSource = smiResult.UsedDeterministicFallback
+                    ? "Generated with the lesson-plan-content-only SMI workflow using free content seeds (deterministic fallback used where SMI output was not parseable)."
+                    : "Generated with the lesson-plan-content-only SMI workflow using free content seeds",
+                TotalQuestions = smiResult.Questions.Count,
+                TrueFalseQuestions = smiResult.Questions.Count(q => string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
+                MultipleChoiceQuestions = smiResult.Questions.Count(q => !string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
+                Questions = mappedQuestions
+                    .Select(row => row.Question)
+                    .ToList(),
+                LearningResourceSuggestions = smiResult.ResourceSuggestions
+            };
+
+            if (payload.PersistToDatabase)
+            {
+                var persistedEntries = mappedQuestions
+                    .Where(row => row.Seed?.Subject != null)
+                    .GroupBy(row => row.Seed!.Subject.Id)
+                    .Select(group =>
+                    {
+                        var subject = group.First().Seed!.Subject;
+                        return new PersistedSubjectQuestionnaire
+                        {
+                            Subject = subject,
+                            Title = ResolvePersistedQuestionnaireTitle(
+                                payload.QuestionnaireTitle,
+                                subject.SubjectCode,
+                                subject.SubjectDescription,
+                                payload.MainCategoryCode,
+                                payload.MainCategoryLabel),
+                            QuestionSource = response.QuestionSource,
+                            Questions = group
+                                .Select(row => row.Question)
+                                .OrderBy(row => row.Number)
+                                .ToList()
+                        };
+                    })
+                    .Where(row => row.Questions.Count > 0)
+                    .ToList();
+
+                response.PersistedQuestionnaireIds = await UpsertGeneratedContentQuestionnairesAsync(
+                    qualification,
+                    persistedEntries,
+                    payload.PhaseId,
+                    draft.PhaseCode,
+                    draft.PhaseDescription,
+                    payload.MainCategoryCode,
+                    payload.MainCategoryLabel,
+                    HttpContext.RequestAborted);
+                response.PersistedQuestionnaireCount = response.PersistedQuestionnaireIds.Count;
+            }
 
             return Ok(response);
         }
@@ -569,6 +874,153 @@ namespace ETD.Api.Controllers
                 generated.FileBytes,
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 generated.FileName);
+        }
+
+        [HttpPost("v1-phase-save-docx")]
+        public IActionResult SavePhaseQuestionnaireDocx([FromBody] PhaseQuestionnaireDocxExportRequest? request)
+        {
+            var payload = request ?? new PhaseQuestionnaireDocxExportRequest();
+            if (payload.QualificationId <= 0) return BadRequest("qualificationId is required.");
+
+            var qualification = _context.Qualifications
+                .AsNoTracking()
+                .FirstOrDefault(q => q.Id == payload.QualificationId);
+            if (qualification == null)
+            {
+                return BadRequest("No qualification available for Knowledge Questionnaire DOCX export.");
+            }
+
+            var questions = (payload.Questions ?? new List<PhaseQuestionnaireDocxQuestionRow>())
+                .Select(NormalizePhaseQuestionnaireDocxQuestionRow)
+                .Where(row => row.Number > 0 && !string.IsNullOrWhiteSpace(row.Prompt))
+                .OrderBy(row => row.Number)
+                .ThenBy(row => row.SubjectCode, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(row => row.TopicCode, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (questions.Count == 0)
+            {
+                return BadRequest("No generated questionnaire rows were supplied for DOCX export.");
+            }
+
+            var generated = BuildPhaseQuestionnaireDocument(
+                qualification,
+                payload,
+                questions);
+
+            if (!generated.Success)
+            {
+                return BadRequest(generated.ErrorMessage);
+            }
+
+            var savedPath = LearningMaterialWorkspacePaths.SaveBytes(
+                qualification,
+                qualification.Id,
+                "Summative Assessment",
+                generated.FileName,
+                generated.FileBytes);
+
+            return Ok(new
+            {
+                fileName = Path.GetFileName(savedPath),
+                savedPath,
+                folderPath = Path.GetDirectoryName(savedPath)
+            });
+        }
+
+        [HttpPost("v1-phase-export-memorandum-docx")]
+        public IActionResult ExportPhaseQuestionnaireMemorandumDocx([FromBody] PhaseQuestionnaireDocxExportRequest? request)
+        {
+            var payload = request ?? new PhaseQuestionnaireDocxExportRequest();
+            if (payload.QualificationId <= 0) return BadRequest("qualificationId is required.");
+
+            var qualification = _context.Qualifications
+                .AsNoTracking()
+                .FirstOrDefault(q => q.Id == payload.QualificationId);
+            if (qualification == null)
+            {
+                return BadRequest("No qualification available for Knowledge Questionnaire memorandum DOCX export.");
+            }
+
+            var questions = (payload.Questions ?? new List<PhaseQuestionnaireDocxQuestionRow>())
+                .Select(NormalizePhaseQuestionnaireDocxQuestionRow)
+                .Where(row => row.Number > 0 && !string.IsNullOrWhiteSpace(row.Prompt))
+                .OrderBy(row => row.Number)
+                .ThenBy(row => row.SubjectCode, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(row => row.TopicCode, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (questions.Count == 0)
+            {
+                return BadRequest("No generated questionnaire rows were supplied for memorandum DOCX export.");
+            }
+
+            var generated = BuildPhaseQuestionnaireMemorandumDocument(
+                qualification,
+                payload,
+                questions);
+
+            if (!generated.Success)
+            {
+                return BadRequest(generated.ErrorMessage);
+            }
+
+            return File(
+                generated.FileBytes,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                generated.FileName);
+        }
+
+        [HttpPost("v1-phase-save-memorandum-docx")]
+        public IActionResult SavePhaseQuestionnaireMemorandumDocx([FromBody] PhaseQuestionnaireDocxExportRequest? request)
+        {
+            var payload = request ?? new PhaseQuestionnaireDocxExportRequest();
+            if (payload.QualificationId <= 0) return BadRequest("qualificationId is required.");
+
+            var qualification = _context.Qualifications
+                .AsNoTracking()
+                .FirstOrDefault(q => q.Id == payload.QualificationId);
+            if (qualification == null)
+            {
+                return BadRequest("No qualification available for Knowledge Questionnaire memorandum DOCX export.");
+            }
+
+            var questions = (payload.Questions ?? new List<PhaseQuestionnaireDocxQuestionRow>())
+                .Select(NormalizePhaseQuestionnaireDocxQuestionRow)
+                .Where(row => row.Number > 0 && !string.IsNullOrWhiteSpace(row.Prompt))
+                .OrderBy(row => row.Number)
+                .ThenBy(row => row.SubjectCode, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(row => row.TopicCode, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (questions.Count == 0)
+            {
+                return BadRequest("No generated questionnaire rows were supplied for memorandum DOCX export.");
+            }
+
+            var generated = BuildPhaseQuestionnaireMemorandumDocument(
+                qualification,
+                payload,
+                questions);
+
+            if (!generated.Success)
+            {
+                return BadRequest(generated.ErrorMessage);
+            }
+
+            var savedPath = LearningMaterialWorkspacePaths.SaveBytes(
+                qualification,
+                qualification.Id,
+                "Summative Memoranda",
+                generated.FileName,
+                generated.FileBytes);
+
+            return Ok(new
+            {
+                fileName = Path.GetFileName(savedPath),
+                savedPath,
+                folderPath = Path.GetDirectoryName(savedPath)
+            });
         }
 
         [HttpGet("download")]
@@ -678,6 +1130,8 @@ namespace ETD.Api.Controllers
                 var settingsPart = main.AddNewPart<DocumentSettingsPart>();
                 settingsPart.Settings = new Settings(new UpdateFieldsOnOpen() { Val = true });
                 settingsPart.Settings.Save();
+                EnsureKnowledgeQuestionnaireStyles(main);
+                var footerRelId = EnsureKnowledgeQuestionnaireFooter(main);
 
                 AppendCleanCoverPage(
                     body,
@@ -694,7 +1148,8 @@ namespace ETD.Api.Controllers
                 {
                     DocumentTitle = "Knowledge Questionnaire",
                     DocumentType = "Summative Assessment",
-                    Phase = "Knowledge Learning"
+                    Phase = "Knowledge Learning",
+                    IncludeAiAssistedLegalBlock = false
                 });
                 body.Append(PageBreak());
 
@@ -741,7 +1196,7 @@ namespace ETD.Api.Controllers
                     body.Append(BodyPara("No subjects produced assessment-criteria questionnaire items.", 22));
                 }
 
-                body.Append(DefaultSectionProperties());
+                body.Append(DefaultSectionProperties(footerRelId));
                 main.Document.Save();
             }
 
@@ -857,6 +1312,11 @@ namespace ETD.Api.Controllers
                 var main = doc.AddMainDocumentPart();
                 main.Document = new Document(new Body());
                 var body = main.Document.Body ?? (main.Document.Body = new Body());
+                var settingsPart = main.AddNewPart<DocumentSettingsPart>();
+                settingsPart.Settings = new Settings(new UpdateFieldsOnOpen() { Val = true });
+                settingsPart.Settings.Save();
+                EnsureKnowledgeQuestionnaireStyles(main);
+                var footerRelId = EnsureKnowledgeQuestionnaireFooter(main);
 
                 var firstCode = (subjects.FirstOrDefault()?.SubjectCode ?? string.Empty).Trim();
                 var lastCode = (subjects.LastOrDefault()?.SubjectCode ?? string.Empty).Trim();
@@ -879,7 +1339,8 @@ namespace ETD.Api.Controllers
                 {
                     DocumentTitle = "Knowledge Questionnaire Memorandum",
                     DocumentType = "Summative Assessment Memorandum",
-                    Phase = "Knowledge Learning"
+                    Phase = "Knowledge Learning",
+                    IncludeAiAssistedLegalBlock = false
                 });
                 body.Append(PageBreak());
 
@@ -932,7 +1393,7 @@ namespace ETD.Api.Controllers
                     body.Append(BodyPara("No subject in the selected range produced questionnaire questions.", 22));
                 }
 
-                body.Append(DefaultSectionProperties());
+                body.Append(DefaultSectionProperties(footerRelId));
                 main.Document.Save();
             }
 
@@ -1134,6 +1595,8 @@ namespace ETD.Api.Controllers
                 var settingsPart = main.AddNewPart<DocumentSettingsPart>();
                 settingsPart.Settings = new Settings(new UpdateFieldsOnOpen() { Val = true });
                 settingsPart.Settings.Save();
+                EnsureKnowledgeQuestionnaireStyles(main);
+                var footerRelId = EnsureKnowledgeQuestionnaireFooter(main);
 
                 AppendCleanCoverPage(
                     body,
@@ -1163,7 +1626,8 @@ namespace ETD.Api.Controllers
                 {
                     DocumentTitle = "Knowledge Questionnaire",
                     DocumentType = "Summative Assessment",
-                    Phase = "Knowledge Learning"
+                    Phase = "Knowledge Learning",
+                    IncludeAiAssistedLegalBlock = false
                 });
                 body.Append(PageBreak());
 
@@ -1209,7 +1673,7 @@ namespace ETD.Api.Controllers
                     }
                 }
 
-                body.Append(DefaultSectionProperties());
+                body.Append(DefaultSectionProperties(footerRelId));
                 main.Document.Save();
             }
 
@@ -1334,6 +1798,11 @@ namespace ETD.Api.Controllers
                 var main = doc.AddMainDocumentPart();
                 main.Document = new Document(new Body());
                 var body = main.Document.Body ?? (main.Document.Body = new Body());
+                var settingsPart = main.AddNewPart<DocumentSettingsPart>();
+                settingsPart.Settings = new Settings(new UpdateFieldsOnOpen() { Val = true });
+                settingsPart.Settings.Save();
+                EnsureKnowledgeQuestionnaireStyles(main);
+                var footerRelId = EnsureKnowledgeQuestionnaireFooter(main);
 
                 AppendCleanCoverPage(
                     body,
@@ -1356,7 +1825,8 @@ namespace ETD.Api.Controllers
                 {
                     DocumentTitle = "Knowledge Questionnaire Memorandum",
                     DocumentType = "Summative Assessment Memorandum",
-                    Phase = "Knowledge Learning"
+                    Phase = "Knowledge Learning",
+                    IncludeAiAssistedLegalBlock = false
                 });
                 body.Append(PageBreak());
 
@@ -1378,7 +1848,7 @@ namespace ETD.Api.Controllers
                 body.Append(table);
                 body.Append(Blank());
                 body.Append(BodyPara($"Question source: {questionSource}.", 22));
-                body.Append(DefaultSectionProperties());
+                body.Append(DefaultSectionProperties(footerRelId));
                 main.Document.Save();
             }
 
@@ -1424,6 +1894,8 @@ namespace ETD.Api.Controllers
                 var settingsPart = main.AddNewPart<DocumentSettingsPart>();
                 settingsPart.Settings = new Settings(new UpdateFieldsOnOpen() { Val = true });
                 settingsPart.Settings.Save();
+                EnsureKnowledgeQuestionnaireStyles(main);
+                var footerRelId = EnsureKnowledgeQuestionnaireFooter(main);
 
                 AppendCleanCoverPage(
                     body,
@@ -1442,7 +1914,8 @@ namespace ETD.Api.Controllers
                     DocumentType = "Summative Assessment",
                     Phase = string.IsNullOrWhiteSpace(phaseLabel) ? "Knowledge Learning" : phaseLabel,
                     DocumentDeveloper = (payload.CreatedBy ?? string.Empty).Trim(),
-                    Moderator = (payload.ReviewedBy ?? string.Empty).Trim()
+                    Moderator = (payload.ReviewedBy ?? string.Empty).Trim(),
+                    IncludeAiAssistedLegalBlock = false
                 });
                 body.Append(PageBreak());
 
@@ -1469,7 +1942,7 @@ namespace ETD.Api.Controllers
                 body.Append(BodyPara("1. Answer all questions.", 22));
                 body.Append(BodyPara("2. Each question carries 1 mark unless otherwise stated.", 22));
                 body.Append(BodyPara("3. Multiple Choice questions require one correct answer only.", 22));
-                body.Append(BodyPara("4. True/False questions require you to mark each option as True or False where indicated.", 22));
+                body.Append(BodyPara("4. True/False questions require you to select either True or False for the statement shown.", 22));
                 body.Append(BodyPara("5. Read each question carefully before answering.", 22));
                 body.Append(Blank());
 
@@ -1477,6 +1950,7 @@ namespace ETD.Api.Controllers
                 string? lastTopicLine = null;
                 foreach (var question in questions.OrderBy(row => row.Number))
                 {
+                    string? topicHeaderText = null;
                     var subjectLine = string.Join(" - ", new[]
                     {
                         (question.SubjectCode ?? string.Empty).Trim(),
@@ -1491,7 +1965,7 @@ namespace ETD.Api.Controllers
                     if (!string.IsNullOrWhiteSpace(subjectLine) &&
                         !string.Equals(subjectLine, lastSubjectLine, StringComparison.OrdinalIgnoreCase))
                     {
-                        body.Append(StyledHeading(subjectLine.ToUpperInvariant(), "Heading2", 20));
+                        body.Append(StyledHeading(subjectLine.ToUpperInvariant(), "Heading2", 20, keepNext: true));
                         lastSubjectLine = subjectLine;
                         lastTopicLine = null;
                     }
@@ -1499,17 +1973,17 @@ namespace ETD.Api.Controllers
                     if (!string.IsNullOrWhiteSpace(topicLine) &&
                         !string.Equals(topicLine, lastTopicLine, StringComparison.OrdinalIgnoreCase))
                     {
-                        body.Append(QuestionMetaParagraph($"Topic: {topicLine}", 18, bold: true));
+                        topicHeaderText = $"Topic: {topicLine}";
                         lastTopicLine = topicLine;
                     }
 
-                    body.Append(BuildPhaseQuestionTable(question));
+                    body.Append(BuildPhaseQuestionTable(question, topicHeaderText));
                     body.Append(Blank());
                 }
 
                 body.Append(StyledHeading("END OF QUESTIONNAIRE", "Heading1", 20));
                 body.Append(BodyPara($"Total marks: {totalMarks}", 22));
-                body.Append(DefaultSectionProperties());
+                body.Append(DefaultSectionProperties(footerRelId));
                 main.Document.Save();
             }
 
@@ -1517,6 +1991,136 @@ namespace ETD.Api.Controllers
             var qualificationCode = MakeSafeFilePart(qualification.QualificationNumber, "QUALIFICATION");
             var categoryCode = MakeSafeFilePart(payload.MainCategoryCode, "CATEGORY");
             var fileName = $"KnowledgeQuestionnaire_{qualificationCode}_{categoryCode}_{DateTime.Now:yyyyMMdd_HHmmss}.docx";
+            return GeneratedDocResult.Ok(ms.ToArray(), fileName);
+        }
+
+        private GeneratedDocResult BuildPhaseQuestionnaireMemorandumDocument(
+            Qualification qualification,
+            PhaseQuestionnaireDocxExportRequest payload,
+            IReadOnlyList<PhaseQuestionnaireDocxQuestionRow> questions)
+        {
+            if (questions == null || questions.Count == 0)
+            {
+                return GeneratedDocResult.Fail("No generated questionnaire rows were available for memorandum DOCX export.");
+            }
+
+            var totalMarks = questions.Sum(row => Math.Max(1, row.Marks));
+            var trueFalseCount = questions.Count(row => string.Equals(row.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase));
+            var multipleChoiceCount = questions.Count - trueFalseCount;
+            var questionnaireTitle = string.IsNullOrWhiteSpace(payload.QuestionnaireTitle)
+                ? "Knowledge Questionnaire"
+                : payload.QuestionnaireTitle.Trim();
+            var memorandumTitle = $"{questionnaireTitle} Memorandum";
+            var phaseLabel = BuildPhaseScopeLabel(payload.PhaseName, payload.PhaseDescription);
+            var categoryLine = string.Join(" - ", new[]
+            {
+                (payload.MainCategoryCode ?? string.Empty).Trim(),
+                (payload.MainCategoryLabel ?? string.Empty).Trim()
+            }.Where(part => !string.IsNullOrWhiteSpace(part)));
+            if (string.IsNullOrWhiteSpace(categoryLine))
+            {
+                categoryLine = "Main Category";
+            }
+
+            using var ms = new MemoryStream();
+            using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document, true))
+            {
+                var main = doc.AddMainDocumentPart();
+                main.Document = new Document(new Body());
+                var body = main.Document.Body ?? (main.Document.Body = new Body());
+                var settingsPart = main.AddNewPart<DocumentSettingsPart>();
+                settingsPart.Settings = new Settings(new UpdateFieldsOnOpen() { Val = true });
+                settingsPart.Settings.Save();
+                EnsureKnowledgeQuestionnaireStyles(main);
+                var footerRelId = EnsureKnowledgeQuestionnaireFooter(main);
+
+                AppendCleanCoverPage(
+                    body,
+                    main,
+                    qualification,
+                    memorandumTitle.ToUpperInvariant(),
+                    categoryLine);
+                body.Append(PageBreak());
+
+                AppendLegalDisclaimerPage(body, qualification);
+                body.Append(PageBreak());
+
+                DocumentRevisionQualityControlPage.Append(body, qualification, new DocumentRevisionQualityControlPageOptions
+                {
+                    DocumentTitle = memorandumTitle,
+                    DocumentType = "Summative Assessment Memorandum",
+                    Phase = string.IsNullOrWhiteSpace(phaseLabel) ? "Knowledge Learning" : phaseLabel,
+                    DocumentDeveloper = (payload.CreatedBy ?? string.Empty).Trim(),
+                    Moderator = (payload.ReviewedBy ?? string.Empty).Trim(),
+                    IncludeAiAssistedLegalBlock = false
+                });
+                body.Append(PageBreak());
+
+                body.Append(StyledHeading(memorandumTitle.ToUpperInvariant(), "Heading1", 30));
+                body.Append(BodyPara($"{qualification.QualificationNumber} — {qualification.QualificationDescription}", 24));
+                body.Append(BodyPara(categoryLine, 24));
+                if (!string.IsNullOrWhiteSpace(phaseLabel))
+                {
+                    body.Append(BodyPara($"Phase: {phaseLabel}", 22));
+                }
+                body.Append(BodyPara($"Total questions: {questions.Count}", 22));
+                body.Append(BodyPara($"True/False questions: {trueFalseCount}", 22));
+                body.Append(BodyPara($"Multiple Choice questions: {multipleChoiceCount}", 22));
+                body.Append(BodyPara($"Total marks: {totalMarks}", 22));
+                body.Append(Blank());
+
+                var summary = new Table();
+                summary.Append(DefaultTableProperties());
+                summary.Append(new TableGrid());
+                summary.Append(MemoRow("Q#", "Type", "Stem (short)", "Assessment Criterion", "Answer Key", header: true));
+                foreach (var question in questions.OrderBy(row => row.Number))
+                {
+                    var stem = string.Equals(question.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)
+                        ? NormalizeTrueFalseStatement(question.Prompt)
+                        : (question.Prompt ?? string.Empty).Trim();
+                    var stemShort = stem.Length <= 80 ? stem : $"{stem[..80]}...";
+                    var criterionLine = string.Join(" ", new[]
+                    {
+                        (question.AssessmentCriteriaNumber ?? string.Empty).Trim(),
+                        (question.AssessmentCriteriaDescription ?? string.Empty).Trim()
+                    }.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+                    summary.Append(MemoRow(
+                        question.Number.ToString(),
+                        string.Equals(question.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase) ? "True/False" : "Multiple Choice",
+                        stemShort,
+                        criterionLine,
+                        BuildPhaseMemorandumAnswerKey(question)));
+                }
+
+                body.Append(summary);
+                body.Append(PageBreak());
+                body.Append(StyledHeading("ANSWER KEY DETAIL", "Heading2", 22));
+
+                foreach (var question in questions.OrderBy(row => row.Number))
+                {
+                    var stem = string.Equals(question.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)
+                        ? NormalizeTrueFalseStatement(question.Prompt)
+                        : (question.Prompt ?? string.Empty).Trim();
+                    body.Append(QuestionMetaParagraph($"Question {question.Number}", 18, bold: true));
+                    body.Append(BodyPara(BuildQuestionBlockContextLine(question), 18));
+                    body.Append(BodyPara(stem, 22));
+                    body.Append(BodyPara($"Answer key: {BuildPhaseMemorandumAnswerKey(question)}", 20));
+                    if (!string.IsNullOrWhiteSpace((question.Rationale ?? string.Empty).Trim()))
+                    {
+                        body.Append(BodyPara($"Model answer: {(question.Rationale ?? string.Empty).Trim()}", 20));
+                    }
+                    body.Append(Blank());
+                }
+
+                body.Append(DefaultSectionProperties(footerRelId));
+                main.Document.Save();
+            }
+
+            ms.Position = 0;
+            var qualificationCode = MakeSafeFilePart(qualification.QualificationNumber, "QUALIFICATION");
+            var categoryCode = MakeSafeFilePart(payload.MainCategoryCode, "CATEGORY");
+            var fileName = $"KnowledgeQuestionnaire_Memorandum_{qualificationCode}_{categoryCode}_{DateTime.Now:yyyyMMdd_HHmmss}.docx";
             return GeneratedDocResult.Ok(ms.ToArray(), fileName);
         }
 
@@ -1662,7 +2266,8 @@ namespace ETD.Api.Controllers
         {
             _ = totalMarks;
             _ = mcqDistractors;
-            var items = AssessmentDrivenQuestionGenerator.BuildOrderedLessonEvidence(_context, subject.Id);
+            var items = BuildLessonPlanContentOnlyItems(
+                AssessmentDrivenQuestionGenerator.BuildOrderedLessonEvidence(_context, subject.Id));
             var criteriaItems = BuildAssessmentCriteriaFocusedItems(items);
             var questions = new List<AssessmentDrivenQuestionGenerator.GeneratedQuestion>();
 
@@ -1681,6 +2286,23 @@ namespace ETD.Api.Controllers
             });
         }
 
+        private static List<AssessmentDrivenQuestionGenerator.LessonEvidenceItem> BuildLessonPlanContentOnlyItems(
+            List<AssessmentDrivenQuestionGenerator.LessonEvidenceItem> items)
+        {
+            if (items == null || items.Count == 0) return new List<AssessmentDrivenQuestionGenerator.LessonEvidenceItem>();
+
+            return items
+                .Where(item => !string.IsNullOrWhiteSpace((item.LessonPlanContent ?? string.Empty).Trim()))
+                .GroupBy(BuildContentOnlyBundleKey, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group
+                    .OrderBy(item => item.TopicOrder)
+                    .ThenBy(item => item.LessonSortOrder)
+                    .ThenBy(item => item.TopicCode, StringComparer.OrdinalIgnoreCase)
+                    .First())
+                .Select(item => CreateContentOnlyLessonEvidenceItem(item, item.LessonPlanContent))
+                .ToList();
+        }
+
         private static List<AssessmentDrivenQuestionGenerator.LessonEvidenceItem> ApplyLessonContentOverride(
             List<AssessmentDrivenQuestionGenerator.LessonEvidenceItem> items,
             string lessonPlanOverride)
@@ -1688,31 +2310,45 @@ namespace ETD.Api.Controllers
             var overrideText = (lessonPlanOverride ?? string.Empty).Trim();
             if (items.Count == 0 || string.IsNullOrWhiteSpace(overrideText)) return items;
 
-            return items.Select(item => new AssessmentDrivenQuestionGenerator.LessonEvidenceItem
-            {
-                TopicId = item.TopicId,
-                TopicCode = item.TopicCode,
-                TopicDescription = item.TopicDescription,
-                AssessmentCriteriaId = item.AssessmentCriteriaId,
-                AssessmentCriteriaDescription = item.AssessmentCriteriaDescription,
-                LessonPlanLabel = item.LessonPlanLabel,
-                LessonPlanDescription = item.LessonPlanDescription,
-                LessonPlanContent = overrideText,
-                EvidenceText = BuildMergedEvidenceText(overrideText, item.EvidenceText),
-                TopicOrder = item.TopicOrder,
-                LessonSortOrder = item.LessonSortOrder,
-                BundleKey = item.BundleKey
-            }).ToList();
+            return items
+                .Select(item => CreateContentOnlyLessonEvidenceItem(item, overrideText))
+                .ToList();
         }
 
-        private static string BuildMergedEvidenceText(string primaryText, string fallbackText)
+        private static AssessmentDrivenQuestionGenerator.LessonEvidenceItem CreateContentOnlyLessonEvidenceItem(
+            AssessmentDrivenQuestionGenerator.LessonEvidenceItem source,
+            string? lessonPlanContentOverride = null)
         {
-            var primary = AssessmentDrivenQuestionGenerator.SanitizeQuestionText(primaryText);
-            var fallback = AssessmentDrivenQuestionGenerator.SanitizeQuestionText(fallbackText);
-            if (string.IsNullOrWhiteSpace(primary)) return fallback;
-            if (string.IsNullOrWhiteSpace(fallback)) return primary;
-            var combined = $"{primary} {fallback}".Trim();
-            return combined.Length <= 2200 ? combined : combined[..2200];
+            var content = (lessonPlanContentOverride ?? source.LessonPlanContent ?? string.Empty).Trim();
+            return new AssessmentDrivenQuestionGenerator.LessonEvidenceItem
+            {
+                TopicId = source.TopicId,
+                TopicCode = source.TopicCode,
+                TopicDescription = source.TopicDescription,
+                AssessmentCriteriaId = 0,
+                AssessmentCriteriaDescription = string.Empty,
+                LessonPlanLabel = string.Empty,
+                LessonPlanDescription = string.Empty,
+                LessonPlanContent = content,
+                EvidenceText = AssessmentDrivenQuestionGenerator.SanitizeQuestionText(content),
+                TopicOrder = source.TopicOrder,
+                LessonSortOrder = source.LessonSortOrder,
+                BundleKey = BuildContentOnlyBundleKey(source, content)
+            };
+        }
+
+        private static string BuildContentOnlyBundleKey(AssessmentDrivenQuestionGenerator.LessonEvidenceItem item)
+            => BuildContentOnlyBundleKey(item, item.LessonPlanContent);
+
+        private static string BuildContentOnlyBundleKey(
+            AssessmentDrivenQuestionGenerator.LessonEvidenceItem item,
+            string? lessonPlanContent)
+        {
+            var topicKey = item.TopicId > 0
+                ? $"T{item.TopicId}"
+                : NormalizeSeedKeyPart(item.TopicCode);
+            var contentKey = ComputeStableHash(NormalizeLessonContentKey(lessonPlanContent));
+            return $"{topicKey}|{contentKey}";
         }
 
         private static List<AssessmentDrivenQuestionGenerator.LessonEvidenceItem> BuildAssessmentCriteriaFocusedItems(
@@ -1721,7 +2357,9 @@ namespace ETD.Api.Controllers
             if (items == null || items.Count == 0) return new List<AssessmentDrivenQuestionGenerator.LessonEvidenceItem>();
 
             return items
-                .Where(item => !string.IsNullOrWhiteSpace((item.AssessmentCriteriaDescription ?? string.Empty).Trim()))
+                .Where(item =>
+                    !string.IsNullOrWhiteSpace((item.AssessmentCriteriaDescription ?? string.Empty).Trim()) &&
+                    !string.IsNullOrWhiteSpace((item.LessonPlanContent ?? string.Empty).Trim()))
                 .GroupBy(item => item.AssessmentCriteriaId > 0
                     ? $"ACID:{item.AssessmentCriteriaId}"
                     : $"{(item.TopicCode ?? string.Empty).Trim().ToUpperInvariant()}|{(item.AssessmentCriteriaDescription ?? string.Empty).Trim().ToUpperInvariant()}")
@@ -1762,11 +2400,48 @@ namespace ETD.Api.Controllers
             public List<string> ResourceHints { get; set; } = new();
         }
 
+        private sealed class PersistedSubjectQuestionnaire
+        {
+            public Subject Subject { get; init; } = new();
+            public string Title { get; init; } = string.Empty;
+            public string QuestionSource { get; init; } = string.Empty;
+            public List<SmiDraftQuestionDto> Questions { get; init; } = new();
+        }
+
+        private sealed class PersistedKnowledgeQuestionnaireEnvelope
+        {
+            public DateTime GeneratedAtUtc { get; set; }
+            public string QuestionSource { get; set; } = string.Empty;
+            public int QualificationId { get; set; }
+            public string QualificationCode { get; set; } = string.Empty;
+            public string QualificationDescription { get; set; } = string.Empty;
+            public int SubjectId { get; set; }
+            public string SubjectCode { get; set; } = string.Empty;
+            public string SubjectDescription { get; set; } = string.Empty;
+            public int? PhaseId { get; set; }
+            public string PhaseName { get; set; } = string.Empty;
+            public string PhaseDescription { get; set; } = string.Empty;
+            public string MainCategoryCode { get; set; } = string.Empty;
+            public string MainCategoryLabel { get; set; } = string.Empty;
+            public int TotalQuestions { get; set; }
+            public int TrueFalseQuestions { get; set; }
+            public int MultipleChoiceQuestions { get; set; }
+            public List<SmiDraftQuestionDto> Questions { get; set; } = new();
+        }
+
         private sealed class PhaseCriterionSeed
         {
             public Subject Subject { get; init; } = new();
             public AssessmentDrivenQuestionGenerator.LessonEvidenceItem Item { get; init; } = new();
             public string AssessmentCriteriaNumber { get; init; } = string.Empty;
+            public string SubjectCode => (Subject.SubjectCode ?? string.Empty).Trim();
+            public string SubjectDescription => (Subject.SubjectDescription ?? string.Empty).Trim();
+        }
+
+        private sealed class PhaseContentSeed
+        {
+            public Subject Subject { get; init; } = new();
+            public AssessmentDrivenQuestionGenerator.LessonEvidenceItem Item { get; init; } = new();
             public string SubjectCode => (Subject.SubjectCode ?? string.Empty).Trim();
             public string SubjectDescription => (Subject.SubjectDescription ?? string.Empty).Trim();
         }
@@ -1779,6 +2454,16 @@ namespace ETD.Api.Controllers
         private sealed class PhaseQuestionAssignment
         {
             public PhaseCriterionSeed Seed { get; set; } = new();
+            public string QuestionType { get; set; } = string.Empty;
+            public int QuestionNumber { get; set; }
+            public int TypeOccurrence { get; set; }
+            public int VariantIndex { get; set; }
+            public int VariantCount { get; set; }
+        }
+
+        private sealed class ContentQuestionAssignment
+        {
+            public PhaseContentSeed Seed { get; set; } = new();
             public string QuestionType { get; set; } = string.Empty;
             public int QuestionNumber { get; set; }
             public int TypeOccurrence { get; set; }
@@ -1824,34 +2509,33 @@ namespace ETD.Api.Controllers
             List<Subject> subjects,
             KnowledgeQuestionnaireV1Service.KnowledgeQuestionnaireV1Draft draft)
         {
-            var kqCriteria = (draft.Criteria ?? new List<KnowledgeQuestionnaireV1Service.KnowledgeQuestionnaireV1CriterionIntentDraft>())
-                .Where(row => string.Equals(row.RoutingStatus, "KQ", StringComparison.OrdinalIgnoreCase) && row.AssessmentCriteriaId > 0)
+            var criteriaLookup = (draft.Criteria ?? new List<KnowledgeQuestionnaireV1Service.KnowledgeQuestionnaireV1CriterionIntentDraft>())
+                .Where(row => row.AssessmentCriteriaId > 0)
                 .GroupBy(row => row.AssessmentCriteriaId)
                 .ToDictionary(
                     group => group.Key,
                     group => group
-                        .OrderBy(row => row.CoverageType == "direct" ? 0 : 1)
-                        .ThenBy(row => row.IntentId, StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(row => row.IntentId, StringComparer.OrdinalIgnoreCase)
                         .First());
 
-            if (kqCriteria.Count == 0) return new List<PhaseCriterionSeed>();
+            if (criteriaLookup.Count == 0) return new List<PhaseCriterionSeed>();
 
             var result = new List<PhaseCriterionSeed>();
             foreach (var subject in subjects)
             {
-                var items = AssessmentDrivenQuestionGenerator.BuildOrderedLessonEvidence(_context, subject.Id)
-                    .Where(item => item.AssessmentCriteriaId > 0 && kqCriteria.ContainsKey(item.AssessmentCriteriaId))
+                var items = BuildLessonPlanContentOnlyItems(
+                        AssessmentDrivenQuestionGenerator.BuildOrderedLessonEvidence(_context, subject.Id))
+                    .Where(item => item.AssessmentCriteriaId > 0 && criteriaLookup.ContainsKey(item.AssessmentCriteriaId))
                     .GroupBy(item => item.AssessmentCriteriaId)
                     .Select(group => group
-                        .OrderBy(item => string.IsNullOrWhiteSpace((item.LessonPlanContent ?? string.Empty).Trim()) ? 1 : 0)
-                        .ThenBy(item => item.LessonSortOrder)
+                        .OrderBy(item => item.LessonSortOrder)
                         .ThenBy(item => item.LessonPlanLabel)
                         .First())
                     .ToList();
 
                 foreach (var item in items)
                 {
-                    if (!kqCriteria.TryGetValue(item.AssessmentCriteriaId, out var criterionRow)) continue;
+                    if (!criteriaLookup.TryGetValue(item.AssessmentCriteriaId, out var criterionRow)) continue;
                     result.Add(new PhaseCriterionSeed
                     {
                         Subject = subject,
@@ -1867,6 +2551,384 @@ namespace ETD.Api.Controllers
                 .ThenBy(seed => seed.AssessmentCriteriaNumber, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(seed => seed.Item.AssessmentCriteriaId)
                 .ToList();
+        }
+
+        private List<PhaseContentSeed> BuildPhaseContentSeeds(List<Subject> subjects)
+        {
+            var result = new List<PhaseContentSeed>();
+            foreach (var subject in subjects ?? new List<Subject>())
+            {
+                var groupedItems = BuildLessonPlanContentOnlyItems(
+                        AssessmentDrivenQuestionGenerator.BuildOrderedLessonEvidence(_context, subject.Id))
+                    .Where(item => !string.IsNullOrWhiteSpace((item.LessonPlanContent ?? string.Empty).Trim()))
+                    .GroupBy(item => BuildLessonContentSeedKey(subject.Id, item), StringComparer.OrdinalIgnoreCase)
+                    .Select(group => CreateContentSeedItem(group.Key, group.First()))
+                    .OrderBy(item => item.TopicOrder)
+                    .ThenBy(item => item.LessonSortOrder)
+                    .ThenBy(item => item.TopicCode, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(item => item.LessonPlanLabel, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                foreach (var item in groupedItems)
+                {
+                    result.Add(new PhaseContentSeed
+                    {
+                        Subject = subject,
+                        Item = item
+                    });
+                }
+            }
+
+            return result
+                .OrderBy(seed => seed.SubjectCode, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(seed => seed.Item.TopicCode, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(seed => seed.Item.TopicOrder)
+                .ThenBy(seed => seed.Item.LessonSortOrder)
+                .ThenBy(seed => seed.Item.LessonPlanLabel, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static AssessmentDrivenQuestionGenerator.LessonEvidenceItem CreateContentSeedItem(
+            string bundleKey,
+            AssessmentDrivenQuestionGenerator.LessonEvidenceItem source)
+        {
+            return new AssessmentDrivenQuestionGenerator.LessonEvidenceItem
+            {
+                TopicId = source.TopicId,
+                TopicCode = source.TopicCode,
+                TopicDescription = source.TopicDescription,
+                AssessmentCriteriaId = 0,
+                AssessmentCriteriaDescription = string.Empty,
+                LessonPlanLabel = string.Empty,
+                LessonPlanDescription = string.Empty,
+                LessonPlanContent = source.LessonPlanContent,
+                EvidenceText = AssessmentDrivenQuestionGenerator.SanitizeQuestionText(source.LessonPlanContent),
+                TopicOrder = source.TopicOrder,
+                LessonSortOrder = source.LessonSortOrder,
+                BundleKey = bundleKey
+            };
+        }
+
+        private static string BuildLessonContentSeedKey(
+            int subjectId,
+            AssessmentDrivenQuestionGenerator.LessonEvidenceItem item)
+        {
+            var topicKey = item.TopicId > 0
+                ? $"T{item.TopicId}"
+                : NormalizeSeedKeyPart(item.TopicCode);
+            var contentKey = ComputeStableHash(NormalizeLessonContentKey(item.LessonPlanContent));
+            return $"{subjectId}|{topicKey}|{contentKey}";
+        }
+
+        private static string NormalizeLessonContentKey(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            var normalized = Regex.Replace(value.Trim().ToLowerInvariant(), @"\s+", " ");
+            return normalized;
+        }
+
+        private static string NormalizeSeedKeyPart(string? value)
+        {
+            var normalized = Regex.Replace((value ?? string.Empty).Trim().ToUpperInvariant(), @"\s+", "_");
+            return string.IsNullOrWhiteSpace(normalized) ? "NA" : normalized;
+        }
+
+        private static string ComputeStableHash(string? value)
+        {
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value ?? string.Empty));
+            return Convert.ToHexString(bytes[..12]);
+        }
+
+        private static string ResolvePersistedQuestionnaireTitle(
+            string? requestedTitle,
+            string? subjectCode,
+            string? subjectDescription,
+            string? mainCategoryCode,
+            string? mainCategoryLabel)
+        {
+            var explicitTitle = (requestedTitle ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(explicitTitle))
+            {
+                return explicitTitle;
+            }
+
+            var categoryLabel = !string.IsNullOrWhiteSpace(mainCategoryLabel)
+                ? mainCategoryLabel!.Trim()
+                : (mainCategoryCode ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(categoryLabel))
+            {
+                return $"Knowledge Questionnaire - {categoryLabel}";
+            }
+
+            var subjectLabel = string.Join(" - ", new[] { (subjectCode ?? string.Empty).Trim(), (subjectDescription ?? string.Empty).Trim() }
+                .Where(value => !string.IsNullOrWhiteSpace(value)));
+            return string.IsNullOrWhiteSpace(subjectLabel)
+                ? "Knowledge Questionnaire"
+                : $"Knowledge Questionnaire - {subjectLabel}";
+        }
+
+        private async Task<List<int>> UpsertGeneratedQuestionnairesAsync(
+            Qualification qualification,
+            List<PersistedSubjectQuestionnaire> entries,
+            int? phaseId,
+            string? phaseName,
+            string? phaseDescription,
+            string? mainCategoryCode,
+            string? mainCategoryLabel,
+            CancellationToken cancellationToken)
+        {
+            var normalizedEntries = (entries ?? new List<PersistedSubjectQuestionnaire>())
+                .Where(entry => entry.Subject != null && entry.Subject.Id > 0 && entry.Questions.Count > 0)
+                .ToList();
+            if (normalizedEntries.Count == 0) return new List<int>();
+
+            var generatedAtUtc = DateTime.UtcNow;
+            var touched = new List<KnowledgeQuestionnaire>();
+
+            foreach (var entry in normalizedEntries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var title = ResolvePersistedQuestionnaireTitle(
+                    entry.Title,
+                    entry.Subject.SubjectCode,
+                    entry.Subject.SubjectDescription,
+                    mainCategoryCode,
+                    mainCategoryLabel);
+
+                var payload = new PersistedKnowledgeQuestionnaireEnvelope
+                {
+                    GeneratedAtUtc = generatedAtUtc,
+                    QuestionSource = (entry.QuestionSource ?? string.Empty).Trim(),
+                    QualificationId = qualification.Id,
+                    QualificationCode = (qualification.QualificationNumber ?? string.Empty).Trim(),
+                    QualificationDescription = (qualification.QualificationDescription ?? string.Empty).Trim(),
+                    SubjectId = entry.Subject.Id,
+                    SubjectCode = (entry.Subject.SubjectCode ?? string.Empty).Trim(),
+                    SubjectDescription = (entry.Subject.SubjectDescription ?? string.Empty).Trim(),
+                    PhaseId = phaseId,
+                    PhaseName = (phaseName ?? string.Empty).Trim(),
+                    PhaseDescription = (phaseDescription ?? string.Empty).Trim(),
+                    MainCategoryCode = (mainCategoryCode ?? string.Empty).Trim(),
+                    MainCategoryLabel = (mainCategoryLabel ?? string.Empty).Trim(),
+                    TotalQuestions = entry.Questions.Count,
+                    TrueFalseQuestions = entry.Questions.Count(q => string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
+                    MultipleChoiceQuestions = entry.Questions.Count(q => !string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
+                    Questions = entry.Questions
+                        .OrderBy(q => q.Number)
+                        .ToList()
+                };
+
+                var serialized = JsonSerializer.Serialize(payload);
+                var existing = _context.KnowledgeQuestionnaires
+                    .FirstOrDefault(row => row.SubjectId == entry.Subject.Id && row.Title == title);
+
+                if (existing == null)
+                {
+                    existing = new KnowledgeQuestionnaire
+                    {
+                        SubjectId = entry.Subject.Id,
+                        Title = title,
+                        Version = generatedAtUtc.ToString("yyyyMMddHHmmss"),
+                        Questions = serialized
+                    };
+                    _context.KnowledgeQuestionnaires.Add(existing);
+                }
+                else
+                {
+                    existing.Version = generatedAtUtc.ToString("yyyyMMddHHmmss");
+                    existing.Questions = serialized;
+                }
+
+                touched.Add(existing);
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            return touched
+                .Select(row => row.Id)
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+        }
+
+        private async Task<List<int>> UpsertGeneratedContentQuestionnairesAsync(
+            Qualification qualification,
+            List<PersistedSubjectQuestionnaire> entries,
+            int? phaseId,
+            string? phaseName,
+            string? phaseDescription,
+            string? mainCategoryCode,
+            string? mainCategoryLabel,
+            CancellationToken cancellationToken)
+        {
+            var normalizedEntries = (entries ?? new List<PersistedSubjectQuestionnaire>())
+                .Where(entry => entry.Subject != null && entry.Subject.Id > 0 && entry.Questions.Count > 0)
+                .ToList();
+            if (normalizedEntries.Count == 0) return new List<int>();
+
+            var generatedAtUtc = DateTime.UtcNow;
+            var touched = new List<SmiContentQuestionnaire>();
+
+            foreach (var entry in normalizedEntries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var title = ResolvePersistedQuestionnaireTitle(
+                    entry.Title,
+                    entry.Subject.SubjectCode,
+                    entry.Subject.SubjectDescription,
+                    mainCategoryCode,
+                    mainCategoryLabel);
+
+                var payload = new PersistedKnowledgeQuestionnaireEnvelope
+                {
+                    GeneratedAtUtc = generatedAtUtc,
+                    QuestionSource = (entry.QuestionSource ?? string.Empty).Trim(),
+                    QualificationId = qualification.Id,
+                    QualificationCode = (qualification.QualificationNumber ?? string.Empty).Trim(),
+                    QualificationDescription = (qualification.QualificationDescription ?? string.Empty).Trim(),
+                    SubjectId = entry.Subject.Id,
+                    SubjectCode = (entry.Subject.SubjectCode ?? string.Empty).Trim(),
+                    SubjectDescription = (entry.Subject.SubjectDescription ?? string.Empty).Trim(),
+                    PhaseId = phaseId,
+                    PhaseName = (phaseName ?? string.Empty).Trim(),
+                    PhaseDescription = (phaseDescription ?? string.Empty).Trim(),
+                    MainCategoryCode = (mainCategoryCode ?? string.Empty).Trim(),
+                    MainCategoryLabel = (mainCategoryLabel ?? string.Empty).Trim(),
+                    TotalQuestions = entry.Questions.Count,
+                    TrueFalseQuestions = entry.Questions.Count(q => string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
+                    MultipleChoiceQuestions = entry.Questions.Count(q => !string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
+                    Questions = entry.Questions
+                        .OrderBy(q => q.Number)
+                        .ToList()
+                };
+
+                var serialized = JsonSerializer.Serialize(payload);
+                var existing = _context.SmiContentQuestionnaires
+                    .FirstOrDefault(row => row.SubjectId == entry.Subject.Id && row.Title == title);
+
+                if (existing == null)
+                {
+                    existing = new SmiContentQuestionnaire
+                    {
+                        QualificationId = qualification.Id,
+                        SubjectId = entry.Subject.Id,
+                        PhaseId = phaseId,
+                        MainCategoryCode = (mainCategoryCode ?? string.Empty).Trim(),
+                        MainCategoryLabel = (mainCategoryLabel ?? string.Empty).Trim(),
+                        Title = title,
+                        Version = generatedAtUtc.ToString("yyyyMMddHHmmss"),
+                        Questions = serialized
+                    };
+                    _context.SmiContentQuestionnaires.Add(existing);
+                }
+                else
+                {
+                    existing.QualificationId = qualification.Id;
+                    existing.PhaseId = phaseId;
+                    existing.MainCategoryCode = (mainCategoryCode ?? string.Empty).Trim();
+                    existing.MainCategoryLabel = (mainCategoryLabel ?? string.Empty).Trim();
+                    existing.Version = generatedAtUtc.ToString("yyyyMMddHHmmss");
+                    existing.Questions = serialized;
+                }
+
+                touched.Add(existing);
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            return touched
+                .Select(row => row.Id)
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+        }
+
+        private async Task<SmiQuestionBuildResult> TryBuildPhaseContentQuestionsWithSmiAsync(
+            List<PhaseContentSeed> seeds,
+            Qualification qualification,
+            int trueFalseCount,
+            int mcqCount,
+            int mcqDistractors,
+            CancellationToken cancellationToken)
+        {
+            var empty = new SmiQuestionBuildResult();
+            if (!IsSmiIntegrationEnabled()) return empty;
+            if (seeds.Count == 0) return empty;
+            if ((trueFalseCount + mcqCount) <= 0) return empty;
+
+            var assignments = BuildPhaseContentAssignments(seeds, trueFalseCount, mcqCount);
+            if (assignments.Count == 0) return empty;
+
+            var built = new List<AssessmentDrivenQuestionGenerator.GeneratedQuestion>(assignments.Count);
+            var resources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var usedDeterministicFallback = !await IsSmiServiceResponsiveAsync(cancellationToken);
+            var skipRemoteGeneration = usedDeterministicFallback;
+
+            foreach (var seedGroup in assignments.GroupBy(row => row.Seed.Item.BundleKey, StringComparer.OrdinalIgnoreCase))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var seed = seedGroup.First().Seed;
+                var priorQuestionsForSeed = new List<AssessmentDrivenQuestionGenerator.GeneratedQuestion>();
+
+                foreach (var assignment in seedGroup.OrderBy(row => row.QuestionNumber))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var isTrueFalse = string.Equals(assignment.QuestionType, "TrueFalse", StringComparison.OrdinalIgnoreCase);
+                    AssessmentDrivenQuestionGenerator.GeneratedQuestion? question = null;
+
+                    if (!skipRemoteGeneration)
+                    {
+                        question = await TryGenerateSingleSmiQuestionAsync(
+                            seed.Item,
+                            qualification,
+                            seed.Subject,
+                            questionType: assignment.QuestionType,
+                            optionCount: isTrueFalse ? TrueFalseOptionCount : Math.Max(2, mcqDistractors + 1),
+                            marks: 1,
+                            cancellationToken,
+                            resources,
+                            variantIndex: assignment.VariantIndex,
+                            variantCount: assignment.VariantCount,
+                            existingQuestions: priorQuestionsForSeed,
+                            contentOnlyScope: true,
+                            timeoutOverrideSeconds: SmiQuestionTimeoutSeconds);
+
+                        if (question == null)
+                        {
+                            usedDeterministicFallback = true;
+                            skipRemoteGeneration = true;
+                        }
+                    }
+
+                    if (question == null || IsDuplicateQuestionForSeed(question, priorQuestionsForSeed))
+                    {
+                        usedDeterministicFallback = true;
+                        question = isTrueFalse
+                            ? BuildTrueFalseSingleCorrectQuestion(seed.Item, assignment.QuestionNumber, assignment.TypeOccurrence)
+                            : BuildMultipleChoiceSubjectQuestion(seed.Item, assignment.QuestionNumber, mcqDistractors, assignment.TypeOccurrence);
+                    }
+                    else
+                    {
+                        question = CloneQuestion(question, assignment.QuestionNumber);
+                    }
+
+                    built.Add(question);
+                    priorQuestionsForSeed.Add(question);
+                }
+            }
+
+            built = built
+                .OrderBy(question => question.Number)
+                .ToList();
+
+            return new SmiQuestionBuildResult
+            {
+                Questions = built,
+                ResourceSuggestions = resources.Take(25).ToList(),
+                UsedDeterministicFallback = usedDeterministicFallback
+            };
         }
 
         private async Task<SmiQuestionBuildResult> TryBuildPhaseQuestionsWithSmiAsync(
@@ -1916,7 +2978,7 @@ namespace ETD.Api.Controllers
                             qualification,
                             seed.Subject,
                             questionType: assignment.QuestionType,
-                            optionCount: isTrueFalse ? TrueFalseOptionCount : DefaultMcqDistractors + 1,
+                            optionCount: isTrueFalse ? TrueFalseOptionCount : Math.Max(2, mcqDistractors + 1),
                             marks: 1,
                             cancellationToken,
                             resources,
@@ -2043,6 +3105,49 @@ namespace ETD.Api.Controllers
             return assignments;
         }
 
+        private static List<ContentQuestionAssignment> BuildPhaseContentAssignments(
+            List<PhaseContentSeed> seeds,
+            int trueFalseCount,
+            int mcqCount)
+        {
+            var remainingTrueFalse = Math.Max(0, trueFalseCount);
+            var remainingMultipleChoice = Math.Max(0, mcqCount);
+            if (seeds == null || seeds.Count == 0) return new List<ContentQuestionAssignment>();
+            if ((remainingTrueFalse + remainingMultipleChoice) <= 0) return new List<ContentQuestionAssignment>();
+
+            var assignments = new List<ContentQuestionAssignment>(remainingTrueFalse + remainingMultipleChoice);
+            var seedAssignments = new Dictionary<string, List<ContentQuestionAssignment>>(StringComparer.OrdinalIgnoreCase);
+            var typeOccurrences = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var questionNumber = 1;
+            var roundRobinIndex = 0;
+            var preferTrueFalse = remainingTrueFalse >= remainingMultipleChoice;
+
+            while (remainingTrueFalse > 0 || remainingMultipleChoice > 0)
+            {
+                var seed = seeds[roundRobinIndex % seeds.Count];
+                var bundleKey = seed.Item.BundleKey ?? $"{seed.SubjectCode}|{seed.Item.TopicCode}|{seed.Item.LessonPlanLabel}";
+                if (!seedAssignments.TryGetValue(bundleKey, out var existingAssignmentsForSeed))
+                {
+                    existingAssignmentsForSeed = new List<ContentQuestionAssignment>();
+                    seedAssignments[bundleKey] = existingAssignmentsForSeed;
+                }
+
+                var nextType = SelectNextQuestionType(ref remainingTrueFalse, ref remainingMultipleChoice, ref preferTrueFalse);
+                if (string.IsNullOrWhiteSpace(nextType)) break;
+
+                assignments.Add(CreateContentQuestionAssignment(
+                    seed,
+                    nextType,
+                    ref questionNumber,
+                    typeOccurrences,
+                    existingAssignmentsForSeed));
+
+                roundRobinIndex++;
+            }
+
+            return assignments;
+        }
+
         private static PhaseQuestionAssignment CreatePhaseQuestionAssignment(
             PhaseCriterionSeed seed,
             string questionType,
@@ -2055,6 +3160,37 @@ namespace ETD.Api.Controllers
             typeOccurrences[occurrenceKey] = occurrence + 1;
 
             var assignment = new PhaseQuestionAssignment
+            {
+                Seed = seed,
+                QuestionType = questionType,
+                QuestionNumber = questionNumber++,
+                TypeOccurrence = occurrence,
+                VariantIndex = existingAssignmentsForSeed.Count,
+                VariantCount = 0
+            };
+            existingAssignmentsForSeed.Add(assignment);
+
+            for (var i = 0; i < existingAssignmentsForSeed.Count; i++)
+            {
+                existingAssignmentsForSeed[i].VariantIndex = i;
+                existingAssignmentsForSeed[i].VariantCount = existingAssignmentsForSeed.Count;
+            }
+
+            return existingAssignmentsForSeed[^1];
+        }
+
+        private static ContentQuestionAssignment CreateContentQuestionAssignment(
+            PhaseContentSeed seed,
+            string questionType,
+            ref int questionNumber,
+            Dictionary<string, int> typeOccurrences,
+            List<ContentQuestionAssignment> existingAssignmentsForSeed)
+        {
+            var occurrenceKey = $"{seed.Item.BundleKey}|{questionType}";
+            var occurrence = typeOccurrences.TryGetValue(occurrenceKey, out var seen) ? seen : 0;
+            typeOccurrences[occurrenceKey] = occurrence + 1;
+
+            var assignment = new ContentQuestionAssignment
             {
                 Seed = seed,
                 QuestionType = questionType,
@@ -2260,6 +3396,26 @@ namespace ETD.Api.Controllers
                 }
             }
 
+            if (trueFalseCount > tfSeeds.Count && seedItems.Count > 0)
+            {
+                usedDeterministicFallback = true;
+                for (var i = tfSeeds.Count; i < trueFalseCount; i++)
+                {
+                    var item = seedItems[i % seedItems.Count];
+                    tfSeeds.Add(BuildTrueFalseSingleCorrectQuestion(item, i + 1, i));
+                }
+            }
+
+            if (mcqCount > mcqSeeds.Count && seedItems.Count > 0)
+            {
+                usedDeterministicFallback = true;
+                for (var i = mcqSeeds.Count; i < mcqCount; i++)
+                {
+                    var item = seedItems[i % seedItems.Count];
+                    mcqSeeds.Add(BuildMultipleChoiceSubjectQuestion(item, i + 1, mcqDistractors, i));
+                }
+            }
+
             if (trueFalseCount > 0 && tfSeeds.Count == 0) return empty;
             if (mcqCount > 0 && mcqSeeds.Count == 0) return empty;
 
@@ -2295,9 +3451,10 @@ namespace ETD.Api.Controllers
             int variantIndex = 0,
             int variantCount = 1,
             IReadOnlyCollection<AssessmentDrivenQuestionGenerator.GeneratedQuestion>? existingQuestions = null,
+            bool contentOnlyScope = false,
             int? timeoutOverrideSeconds = null)
         {
-            var prompt = BuildSmiQuestionPrompt(item, qualification, subject, questionType, optionCount, marks, variantIndex, variantCount, existingQuestions);
+            var prompt = BuildSmiQuestionPrompt(item, qualification, subject, questionType, optionCount, marks, variantIndex, variantCount, existingQuestions, contentOnlyScope);
             var answer = await TryFetchSmiAnswerAsync(
                 prompt,
                 qualification.QualificationNumber ?? string.Empty,
@@ -2371,7 +3528,9 @@ namespace ETD.Api.Controllers
             sb.AppendLine("- Keep one correct answer.");
             if (isTrueFalse)
             {
-                sb.AppendLine("- correctAnswer format: \"A=True; B=False; C=False; D=False\".");
+                sb.AppendLine("- prompt must be one factual statement.");
+                sb.AppendLine("- options must be exactly [\"True\", \"False\"].");
+                sb.AppendLine("- correctAnswer format: \"True\" or \"False\".");
             }
             else
             {
@@ -2423,47 +3582,79 @@ namespace ETD.Api.Controllers
             if (parsed == null) return null;
 
             var isTrueFalse = string.Equals(questionType, "TrueFalse", StringComparison.OrdinalIgnoreCase);
+            var learnerContext = AssessmentDrivenQuestionGenerator.BuildLearnerContextLabel(item);
+            var topicLabel = AssessmentDrivenQuestionGenerator.BuildTopicQuestionLabel(item);
+            var fallbackStatement = AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement(
+                $"Safe and accurate practice is required during {learnerContext}.",
+                "Safe and accurate practice is required during this lesson.");
             var fallbackPrompt = isTrueFalse
-                ? $"Read each statement about {AssessmentDrivenQuestionGenerator.BuildLearnerContextLabel(item)}. Mark each option as True or False. Only one option is True."
-                : $"Which option best reflects correct practice for {AssessmentDrivenQuestionGenerator.BuildLearnerContextLabel(item)}?";
+                ? fallbackStatement
+                : $"Which option is correct about {topicLabel}?";
 
-            var prompt = AssessmentDrivenQuestionGenerator.NormalizeQuestionStem(parsed.Prompt, fallbackPrompt);
-            var options = parsed.Options
+            var normalizedPrompt = isTrueFalse
+                ? AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement(parsed.Prompt, fallbackStatement)
+                : AssessmentDrivenQuestionGenerator.NormalizeQuestionStem(parsed.Prompt, fallbackPrompt);
+            var parsedOptions = parsed.Options
                 .Select(NormalizeOptionLabelPrefix)
                 .Select(o => AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement(o))
                 .Where(o => !string.IsNullOrWhiteSpace(o))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            normalizedPrompt = EnsureTopicNamedQuestionPrompt(item, normalizedPrompt, isTrueFalse, parsedOptions);
 
-            if (!IsLikelyEnglishText(prompt) || HasNoiseArtifacts(prompt)) return null;
-            if (options.Any(o => !IsLikelyEnglishText(o) || HasNoiseArtifacts(o))) return null;
-
-            if (options.Count > optionCount)
-            {
-                options = options.Take(optionCount).ToList();
-            }
-            if (options.Count != optionCount) return null;
-            if (options.Any(AssessmentDrivenQuestionGenerator.ContainsQuestionAdministrativeReference)) return null;
-            if (options.Any(o => o.Contains("all of the above", StringComparison.OrdinalIgnoreCase))) return null;
-            if (options.Any(o => o.Contains("none of the above", StringComparison.OrdinalIgnoreCase))) return null;
+            if (!IsLikelyEnglishText(normalizedPrompt) || HasNoiseArtifacts(normalizedPrompt) || IsCurriculumEchoQuestion(normalizedPrompt)) return null;
+            if (parsedOptions.Any(o => !IsLikelyEnglishText(o) || HasNoiseArtifacts(o) || IsCurriculumEchoQuestion(o))) return null;
+            if (parsedOptions.Any(AssessmentDrivenQuestionGenerator.ContainsQuestionAdministrativeReference)) return null;
+            if (parsedOptions.Any(o => o.Contains("all of the above", StringComparison.OrdinalIgnoreCase))) return null;
+            if (parsedOptions.Any(o => o.Contains("none of the above", StringComparison.OrdinalIgnoreCase))) return null;
 
             var rationale = AssessmentDrivenQuestionGenerator.SanitizeQuestionText(parsed.Rationale);
             if (string.IsNullOrWhiteSpace(rationale))
             {
-                rationale = "Generated by SMI using lesson-plan content and qualification context.";
+                rationale = "Generated by SMI using lesson-plan content only.";
             }
 
+            string prompt;
+            List<string> options;
             string correctAnswer;
             if (isTrueFalse)
             {
-                if (!TryResolveTrueFalseCorrectIndex(parsed.CorrectAnswer, optionCount, out var trueIndex))
+                if (TryResolveBinaryTrueFalseValue(parsed.CorrectAnswer, parsedOptions, out var binaryValue))
                 {
-                    return null;
+                    prompt = normalizedPrompt;
+                    options = new List<string> { "True", "False" };
+                    correctAnswer = binaryValue ? "True" : "False";
                 }
-                correctAnswer = BuildCanonicalTrueFalseAnswer(trueIndex, optionCount);
+                else
+                {
+                    if (parsedOptions.Count > optionCount)
+                    {
+                        parsedOptions = parsedOptions.Take(optionCount).ToList();
+                    }
+                    if (parsedOptions.Count < 2) return null;
+                    if (!TryResolveTrueFalseCorrectIndex(parsed.CorrectAnswer, parsedOptions.Count, out var trueIndex))
+                    {
+                        return null;
+                    }
+
+                    var statementIndex = SelectBinaryTrueFalseStatementIndex(item, parsedOptions.Count, trueIndex);
+                    if (statementIndex < 0 || statementIndex >= parsedOptions.Count) return null;
+
+                    prompt = AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement(parsedOptions[statementIndex], fallbackStatement);
+                    options = new List<string> { "True", "False" };
+                    correctAnswer = statementIndex == trueIndex ? "True" : "False";
+                }
             }
             else
             {
+                prompt = normalizedPrompt;
+                options = parsedOptions;
+                if (options.Count > optionCount)
+                {
+                    options = options.Take(optionCount).ToList();
+                }
+                if (options.Count != optionCount) return null;
+
                 var correctIndex = TryResolveCorrectOptionIndex(parsed.CorrectAnswer, optionCount);
                 if (correctIndex < 0)
                 {
@@ -2536,6 +3727,43 @@ namespace ETD.Api.Controllers
             return false;
         }
 
+        private static bool TryResolveBinaryTrueFalseValue(string raw, IReadOnlyList<string> options, out bool answerTrue)
+        {
+            answerTrue = false;
+            var text = (raw ?? string.Empty).Trim();
+            if (text.Equals("True", StringComparison.OrdinalIgnoreCase))
+            {
+                answerTrue = true;
+                return true;
+            }
+
+            if (text.Equals("False", StringComparison.OrdinalIgnoreCase))
+            {
+                answerTrue = false;
+                return true;
+            }
+
+            if (options == null || options.Count == 0) return false;
+
+            var optionIndex = TryResolveCorrectOptionIndex(text, options.Count);
+            if (optionIndex < 0 || optionIndex >= options.Count) return false;
+
+            var optionText = (options[optionIndex] ?? string.Empty).Trim();
+            if (optionText.Equals("True", StringComparison.OrdinalIgnoreCase))
+            {
+                answerTrue = true;
+                return true;
+            }
+
+            if (optionText.Equals("False", StringComparison.OrdinalIgnoreCase))
+            {
+                answerTrue = false;
+                return true;
+            }
+
+            return false;
+        }
+
         private static int TryResolveCorrectOptionIndex(string raw, int optionCount)
         {
             var idx = LabelToIndex(raw);
@@ -2556,6 +3784,71 @@ namespace ETD.Api.Controllers
             return string.Join("; ", values);
         }
 
+        private static int SelectBinaryTrueFalseStatementIndex(
+            AssessmentDrivenQuestionGenerator.LessonEvidenceItem item,
+            int optionCount,
+            int trueIndex)
+        {
+            if (trueIndex < 0 || trueIndex >= optionCount) return -1;
+
+            var polaritySeed = item.AssessmentCriteriaId > 0
+                ? item.AssessmentCriteriaId
+                : item.TopicId;
+            var preferTrueStatement = Math.Abs(polaritySeed) % 2 == 1;
+            if (preferTrueStatement)
+            {
+                return trueIndex;
+            }
+
+            for (var i = 0; i < optionCount; i++)
+            {
+                if (i != trueIndex) return i;
+            }
+
+            return trueIndex;
+        }
+
+        private static string EnsureTopicNamedQuestionPrompt(
+            AssessmentDrivenQuestionGenerator.LessonEvidenceItem item,
+            string prompt,
+            bool isTrueFalse,
+            IReadOnlyList<string> options)
+        {
+            var cleaned = AssessmentDrivenQuestionGenerator.SanitizeQuestionText(prompt);
+            if (string.IsNullOrWhiteSpace(cleaned)) return prompt;
+
+            if (!Regex.IsMatch(cleaned, @"\b(?:topic|lesson(?:\s*plan)?)(?:\s|-)*content\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                return cleaned;
+            }
+
+            var topicLabel = AssessmentDrivenQuestionGenerator.BuildTopicQuestionLabel(item);
+            if (isTrueFalse || LooksLikeStatementChoiceOptions(options))
+            {
+                return AssessmentDrivenQuestionGenerator.NormalizeQuestionStem(
+                    $"Which statements are True or False relating to {topicLabel}? Only one statement is True.",
+                    $"Which statements are True or False relating to {topicLabel}?");
+            }
+
+            return AssessmentDrivenQuestionGenerator.NormalizeQuestionStem(
+                $"Which option is correct about {topicLabel}?",
+                $"Which option is correct about {topicLabel}?");
+        }
+
+        private static bool LooksLikeStatementChoiceOptions(IReadOnlyList<string>? options)
+        {
+            if (options == null || options.Count == 0) return false;
+            return options.All(IsStatementChoiceOption);
+        }
+
+        private static bool IsStatementChoiceOption(string? option)
+        {
+            var text = (option ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            if (Regex.IsMatch(text, @"[\.!\?]$")) return true;
+            return text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 5;
+        }
+
         private static string BuildSmiQuestionPrompt(
             AssessmentDrivenQuestionGenerator.LessonEvidenceItem item,
             Qualification qualification,
@@ -2565,9 +3858,11 @@ namespace ETD.Api.Controllers
             int marks,
             int variantIndex,
             int variantCount,
-            IReadOnlyCollection<AssessmentDrivenQuestionGenerator.GeneratedQuestion>? existingQuestions)
+            IReadOnlyCollection<AssessmentDrivenQuestionGenerator.GeneratedQuestion>? existingQuestions,
+            bool contentOnlyScope = false)
         {
             var isTrueFalse = string.Equals(questionType, "TrueFalse", StringComparison.OrdinalIgnoreCase);
+            var scopeLabel = contentOnlyScope ? "lesson content seed" : "criterion";
             var sb = new StringBuilder();
             sb.AppendLine("You are a strict TVET assessment designer for South African occupational training.");
             sb.AppendLine("Generate exactly one question and return ONLY raw JSON (no markdown, no extra text).");
@@ -2587,37 +3882,46 @@ namespace ETD.Api.Controllers
             sb.AppendLine($"OptionCount: {optionCount}");
             sb.AppendLine($"Marks: {Math.Max(1, marks)}");
             sb.AppendLine($"VariantNumber: {Math.Max(1, variantIndex + 1)}");
-            sb.AppendLine($"TotalVariantsRequiredForThisCriterion: {Math.Max(1, variantCount)}");
+            sb.AppendLine($"TotalVariantsRequiredForThis{(contentOnlyScope ? "LessonContentSeed" : "Criterion")}: {Math.Max(1, variantCount)}");
             sb.AppendLine("Rules:");
             sb.AppendLine("- Use English only.");
             sb.AppendLine("- Use clean plain text (no garbled or corrupted characters).");
             sb.AppendLine("- Do not wrap the JSON in markdown code fences.");
             sb.AppendLine("- Apply logical reasoning using only the provided context.");
+            sb.AppendLine("- Use the supplied lesson content first and the supporting evidence second as the source of truth.");
+            sb.AppendLine("- Infer the real technical concept, task, component, tool, safety rule, sequence, or workplace decision from the content before writing the question.");
+            sb.AppendLine("- Do not echo curriculum wording, administrative wording, or document scaffolding.");
+            sb.AppendLine("- Ignore assessment verbs, Bloom taxonomy labels, and instruction words such as explain, discuss, compare, justify, interpret, or describe.");
+            sb.AppendLine("- Generate questions from subject-matter understanding, not from headings or curriculum labels.");
             sb.AppendLine("- Keep the stem self-contained and practical.");
             sb.AppendLine("- Do not include topic codes, AC numbers, LPN labels, or administrative metadata in the stem/options.");
+            sb.AppendLine("- Never mention phrases such as 'lesson plan content', 'topic content', 'curriculum', 'assessment criteria', or 'content map' in the stem or options.");
+            sb.AppendLine("- When the stem refers to the lesson, use the actual topic name instead of phrases like 'topic content' or 'lesson content'.");
             sb.AppendLine("- Keep options homogeneous and realistic.");
             sb.AppendLine("- Do not use 'All of the above' or 'None of the above'.");
-            sb.AppendLine("- The question must test the stated learning requirement, not generic workshop trivia.");
+            sb.AppendLine("- Simple factual checks are acceptable when they are genuinely about the technical subject matter and not about the curriculum wording.");
             if (variantCount > 1)
             {
-                sb.AppendLine("- This criterion requires multiple distinct questions.");
-                sb.AppendLine("- This question must assess a different angle or fact pattern from the other question(s) for the same criterion.");
+                sb.AppendLine($"- This {scopeLabel} requires multiple distinct questions.");
+                sb.AppendLine($"- This question must assess a different angle or fact pattern from the other question(s) for the same {scopeLabel}.");
                 sb.AppendLine("- Do not repeat or lightly paraphrase an earlier stem.");
                 sb.AppendLine("- Do not reuse the same correct answer concept as an earlier question.");
             }
             if (isTrueFalse)
             {
-                sb.AppendLine("- Build one stem and OptionCount statements.");
-                sb.AppendLine("- Exactly one statement must be True.");
-                sb.AppendLine("- correctAnswer format: \"A=True; B=False; C=False; D=False\".");
-                sb.AppendLine("- Use the stem to frame a specific knowledge check, not a generic instruction only.");
+                sb.AppendLine("- Build one single factual statement that the learner can mark True or False.");
+                sb.AppendLine("- options must be exactly [\"True\", \"False\"].");
+                sb.AppendLine("- correctAnswer format: \"True\" or \"False\".");
+                sb.AppendLine("- The statement may be simple and lesson-plan-direct, but it must still be accurate and unambiguous.");
+                sb.AppendLine("- Do not ask the learner to explain, discuss, motivate, or justify the answer.");
             }
             else
             {
                 sb.AppendLine("- Build one stem and OptionCount options.");
                 sb.AppendLine("- Exactly one option is correct.");
                 sb.AppendLine("- correctAnswer format: option letter only, for example \"B\".");
-                sb.AppendLine("- Use a stem that asks for the best description, explanation, identification, or interpretation from the lesson content.");
+                sb.AppendLine("- Ask for a direct fact, correct step, label, term, value, tool, safety point, or sequence from the lesson plan content.");
+                sb.AppendLine("- Do not ask the learner to explain, discuss, motivate, justify, compare, or interpret.");
             }
             sb.AppendLine("- resourceHints can be empty, but when present include practical learner resources.");
             sb.AppendLine();
@@ -2626,14 +3930,12 @@ namespace ETD.Api.Controllers
             sb.AppendLine($"Subject: {CleanPromptField(subject.SubjectCode)} - {CleanPromptField(subject.SubjectDescription)}");
             sb.AppendLine($"TopicFocus: {CleanPromptField(AssessmentDrivenQuestionGenerator.BuildLearnerContextLabel(item))}");
             sb.AppendLine($"TopicDescription: {CleanPromptField(item.TopicDescription)}");
-            sb.AppendLine($"LessonPlanLabel: {CleanPromptField(item.LessonPlanLabel)}");
-            sb.AppendLine($"LearningRequirement: {CleanPromptField(AssessmentDrivenQuestionGenerator.SanitizeQuestionText(item.AssessmentCriteriaDescription))}");
             sb.AppendLine($"LessonContent: {CleanPromptField(TrimForPrompt(item.LessonPlanContent, 1000))}");
-            sb.AppendLine($"EvidenceText: {CleanPromptField(TrimForPrompt(item.EvidenceText, 1000))}");
+            sb.AppendLine($"SupportingEvidence: {CleanPromptField(TrimForPrompt(item.EvidenceText, 800))}");
             if (existingQuestions != null && existingQuestions.Count > 0)
             {
                 sb.AppendLine();
-                sb.AppendLine("Avoid repeating these existing question stems or answer concepts for this same criterion:");
+                sb.AppendLine($"Avoid repeating these existing question stems or answer concepts for this same {scopeLabel}:");
                 foreach (var row in existingQuestions.Take(4))
                 {
                     var priorPrompt = CleanPromptField(TrimForPrompt(row.Prompt, 240));
@@ -2947,6 +4249,15 @@ namespace ETD.Api.Controllers
             return nonAscii > Math.Max(6, text.Length / 12);
         }
 
+        private static bool IsCurriculumEchoQuestion(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            return Regex.IsMatch(
+                text,
+                @"\b(?:lesson\s+plan\s+content|topic\s+content|curriculum(?:\s+content|\s+map)?|assessment\s+criteria?|source\s+excerpt|cited\s+source)\b|[A-Za-z]:\\|\.pdf\b|https?://",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
         private static string CleanSmiAnswerText(string? text)
         {
             var value = text ?? string.Empty;
@@ -3221,7 +4532,7 @@ namespace ETD.Api.Controllers
             int variantIndex = 0)
         {
             _ = variantIndex;
-            return AssessmentDrivenQuestionGenerator.BuildTrueFalseQuestion(item, number, 1);
+            return AssessmentDrivenQuestionGenerator.BuildBinaryTrueFalseQuestion(item, number, 1);
         }
 
         private static AssessmentDrivenQuestionGenerator.GeneratedQuestion BuildMultipleChoiceSubjectQuestion(
@@ -3239,11 +4550,14 @@ namespace ETD.Api.Controllers
         {
             if (seed.Options == null || seed.Options.Count == 0)
             {
-                return ("The learner follows safe procedure and verifies quality.", new List<string>
+                var fallbackSource = AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement(
+                    seed.Prompt,
+                    "Follow the lesson content accurately.");
+                return (fallbackSource, new List<string>
                 {
-                    "Safety checks may be skipped when the task appears routine.",
-                    "Precision can be estimated by eye when production pressure is high.",
-                    "Documenting defects is unnecessary if the output appears usable."
+                    AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement($"It is incorrect that {fallbackSource.TrimEnd('.', '!', '?')}."),
+                    AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement($"It is false that {fallbackSource.TrimEnd('.', '!', '?')}."),
+                    AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement($"This is not correct regarding {fallbackSource.TrimEnd('.', '!', '?')}.")
                 });
             }
 
@@ -3265,21 +4579,6 @@ namespace ETD.Api.Controllers
             if (string.IsNullOrWhiteSpace(cleaned)) return;
             if (list.Any(x => string.Equals(x, cleaned, StringComparison.OrdinalIgnoreCase))) return;
             list.Add(cleaned);
-        }
-
-        private static string BuildFallbackDistractor(AssessmentDrivenQuestionGenerator.LessonEvidenceItem item, int index)
-        {
-            return index switch
-            {
-                0 => "Safety checks may be skipped when a task appears routine.",
-                1 => "Precision can be estimated by eye when production pressure is high.",
-                2 => "Documenting faults is optional if the final output appears usable.",
-                3 => "Protective equipment is optional for short tasks.",
-                4 => "A quick workaround is acceptable even when procedure requires verification.",
-                5 => "Peer approval alone is enough evidence that the work meets standard.",
-                6 => "Quality checks can be completed after handover if time is limited.",
-                _ => "The task can be signed off without recording how the result was achieved."
-            };
         }
 
         private static string NormalizeQuestionOption(string? value, string? fallback = null)
@@ -3350,20 +4649,148 @@ namespace ETD.Api.Controllers
                    ?? _context.Qualifications.FirstOrDefault();
         }
 
-        private static SectionProperties DefaultSectionProperties()
+        private static void EnsureKnowledgeQuestionnaireStyles(MainDocumentPart main)
         {
-            return new SectionProperties(
+            var stylePart = main.StyleDefinitionsPart ?? main.AddNewPart<StyleDefinitionsPart>();
+            stylePart.Styles ??= new Styles();
+
+            UpsertParagraphStyle(stylePart.Styles, BuildNormalStyle());
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading1", "heading 1", 0));
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading2", "heading 2", 1));
+            UpsertParagraphStyle(stylePart.Styles, BuildTocStyle("TOC1", "toc 1", 0, bold: true));
+            UpsertParagraphStyle(stylePart.Styles, BuildTocStyle("TOC2", "toc 2", 240, bold: true));
+            stylePart.Styles.Save();
+        }
+
+        private static void UpsertParagraphStyle(Styles styles, Style style)
+        {
+            var existing = styles.Elements<Style>()
+                .FirstOrDefault(candidate => string.Equals(candidate.StyleId?.Value, style.StyleId?.Value, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                existing.Remove();
+            }
+
+            styles.Append(style);
+        }
+
+        private static Style BuildNormalStyle()
+        {
+            var style = new Style
+            {
+                Type = StyleValues.Paragraph,
+                StyleId = "Normal",
+                Default = true
+            };
+            style.Append(
+                new StyleName { Val = "Normal" },
+                new PrimaryStyle(),
+                new StyleRunProperties(
+                    new RunFonts { Ascii = ExportFont, HighAnsi = ExportFont },
+                    new FontSize { Val = "22" },
+                    new FontSizeComplexScript { Val = "22" }));
+            return style;
+        }
+
+        private static Style BuildHeadingStyle(string styleId, string styleName, int outlineLevel)
+        {
+            var style = new Style
+            {
+                Type = StyleValues.Paragraph,
+                StyleId = styleId,
+                CustomStyle = false
+            };
+            style.Append(
+                new StyleName { Val = styleName },
+                new BasedOn { Val = "Normal" },
+                new NextParagraphStyle { Val = "Normal" },
+                new UIPriority { Val = 9 },
+                new UnhideWhenUsed(),
+                new PrimaryStyle(),
+                new StyleParagraphProperties(
+                    new OutlineLevel { Val = outlineLevel }),
+                new StyleRunProperties(
+                    new RunFonts { Ascii = ExportFont, HighAnsi = ExportFont }));
+            return style;
+        }
+
+        private static Style BuildTocStyle(string styleId, string styleName, int leftIndentTwips, bool bold)
+        {
+            var runProperties = new StyleRunProperties(
+                new RunFonts { Ascii = ExportFont, HighAnsi = ExportFont },
+                new FontSize { Val = "22" },
+                new FontSizeComplexScript { Val = "22" });
+            if (bold)
+            {
+                runProperties.Bold = new Bold();
+            }
+
+            var style = new Style
+            {
+                Type = StyleValues.Paragraph,
+                StyleId = styleId,
+                CustomStyle = false
+            };
+            style.Append(
+                new StyleName { Val = styleName },
+                new BasedOn { Val = "Normal" },
+                new NextParagraphStyle { Val = "Normal" },
+                new AutoRedefine(),
+                new UIPriority { Val = 39 },
+                new UnhideWhenUsed(),
+                new StyleParagraphProperties(
+                    new SpacingBetweenLines { After = "100" },
+                    new Indentation { Left = leftIndentTwips.ToString() }),
+                runProperties);
+            return style;
+        }
+
+        private static string EnsureKnowledgeQuestionnaireFooter(MainDocumentPart main)
+        {
+            var footerPart = main.AddNewPart<FooterPart>();
+            var footer = new Footer();
+            footer.Append(new Paragraph(
+                new ParagraphProperties(new Justification { Val = JustificationValues.Right }),
+                FooterRun("Page "),
+                new SimpleField { Instruction = " PAGE " },
+                FooterRun(" of "),
+                new SimpleField { Instruction = " NUMPAGES " }));
+            footerPart.Footer = footer;
+            footerPart.Footer.Save();
+            return main.GetIdOfPart(footerPart);
+        }
+
+        private static Run FooterRun(string text)
+        {
+            return new Run(
+                new RunProperties(
+                    new FontSize { Val = "20" },
+                    new RunFonts { Ascii = ExportFont, HighAnsi = ExportFont }),
+                new Text(SanitizeXmlText(text ?? string.Empty)) { Space = SpaceProcessingModeValues.Preserve });
+        }
+
+        private static SectionProperties DefaultSectionProperties(string? footerRelId = null)
+        {
+            var section = new SectionProperties();
+            if (!string.IsNullOrWhiteSpace(footerRelId))
+            {
+                section.Append(new FooterReference { Type = HeaderFooterValues.Default, Id = footerRelId });
+            }
+
+            section.Append(
                 new PageSize() { Orient = PageOrientationValues.Portrait, Width = PortraitA4PageWidthTwips, Height = PortraitA4PageHeightTwips },
                 new PageMargin()
                 {
                     Top = 1020,
                     Bottom = 1020,
-                    Left = 1020,
-                    Right = 1020,
+                    Left = QuestionnairePageMarginTwips,
+                    Right = QuestionnairePageMarginTwips,
                     Header = 680,
                     Footer = 680,
                     Gutter = 0
                 });
+
+            return section;
         }
 
         private static TableProperties DefaultTableProperties()
@@ -3396,6 +4823,11 @@ namespace ETD.Api.Controllers
 
         private static Paragraph PageBreak() => new(new Run(new Break() { Type = BreakValues.Page }));
 
+        private static int CentimetresToTwips(double centimetres)
+        {
+            return Math.Max(0, (int)Math.Round(centimetres * 1440d / 2.54d));
+        }
+
         private static Paragraph CenterPara(string text, int sizePt, bool bold)
         {
             var rPr = new RunProperties();
@@ -3417,7 +4849,7 @@ namespace ETD.Api.Controllers
             return new Paragraph(new Run(rPr, new Text(SanitizeXmlText(text ?? string.Empty))));
         }
 
-        private static Paragraph StyledHeading(string text, string styleId, int sizePt)
+        private static Paragraph StyledHeading(string text, string styleId, int sizePt, bool keepNext = false)
         {
             var runProps = new RunProperties
             {
@@ -3429,8 +4861,27 @@ namespace ETD.Api.Controllers
             var paraProps = new ParagraphProperties(
                 new ParagraphStyleId() { Val = styleId },
                 new SpacingBetweenLines() { Before = "120", After = "80" });
+            var outlineLevel = ResolveOutlineLevelForStyle(styleId);
+            if (outlineLevel.HasValue)
+            {
+                paraProps.OutlineLevel = new OutlineLevel { Val = outlineLevel.Value };
+            }
+            if (keepNext)
+            {
+                paraProps.KeepNext = new KeepNext();
+            }
 
             return new Paragraph(paraProps, new Run(runProps, new Text(SanitizeXmlText(text ?? string.Empty))));
+        }
+
+        private static int? ResolveOutlineLevelForStyle(string? styleId)
+        {
+            return styleId?.Trim() switch
+            {
+                "Heading1" => 0,
+                "Heading2" => 1,
+                _ => null
+            };
         }
 
         private static Paragraph BodyPara(string text, int sizeHalfPt)
@@ -3492,7 +4943,7 @@ namespace ETD.Api.Controllers
 
         private static Paragraph BuildPlainQuestionOptionParagraph(string label, string text, bool includeTrueFalseTicks)
         {
-            var suffix = includeTrueFalseTicks ? "    True [ ]    False [ ]" : string.Empty;
+            var suffix = includeTrueFalseTicks ? "    T    F" : string.Empty;
             var line = $"{label}. {text}{suffix}";
             var runProps = new RunProperties
             {
@@ -3567,7 +5018,7 @@ namespace ETD.Api.Controllers
         {
             return new Paragraph(
                 new Run(new FieldChar() { FieldCharType = FieldCharValues.Begin }),
-                new Run(new FieldCode(" TOC \\o \"1-3\" \\h \\z \\u ") { Space = SpaceProcessingModeValues.Preserve }),
+                new Run(new FieldCode(" TOC \\o \"1-2\" \\h \\z \\u ") { Space = SpaceProcessingModeValues.Preserve }),
                 new Run(new FieldChar() { FieldCharType = FieldCharValues.Separate }),
                 new Run(new Text("Table of contents will populate after field update.") { Space = SpaceProcessingModeValues.Preserve }),
                 new Run(new FieldChar() { FieldCharType = FieldCharValues.End }));
@@ -3592,9 +5043,6 @@ namespace ETD.Api.Controllers
             body.Append(HeadingPara("NOTICE OF LIABILITY", 14));
             body.Append(BodyPara("The information in this courseware title is distributed on an 'as is' basis, without warranty. While every precaution has been taken in preparation of this courseware, neither Dr P.C. Wepener nor OpenAI shall have any liability to any person or entity for any loss or damage caused, or alleged to be caused, directly or indirectly by the instructions in this document or by the learning design and development processes described in it.", 22));
 
-            body.Append(HeadingPara("DISCLAIMER", 14));
-            body.Append(BodyPara("A sincere effort has been made to ensure typology accuracy of the material; however, no warranty, express or implied, is made regarding quality, correctness, reliability, accuracy, or freedom from error of this document or the products it describes. Data used in examples and sample files may be fictional. Any resemblance to real persons or companies is coincidental.", 22));
-
             body.Append(HeadingPara("TERMS AND CONDITIONS", 14));
             body.Append(BodyPara("This document is developed for the learning institution holding a legal permit and may not be resold by the learning institution. Sample versions may be shared but may not be resold to a third party. For licensed users, this document may only be used under the terms of the license agreement between the learning institution and Dr P.C. Wepener.", 22));
 
@@ -3616,39 +5064,98 @@ namespace ETD.Api.Controllers
             var coverPath = ResolveKnowledgeQuestionnaireCoverPath(documentTitle);
             var qualificationLine = BuildCoverQualificationLine(qualification);
             var institutionLine = (qualification.LearningInstitutionName ?? "LEARNING INSTITUTION").Trim();
-            var appended = DocxCoverPageOverlay.TryAppendStandardPortraitCoverPage(
-                body,
-                main,
-                coverPath,
-                qualificationLine,
-                subjectLine,
-                institutionLine,
-                PortraitCoverUsableWidthTwips,
-                2001U);
-
-            if (appended) return;
-
-            body.Append(CenterPara(documentTitle, 34, true));
+            const string coverTextColor = "000000";
+            var topBlockStartTwips = CentimetresToTwips(7.0d);
+            var lowerBlockGapTwips = string.IsNullOrWhiteSpace(subjectLine)
+                ? CentimetresToTwips(11.4d)
+                : CentimetresToTwips(9.8d);
+            var coverLines = new List<DocxCoverPageOverlay.CoverTextLine>();
             if (!string.IsNullOrWhiteSpace(institutionLine))
             {
-                body.Append(CenterPara(institutionLine, 24, true));
+                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+                {
+                    Text = institutionLine.ToUpperInvariant(),
+                    FontSizeHalfPt = 52,
+                    Bold = true,
+                    BeforeTwips = topBlockStartTwips,
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
+                });
             }
             if (!string.IsNullOrWhiteSpace(qualificationLine))
             {
-                body.Append(CenterPara(qualificationLine, 20, false));
+                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+                {
+                    Text = qualificationLine,
+                    FontSizeHalfPt = 50,
+                    Bold = true,
+                    BeforeTwips = 520,
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
+                });
+            }
+            if (!string.IsNullOrWhiteSpace(documentTitle))
+            {
+                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+                {
+                    Text = documentTitle.ToUpperInvariant(),
+                    FontSizeHalfPt = 44,
+                    Bold = true,
+                    BeforeTwips = lowerBlockGapTwips,
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
+                });
             }
             if (!string.IsNullOrWhiteSpace(subjectLine))
             {
-                body.Append(CenterPara(subjectLine, 18, false));
+                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+                {
+                    Text = subjectLine.ToUpperInvariant(),
+                    FontSizeHalfPt = 28,
+                    Bold = true,
+                    BeforeTwips = 240,
+                    AfterTwips = 0,
+                    ColorHex = coverTextColor
+                });
+            }
+
+            var appended = DocxCoverPageOverlay.TryAppendCenteredPortraitCoverPage(
+                body,
+                main,
+                coverPath,
+                coverLines,
+                PortraitA4PageWidthTwips,
+                1U);
+
+            if (appended) return;
+
+            if (!string.IsNullOrWhiteSpace(institutionLine))
+            {
+                body.Append(CenterPara(institutionLine, 26, true));
+            }
+            if (!string.IsNullOrWhiteSpace(qualificationLine))
+            {
+                body.Append(CenterPara(qualificationLine, 25, true));
+            }
+            if (!string.IsNullOrWhiteSpace(documentTitle))
+            {
+                body.Append(CenterPara(documentTitle, 22, true));
+            }
+            if (!string.IsNullOrWhiteSpace(subjectLine))
+            {
+                body.Append(CenterPara(subjectLine, 18, true));
             }
         }
 
-        private static Table BuildPhaseQuestionTable(PhaseQuestionnaireDocxQuestionRow? question)
+        private static Table BuildPhaseQuestionTable(PhaseQuestionnaireDocxQuestionRow? question, string? topicHeaderText = null)
         {
             var isTrueFalse = string.Equals(question?.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase);
-            var gridWidths = new[] { "939", "5965", "833", "693", "694", "742" };
-            var promptSpanWidth = "7491";
-            var choiceSpanWidth = "1526";
+            var decisionColumnWidthTwips = CentimetresToTwips(1.2d).ToString();
+            // Keep both decision columns at 1.2 cm and leave wrapper slack so Word renders the far-right border.
+            var gridWidths = new[] { "1000", "5700", "950", "950", decisionColumnWidthTwips, decisionColumnWidthTwips };
+            var promptSpanWidth = "7600";
+            var choiceSpanWidth = "1900";
+            const uint compactOptionRowHeightTwips = 454U; // ~0.8 cm
             var table = new Table();
             table.Append(BuildPhaseQuestionTableProperties());
             table.Append(new TableGrid(
@@ -3664,6 +5171,9 @@ namespace ETD.Api.Controllers
                 .Select(option => (option ?? string.Empty).Trim())
                 .Where(option => !string.IsNullOrWhiteSpace(option))
                 .ToList();
+            var useTrueFalseColumns = isTrueFalse
+                || (question?.Prompt ?? string.Empty).Contains("true or false", StringComparison.OrdinalIgnoreCase)
+                || LooksLikeStatementChoiceOptions(options);
 
             if (options.Count == 0)
             {
@@ -3677,7 +5187,7 @@ namespace ETD.Api.Controllers
             }
 
             table.Append(new TableRow(
-                new TableRowProperties(new TableRowHeight { Val = 624U, HeightType = HeightRuleValues.AtLeast }),
+                new TableRowProperties(new CantSplit(), new TableRowHeight { Val = 624U, HeightType = HeightRuleValues.AtLeast }),
                 SampleQuestionCell(gridWidths[0], $"Q{Math.Max(1, question?.Number ?? 1)}", bold: true, center: true, fill: "F2F2F2", fontSizeHalfPt: "22"),
                 SampleQuestionCell(
                     promptSpanWidth,
@@ -3688,38 +5198,55 @@ namespace ETD.Api.Controllers
                 SampleQuestionCell(gridWidths[5], "Moderator Decision", bold: true, center: true, verticalText: true, verticalMerge: "restart", fontSizeHalfPt: "16")));
 
             table.Append(new TableRow(
+                new TableRowProperties(new CantSplit()),
                 SampleQuestionCell(gridWidths[0], "Option", bold: true, center: true, fill: "F2F2F2", fontSizeHalfPt: "20"),
                 SampleQuestionCell(gridWidths[1], "Statement", bold: true, fill: "F2F2F2", fontSizeHalfPt: "20"),
-                SampleQuestionCell(choiceSpanWidth, "ENCIRCLE YOUR CHOISE", bold: true, center: true, fill: "F2F2F2", gridSpan: 2, fontSizeHalfPt: "16"),
+                SampleQuestionCell(choiceSpanWidth, useTrueFalseColumns ? "MARK T OR F" : "MARK YOUR CHOICE", bold: true, center: true, fill: "F2F2F2", gridSpan: 2, fontSizeHalfPt: "16"),
                 SampleQuestionCell(gridWidths[4], string.Empty, fill: "F2F2F2", verticalMerge: "continue"),
                 SampleQuestionCell(gridWidths[5], string.Empty, fill: "F2F2F2", verticalMerge: "continue")));
 
             for (var i = 0; i < options.Count; i++)
             {
-                if (isTrueFalse)
+                if (useTrueFalseColumns)
                 {
                     table.Append(new TableRow(
-                        new TableRowProperties(new TableRowHeight { Val = 520U, HeightType = HeightRuleValues.AtLeast }),
+                        new TableRowProperties(new CantSplit(), new TableRowHeight { Val = compactOptionRowHeightTwips, HeightType = HeightRuleValues.AtLeast }),
                         SampleQuestionCell(gridWidths[0], OptionLabel(i), center: true, fontSizeHalfPt: "20"),
                         SampleQuestionCell(gridWidths[1], options[i], fontSizeHalfPt: "20"),
-                        SampleQuestionCell(gridWidths[2], "T", center: true, fontSizeHalfPt: "20"),
-                        SampleQuestionCell(gridWidths[3], "F", center: true, fontSizeHalfPt: "20"),
+                        SampleQuestionCell(gridWidths[2], "T", center: true, fontSizeHalfPt: "18"),
+                        SampleQuestionCell(gridWidths[3], "F", center: true, fontSizeHalfPt: "18"),
                         SampleQuestionCell(gridWidths[4], string.Empty, center: true, fontSizeHalfPt: "20"),
                         SampleQuestionCell(gridWidths[5], string.Empty, center: true, fontSizeHalfPt: "20")));
                 }
                 else
                 {
                     table.Append(new TableRow(
-                        new TableRowProperties(new TableRowHeight { Val = 520U, HeightType = HeightRuleValues.AtLeast }),
+                        new TableRowProperties(new CantSplit(), new TableRowHeight { Val = compactOptionRowHeightTwips, HeightType = HeightRuleValues.AtLeast }),
                         SampleQuestionCell(gridWidths[0], OptionLabel(i), center: true, fontSizeHalfPt: "20"),
                         SampleQuestionCell(gridWidths[1], options[i], fontSizeHalfPt: "20"),
-                        SampleQuestionCell(choiceSpanWidth, "[   ]", center: true, gridSpan: 2, fontSizeHalfPt: "22"),
+                        SampleQuestionCell(choiceSpanWidth, "MARK", center: true, gridSpan: 2, fontSizeHalfPt: "20"),
                         SampleQuestionCell(gridWidths[4], string.Empty, center: true, fontSizeHalfPt: "20"),
                         SampleQuestionCell(gridWidths[5], string.Empty, center: true, fontSizeHalfPt: "20")));
                 }
             }
 
-            return table;
+            var leadingContent = new List<OpenXmlElement>();
+            if (!string.IsNullOrWhiteSpace(topicHeaderText))
+            {
+                leadingContent.Add(BuildTopicQuestionHeaderParagraph(topicHeaderText));
+            }
+
+            return WrapQuestionTableForPageFlow(table, leadingContent);
+        }
+
+        private static Paragraph BuildTopicQuestionHeaderParagraph(string text)
+        {
+            return BuildQuestionBlockParagraph(
+                text,
+                "24",
+                bold: true,
+                before: "0",
+                after: CentimetresToTwips(1.5d).ToString());
         }
 
         private static Paragraph BuildSampleQuestionPromptParagraph(PhaseQuestionnaireDocxQuestionRow? question, int marks)
@@ -3821,14 +5348,59 @@ namespace ETD.Api.Controllers
         private static TableProperties BuildPhaseQuestionTableProperties()
         {
             return new TableProperties(
-                new TableWidth { Type = TableWidthUnitValues.Dxa, Width = QuestionnaireUsableWidthTwips },
+                new TableWidth { Type = TableWidthUnitValues.Dxa, Width = QuestionnaireQuestionTableWidthTwips },
+                new TableJustification { Val = TableRowAlignmentValues.Left },
                 new TableLayout { Type = TableLayoutValues.Fixed },
                 BuildVisibleTableBorders(),
                 new TableCellMarginDefault(
                     new TopMargin { Width = "70", Type = TableWidthUnitValues.Dxa },
                     new BottomMargin { Width = "70", Type = TableWidthUnitValues.Dxa },
-                    new TableCellLeftMargin { Width = 100, Type = TableWidthValues.Dxa },
-                    new TableCellRightMargin { Width = 100, Type = TableWidthValues.Dxa }));
+                    new TableCellLeftMargin { Width = 0, Type = TableWidthValues.Dxa },
+                    new TableCellRightMargin { Width = 0, Type = TableWidthValues.Dxa }));
+        }
+
+        private static Table WrapQuestionTableForPageFlow(Table questionTable, IEnumerable<OpenXmlElement>? leadingContent = null)
+        {
+            var wrapper = new Table(
+                new TableProperties(
+                    new TableWidth { Type = TableWidthUnitValues.Dxa, Width = QuestionnaireQuestionTableWrapperWidthTwips },
+                    new TableJustification { Val = TableRowAlignmentValues.Left },
+                    new TableLayout { Type = TableLayoutValues.Fixed },
+                    new TableBorders(
+                        new TopBorder { Val = BorderValues.Nil },
+                        new LeftBorder { Val = BorderValues.Nil },
+                        new BottomBorder { Val = BorderValues.Nil },
+                        new RightBorder { Val = BorderValues.Nil },
+                        new InsideHorizontalBorder { Val = BorderValues.Nil },
+                        new InsideVerticalBorder { Val = BorderValues.Nil }),
+                    new TableCellMarginDefault(
+                        new TopMargin { Width = "0", Type = TableWidthUnitValues.Dxa },
+                        new BottomMargin { Width = "0", Type = TableWidthUnitValues.Dxa },
+                        new TableCellLeftMargin { Width = 0, Type = TableWidthValues.Dxa },
+                        new TableCellRightMargin { Width = 0, Type = TableWidthValues.Dxa })),
+                new TableGrid(new GridColumn { Width = QuestionnaireQuestionTableWrapperWidthTwips }));
+
+            var cell = new TableCell(
+                new TableCellProperties(
+                    new TableCellWidth { Type = TableWidthUnitValues.Dxa, Width = QuestionnaireQuestionTableWrapperWidthTwips },
+                    new TableCellBorders(
+                        new TopBorder { Val = BorderValues.Nil },
+                        new LeftBorder { Val = BorderValues.Nil },
+                        new BottomBorder { Val = BorderValues.Nil },
+                        new RightBorder { Val = BorderValues.Nil })));
+
+            foreach (var item in leadingContent ?? Array.Empty<OpenXmlElement>())
+            {
+                cell.Append((OpenXmlElement)item.CloneNode(true));
+            }
+
+            cell.Append((Table)questionTable.CloneNode(true));
+
+            wrapper.Append(new TableRow(
+                new TableRowProperties(new CantSplit()),
+                cell));
+
+            return wrapper;
         }
 
         private static Table BuildPhaseQuestionResponseTable(PhaseQuestionnaireDocxQuestionRow? question)
@@ -3845,20 +5417,20 @@ namespace ETD.Api.Controllers
             var table = new Table();
             table.Append(BuildNestedQuestionTableProperties());
             table.Append(new TableGrid(
-                new GridColumn() { Width = "6766" },
+                new GridColumn() { Width = "6300" },
                 new GridColumn() { Width = "1550" },
                 new GridColumn() { Width = "1550" }));
 
             table.Append(new TableRow(
-                QuestionBlockCell("6766", "Statement", bold: true, fill: "F2F2F2", fontSizeHalfPt: "20"),
+                QuestionBlockCell("6300", "Statement", bold: true, fill: "F2F2F2", fontSizeHalfPt: "20"),
                 QuestionBlockCell("1550", "True", bold: true, center: true, fill: "F2F2F2", fontSizeHalfPt: "20"),
                 QuestionBlockCell("1550", "False", bold: true, center: true, fill: "F2F2F2", fontSizeHalfPt: "20")));
 
             table.Append(new TableRow(
                 new TableRowProperties(new TableRowHeight { Val = 620U, HeightType = HeightRuleValues.AtLeast }),
-                QuestionBlockCell("6766", statement, fontSizeHalfPt: "20"),
-                QuestionBlockCell("1550", "[   ]", center: true, fontSizeHalfPt: "22"),
-                QuestionBlockCell("1550", "[   ]", center: true, fontSizeHalfPt: "22")));
+                QuestionBlockCell("6300", statement, fontSizeHalfPt: "20"),
+                QuestionBlockCell("1550", "T", center: true, fontSizeHalfPt: "20"),
+                QuestionBlockCell("1550", "F", center: true, fontSizeHalfPt: "20")));
 
             return table;
         }
@@ -3869,13 +5441,15 @@ namespace ETD.Api.Controllers
             table.Append(BuildNestedQuestionTableProperties());
             table.Append(new TableGrid(
                 new GridColumn() { Width = "900" },
-                new GridColumn() { Width = "7366" },
-                new GridColumn() { Width = "1600" }));
+                new GridColumn() { Width = "5500" },
+                new GridColumn() { Width = "1500" },
+                new GridColumn() { Width = "1500" }));
 
             table.Append(new TableRow(
                 QuestionBlockCell("900", "Option", bold: true, center: true, fill: "F2F2F2", fontSizeHalfPt: "20"),
-                QuestionBlockCell("7366", "Statement", bold: true, fill: "F2F2F2", fontSizeHalfPt: "20"),
-                QuestionBlockCell("1600", "Learner Choice", bold: true, center: true, fill: "F2F2F2", fontSizeHalfPt: "20")));
+                QuestionBlockCell("5500", "Statement", bold: true, fill: "F2F2F2", fontSizeHalfPt: "20"),
+                QuestionBlockCell("1500", "T", bold: true, center: true, fill: "F2F2F2", fontSizeHalfPt: "20"),
+                QuestionBlockCell("1500", "F", bold: true, center: true, fill: "F2F2F2", fontSizeHalfPt: "20")));
 
             var options = (question?.Options ?? new List<string>())
                 .Select(option => (option ?? string.Empty).Trim())
@@ -3886,8 +5460,9 @@ namespace ETD.Api.Controllers
             {
                 table.Append(new TableRow(
                     QuestionBlockCell("900", "-", center: true),
-                    QuestionBlockCell("7366", "No answer options were generated for this question."),
-                    QuestionBlockCell("1600", string.Empty)));
+                    QuestionBlockCell("5500", "No answer options were generated for this question."),
+                    QuestionBlockCell("1500", string.Empty),
+                    QuestionBlockCell("1500", string.Empty)));
                 return table;
             }
 
@@ -3896,8 +5471,9 @@ namespace ETD.Api.Controllers
                 table.Append(new TableRow(
                     new TableRowProperties(new TableRowHeight { Val = 520U, HeightType = HeightRuleValues.AtLeast }),
                     QuestionBlockCell("900", OptionLabel(i), center: true, fontSizeHalfPt: "20"),
-                    QuestionBlockCell("7366", options[i], fontSizeHalfPt: "20"),
-                    QuestionBlockCell("1600", "[   ]", center: true, fontSizeHalfPt: "22")));
+                    QuestionBlockCell("5500", options[i], fontSizeHalfPt: "20"),
+                    QuestionBlockCell("1500", "T", center: true, fontSizeHalfPt: "20"),
+                    QuestionBlockCell("1500", "F", center: true, fontSizeHalfPt: "20")));
             }
 
             return table;
@@ -3906,7 +5482,7 @@ namespace ETD.Api.Controllers
         private static TableProperties BuildNestedQuestionTableProperties()
         {
             return new TableProperties(
-                new TableWidth { Type = TableWidthUnitValues.Dxa, Width = QuestionnaireUsableWidthTwips },
+                new TableWidth { Type = TableWidthUnitValues.Dxa, Width = QuestionnaireQuestionTableWidthTwips },
                 new TableLayout { Type = TableLayoutValues.Fixed },
                 BuildVisibleTableBorders(),
                 new TableCellMarginDefault(
@@ -4051,35 +5627,66 @@ namespace ETD.Api.Controllers
                 : cleaned;
         }
 
+        private static string BuildPhaseMemorandumAnswerKey(PhaseQuestionnaireDocxQuestionRow? question)
+        {
+            if (question == null) return string.Empty;
+
+            if (string.Equals(question.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase))
+            {
+                var raw = (question.CorrectAnswer ?? string.Empty).Trim();
+                if (raw.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                    raw.Equals("False", StringComparison.OrdinalIgnoreCase))
+                {
+                    return raw;
+                }
+
+                var options = (question.Options ?? new List<string>())
+                    .Select(option => (option ?? string.Empty).Trim())
+                    .Where(option => !string.IsNullOrWhiteSpace(option))
+                    .ToList();
+                if (options.Count > 0 &&
+                    TryResolveTrueFalseCorrectIndex(raw, options.Count, out var trueIndex) &&
+                    trueIndex >= 0 &&
+                    trueIndex < options.Count)
+                {
+                    return $"True: {OptionLabel(trueIndex)}. {options[trueIndex]}";
+                }
+
+                return raw;
+            }
+
+            var mcqOptions = (question.Options ?? new List<string>())
+                .Select(option => (option ?? string.Empty).Trim())
+                .Where(option => !string.IsNullOrWhiteSpace(option))
+                .ToList();
+            var correctIndex = TryResolveCorrectOptionIndex((question.CorrectAnswer ?? string.Empty).Trim(), mcqOptions.Count);
+            if (correctIndex >= 0 && correctIndex < mcqOptions.Count)
+            {
+                return $"{OptionLabel(correctIndex)}. {mcqOptions[correctIndex]}";
+            }
+
+            return (question.CorrectAnswer ?? string.Empty).Trim();
+        }
+
         private static string BuildCoverQualificationLine(Qualification qualification)
         {
             var qualificationNumber = (qualification.QualificationNumber ?? string.Empty).Trim();
             var qualificationDescription = (qualification.QualificationDescription ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(qualificationNumber)) return qualificationDescription;
-            if (string.IsNullOrWhiteSpace(qualificationDescription)) return qualificationNumber;
-            return $"{qualificationNumber} {qualificationDescription}".Trim();
+            if (!string.IsNullOrWhiteSpace(qualificationDescription)) return qualificationDescription;
+            return qualificationNumber;
         }
 
         private static string? ResolveKnowledgeQuestionnaireCoverPath(string documentTitle)
         {
-            var normalizedTitle = (documentTitle ?? string.Empty).Trim().ToUpperInvariant();
-            var candidates = normalizedTitle.Contains("MEMORANDUM", StringComparison.Ordinal)
-                ? new[]
-                {
-                    Path.Combine("Imports", "Coverpages", "Knowlegde Questionnaire Memorandum Cover Page.png"),
-                    Path.Combine("ETDP", "Imports", "Coverpages", "Knowlegde Questionnaire Memorandum Cover Page.png"),
-                    Path.Combine("Imports", "Coverpages", "Knowlegde Questionnaire Cover Page.png"),
-                    Path.Combine("ETDP", "Imports", "Coverpages", "Knowlegde Questionnaire Cover Page.png"),
-                    Path.Combine("Imports", "Coverpages", "clean coverpage.jpg"),
-                    Path.Combine("ETDP", "Imports", "Coverpages", "clean coverpage.jpg")
-                }
-                : new[]
-                {
-                    Path.Combine("Imports", "Coverpages", "Knowlegde Questionnaire Cover Page.png"),
-                    Path.Combine("ETDP", "Imports", "Coverpages", "Knowlegde Questionnaire Cover Page.png"),
-                    Path.Combine("Imports", "Coverpages", "clean coverpage.jpg"),
-                    Path.Combine("ETDP", "Imports", "Coverpages", "clean coverpage.jpg")
-                };
+            var candidates = new[]
+            {
+                Path.Combine("Imports", "Coverpages", "clean coverpage.jpg"),
+                Path.Combine("ETDP", "Imports", "Coverpages", "clean coverpage.jpg"),
+                Path.Combine("Imports", "Coverpages", "Knowlegde Questionnaire Memorandum Cover Page.png"),
+                Path.Combine("ETDP", "Imports", "Coverpages", "Knowlegde Questionnaire Memorandum Cover Page.png"),
+                Path.Combine("Imports", "Coverpages", "Knowlegde Questionnaire Cover Page.png"),
+                Path.Combine("ETDP", "Imports", "Coverpages", "Knowlegde Questionnaire Cover Page.png")
+            };
 
             foreach (var relative in candidates)
             {
@@ -4178,7 +5785,6 @@ namespace ETD.Api.Controllers
 
             table.Append(QuestionRow("Question", $"Question {question.Number} ({question.Marks} mark) - {typeLabel}", emphasizeValue: true));
             table.Append(QuestionRow("Topic", $"{question.TopicCode} — {question.TopicDescription}"));
-            table.Append(QuestionRow("Lesson Plan", question.LessonPlanLabel));
             table.Append(QuestionRow("Assessment Criterion", question.AssessmentCriteriaDescription));
             table.Append(QuestionRow("Stem", question.Prompt));
 
@@ -4257,8 +5863,8 @@ namespace ETD.Api.Controllers
                     table.Append(new TableRow(
                         TableTextCell("1100", label, center: true),
                         TableTextCell("6400", question.Options[i]),
-                        TableTextCell("1000", "[ ]", center: true),
-                        TableTextCell("1000", "[ ]", center: true)));
+                        TableTextCell("1000", "T", center: true),
+                        TableTextCell("1000", "F", center: true)));
                 }
                 else
                 {

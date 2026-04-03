@@ -1,6 +1,8 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
 using ETD.Api.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -53,12 +55,6 @@ namespace ETD.Api.Controllers
                 return BadRequest(new { error = ex.Message });
             }
 
-            var scriptPath = Path.Combine(_environment.ContentRootPath, "Exports", "ProjectTemplate", "generate_project_rollout_plan.py");
-            if (!System.IO.File.Exists(scriptPath))
-            {
-                return NotFound(new { error = $"Rollout generator script not found: {scriptPath}" });
-            }
-
             string outputDirectory;
             try
             {
@@ -73,84 +69,27 @@ namespace ETD.Api.Controllers
             var outputPath = Path.Combine(outputDirectory, $"Project_Plan_Rollout_{stamp}.xlsx");
             var summaryPath = Path.Combine(outputDirectory, $"ProjectPlan_Rollout_Summary_{stamp}.md");
 
-            var psi = new ProcessStartInfo
-            {
-                FileName = "python",
-                WorkingDirectory = _environment.ContentRootPath,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            psi.ArgumentList.Add(scriptPath);
-            psi.ArgumentList.Add("--template");
-            psi.ArgumentList.Add(resolved.TemplatePath);
-            psi.ArgumentList.Add("--schedule-csv");
-            psi.ArgumentList.Add(resolved.ScheduleCsvPath);
-            psi.ArgumentList.Add("--output");
-            psi.ArgumentList.Add(outputPath);
-            psi.ArgumentList.Add("--summary");
-            psi.ArgumentList.Add(summaryPath);
-            psi.ArgumentList.Add("--start-date");
-            psi.ArgumentList.Add(resolved.StartDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
-            psi.ArgumentList.Add("--end-date");
-            psi.ArgumentList.Add(resolved.EndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
-            psi.ArgumentList.Add("--credits");
-            psi.ArgumentList.Add(resolved.Credits.ToString(CultureInfo.InvariantCulture));
-            psi.ArgumentList.Add("--learning-days");
-            psi.ArgumentList.Add(resolved.LearningDays.ToString(CultureInfo.InvariantCulture));
-            psi.ArgumentList.Add("--semesters");
-            psi.ArgumentList.Add(resolved.Semesters.ToString(CultureInfo.InvariantCulture));
-            psi.ArgumentList.Add("--break-days");
-            psi.ArgumentList.Add(resolved.BreakDays.ToString(CultureInfo.InvariantCulture));
-
             try
             {
-                using var process = Process.Start(psi);
-                if (process == null)
-                {
-                    return StatusCode(500, new { error = "Failed to start Python process." });
-                }
+                var scheduleRows = ReadScheduleCsvRows(resolved.ScheduleCsvPath);
+                var rolloutRows = BuildRolloutPlanRows(resolved, scheduleRows);
+                var fileBytes = BuildProjectRolloutWorkbook(preview, rolloutRows);
+                await System.IO.File.WriteAllBytesAsync(outputPath, fileBytes);
 
-                using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-                var stdOutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
-                var stdErrTask = process.StandardError.ReadToEndAsync(cts.Token);
-                await process.WaitForExitAsync(cts.Token);
-                var stdOut = await stdOutTask;
-                var stdErr = await stdErrTask;
+                var summary = BuildProjectRolloutSummaryMarkdown(resolved, preview, rolloutRows, outputPath);
+                await System.IO.File.WriteAllTextAsync(summaryPath, summary, new UTF8Encoding(true));
 
-                if (process.ExitCode != 0)
-                {
-                    return StatusCode(500, new
-                    {
-                        error = "Rollout export generation failed.",
-                        exitCode = process.ExitCode,
-                        stderr = stdErr,
-                        stdout = stdOut
-                    });
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                return StatusCode(504, new { error = "Rollout export generation timed out." });
+                var downloadName = Path.GetFileName(outputPath);
+                Response.Headers["X-Rollout-Output-Path"] = outputPath;
+                Response.Headers["X-Rollout-Summary-Path"] = summaryPath;
+                Response.Headers["X-Rollout-Schedule-Path"] = resolved.ScheduleCsvPath;
+                Response.Headers["X-Rollout-Learning-Days"] = preview.LearningDays.ToString(CultureInfo.InvariantCulture);
+                return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", downloadName);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = $"Failed to run rollout generator: {ex.Message}" });
+                return StatusCode(500, new { error = $"Failed to generate rollout workbook: {ex.Message}" });
             }
-
-            if (!System.IO.File.Exists(outputPath))
-            {
-                return StatusCode(500, new { error = $"Generator completed but output file was not created: {outputPath}" });
-            }
-
-            var fileBytes = await System.IO.File.ReadAllBytesAsync(outputPath);
-            var downloadName = Path.GetFileName(outputPath);
-            Response.Headers["X-Rollout-Output-Path"] = outputPath;
-            Response.Headers["X-Rollout-Summary-Path"] = summaryPath;
-            Response.Headers["X-Rollout-Schedule-Path"] = resolved.ScheduleCsvPath;
-            Response.Headers["X-Rollout-Learning-Days"] = preview.LearningDays.ToString(CultureInfo.InvariantCulture);
-            return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", downloadName);
         }
 
         private async Task<string> ResolveProjectRolloutOutputDirectoryAsync(ResolvedRolloutRequest resolved)
@@ -264,11 +203,11 @@ namespace ETD.Api.Controllers
             if (breakDays < 0) throw new InvalidOperationException("BreakDays cannot be negative.");
             if (endDate <= startDate) throw new InvalidOperationException("End date must be after start date.");
 
-            var templatePath = Path.Combine(_environment.ContentRootPath, "Exports", "ProjectTemplate", "Fitter_and_Turner_Project_Plan.xlsx");
-            if (!System.IO.File.Exists(templatePath))
-            {
-                throw new InvalidOperationException($"Rollout template not found: {templatePath}");
-            }
+            var projectRoot = ResolveProjectRoot();
+            var templatePath = Path.Combine(projectRoot, "Exports", "ProjectTemplate", "Fitter_and_Turner_Project_Plan.xlsx");
+            var resolvedTemplatePath = System.IO.File.Exists(templatePath)
+                ? templatePath
+                : "ETDP native rollout generator";
 
             var qualificationNumber = request.QualificationNumber;
             if (string.IsNullOrWhiteSpace(qualificationNumber) && request.QualificationId.HasValue && request.QualificationId.Value > 0)
@@ -280,7 +219,7 @@ namespace ETD.Api.Controllers
             }
 
             var scheduleCsvPath = await ResolveScheduleCsvPathAsync(
-                Path.Combine(_environment.ContentRootPath, "Exports"),
+                Path.Combine(projectRoot, "Exports"),
                 request.QualificationId,
                 qualificationNumber);
 
@@ -292,11 +231,62 @@ namespace ETD.Api.Controllers
                 LearningDays = learningDays,
                 Semesters = semesters,
                 BreakDays = breakDays,
-                TemplatePath = templatePath,
+                TemplatePath = resolvedTemplatePath,
                 ScheduleCsvPath = scheduleCsvPath,
                 QualificationId = request.QualificationId,
                 QualificationNumber = qualificationNumber
             };
+        }
+
+        private string ResolveProjectRoot()
+        {
+            var candidates = new List<string>();
+
+            void AddCandidate(string? candidate)
+            {
+                if (string.IsNullOrWhiteSpace(candidate)) return;
+                var full = Path.GetFullPath(candidate);
+                if (Directory.Exists(full))
+                {
+                    candidates.Add(full);
+                }
+            }
+
+            var fromEnv = (Environment.GetEnvironmentVariable("ETDP_WORKSPACE_ROOT") ?? string.Empty).Trim();
+            AddCandidate(fromEnv);
+            AddCandidate(_environment.ContentRootPath);
+            AddCandidate(AppContext.BaseDirectory);
+
+            var cursor = _environment.ContentRootPath;
+            for (var depth = 0; depth < 8 && !string.IsNullOrWhiteSpace(cursor); depth++)
+            {
+                AddCandidate(cursor);
+                AddCandidate(Path.Combine(cursor, "ETDP"));
+                cursor = Directory.GetParent(cursor)?.FullName ?? string.Empty;
+            }
+
+            cursor = AppContext.BaseDirectory;
+            for (var depth = 0; depth < 8 && !string.IsNullOrWhiteSpace(cursor); depth++)
+            {
+                AddCandidate(cursor);
+                AddCandidate(Path.Combine(cursor, "ETDP"));
+                cursor = Directory.GetParent(cursor)?.FullName ?? string.Empty;
+            }
+
+            foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (System.IO.File.Exists(Path.Combine(candidate, "ETDP.csproj")))
+                {
+                    return candidate;
+                }
+
+                if (Directory.Exists(Path.Combine(candidate, "Exports", "ProjectTemplate")))
+                {
+                    return candidate;
+                }
+            }
+
+            return _environment.ContentRootPath;
         }
 
         private static string ResolveScheduleCsvPath(string exportsRoot, string? qualificationNumber)
@@ -504,7 +494,7 @@ namespace ETD.Api.Controllers
 
         private static ProjectRolloutPreviewResponse BuildPreview(ResolvedRolloutRequest resolved)
         {
-            var sourceSessions = CountCsvRows(resolved.ScheduleCsvPath);
+            var sourceSessions = CountCsvRecords(resolved.ScheduleCsvPath);
             if (sourceSessions <= 0)
             {
                 throw new InvalidOperationException($"Schedule CSV has no data rows: {resolved.ScheduleCsvPath}");
@@ -558,23 +548,9 @@ namespace ETD.Api.Controllers
             };
         }
 
-        private static int CountCsvRows(string path)
+        private static int CountCsvRecords(string path)
         {
-            using var reader = new StreamReader(path, Encoding.UTF8, true);
-            var count = 0;
-            var isFirst = true;
-            while (!reader.EndOfStream)
-            {
-                var line = reader.ReadLine();
-                if (isFirst)
-                {
-                    isFirst = false;
-                    continue;
-                }
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                count++;
-            }
-            return count;
+            return ReadScheduleCsvRows(path).Count;
         }
 
         private static DateOnly ParseDateOrDefault(string? value, DateOnly fallback)
@@ -711,6 +687,452 @@ namespace ETD.Api.Controllers
             return list;
         }
 
+        private static List<RolloutScheduleSourceRow> ReadScheduleCsvRows(string path)
+        {
+            if (!System.IO.File.Exists(path))
+            {
+                throw new InvalidOperationException($"Schedule CSV not found: {path}");
+            }
+
+            var raw = System.IO.File.ReadAllText(path, Encoding.UTF8);
+            var records = ParseCsvRecords(raw);
+            if (records.Count == 0)
+            {
+                return new List<RolloutScheduleSourceRow>();
+            }
+
+            var headers = records[0].ToArray();
+            var index = headers
+                .Select((value, idx) => new { Name = (value ?? string.Empty).Trim(), Index = idx })
+                .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+                .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().Index, StringComparer.OrdinalIgnoreCase);
+
+            string Read(string[] fields, params string[] names)
+            {
+                foreach (var name in names)
+                {
+                    if (index.TryGetValue(name, out var i) && i >= 0 && i < fields.Length)
+                    {
+                        return (fields[i] ?? string.Empty).Trim();
+                    }
+                }
+
+                return string.Empty;
+            }
+
+            var rows = new List<RolloutScheduleSourceRow>();
+            foreach (var record in records.Skip(1))
+            {
+                var fields = record?.ToArray() ?? Array.Empty<string>();
+                if (fields.Length == 0 || fields.All(string.IsNullOrWhiteSpace))
+                {
+                    continue;
+                }
+
+                rows.Add(new RolloutScheduleSourceRow
+                {
+                    Date = Read(fields, "Date"),
+                    Day = Read(fields, "Day"),
+                    Period = Read(fields, "Period"),
+                    TimeStart = Read(fields, "TimeStart"),
+                    TimeEnd = Read(fields, "TimeEnd"),
+                    SubjectCode = Read(fields, "SubjectCode"),
+                    TopicCode = Read(fields, "TopicCode"),
+                    TopicDescription = Read(fields, "TopicDescription"),
+                    Lpn = Read(fields, "LPN"),
+                    LessonPlanDescription = Read(fields, "LessonPlanDescription"),
+                    AssessmentCriteriaDescription = Read(fields, "AssessmentCriteriaDescription"),
+                    LecturerActions = Read(fields, "LecturerActions"),
+                    LearnerActions = Read(fields, "LearnerActions"),
+                    LearningAids = Read(fields, "LearningAids")
+                });
+            }
+
+            return rows;
+        }
+
+        private static List<List<string>> ParseCsvRecords(string? raw)
+        {
+            var records = new List<List<string>>();
+            var currentRecord = new List<string>();
+            var currentField = new StringBuilder();
+            var text = (raw ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
+            var inQuotes = false;
+
+            for (var i = 0; i < text.Length; i++)
+            {
+                var ch = text[i];
+                if (ch == '"')
+                {
+                    if (inQuotes && i + 1 < text.Length && text[i + 1] == '"')
+                    {
+                        currentField.Append('"');
+                        i++;
+                        continue;
+                    }
+
+                    inQuotes = !inQuotes;
+                    continue;
+                }
+
+                if (ch == ',' && !inQuotes)
+                {
+                    currentRecord.Add(currentField.ToString());
+                    currentField.Clear();
+                    continue;
+                }
+
+                if (ch == '\n' && !inQuotes)
+                {
+                    currentRecord.Add(currentField.ToString());
+                    currentField.Clear();
+                    if (currentRecord.Any(value => !string.IsNullOrWhiteSpace(value)))
+                    {
+                        records.Add(currentRecord);
+                    }
+                    currentRecord = new List<string>();
+                    continue;
+                }
+
+                currentField.Append(ch);
+            }
+
+            if (currentField.Length > 0 || currentRecord.Count > 0)
+            {
+                currentRecord.Add(currentField.ToString());
+                if (currentRecord.Any(value => !string.IsNullOrWhiteSpace(value)))
+                {
+                    records.Add(currentRecord);
+                }
+            }
+
+            return records;
+        }
+
+        private static List<RolloutPlanRow> BuildRolloutPlanRows(
+            ResolvedRolloutRequest resolved,
+            IReadOnlyList<RolloutScheduleSourceRow> scheduleRows)
+        {
+            var rows = (scheduleRows ?? Array.Empty<RolloutScheduleSourceRow>()).ToList();
+            if (rows.Count == 0)
+            {
+                return new List<RolloutPlanRow>();
+            }
+
+            var (learningPlan, _, _) = BuildSemesterPlan(
+                resolved.StartDate,
+                resolved.EndDate,
+                resolved.Semesters,
+                resolved.BreakDays,
+                resolved.LearningDays);
+            var sessionsPerDay = DistributeSessions(rows.Count, resolved.LearningDays);
+            if (learningPlan.Count != sessionsPerDay.Count)
+            {
+                throw new InvalidOperationException("Unable to align rollout dates to scheduled sessions.");
+            }
+
+            var rollout = new List<RolloutPlanRow>(rows.Count);
+            var sourceIndex = 0;
+            for (var dayIndex = 0; dayIndex < learningPlan.Count && sourceIndex < rows.Count; dayIndex++)
+            {
+                var learningDay = learningPlan[dayIndex];
+                var daySessionCount = sessionsPerDay[dayIndex];
+                for (var sessionIndex = 0; sessionIndex < daySessionCount && sourceIndex < rows.Count; sessionIndex++, sourceIndex++)
+                {
+                    var row = rows[sourceIndex];
+                    var period = TryParsePositiveInt(row.Period);
+                    if (period <= 0)
+                    {
+                        period = sessionIndex + 1;
+                    }
+
+                    var generatedStart = TimeSpan.FromMinutes((period - 1) * 40)
+                        .Add(new TimeSpan(8, 0, 0))
+                        .ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+                    var generatedEnd = TimeSpan.FromMinutes(period * 40)
+                        .Add(new TimeSpan(8, 0, 0))
+                        .ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+
+                    rollout.Add(new RolloutPlanRow
+                    {
+                        Date = learningDay.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        DayName = learningDay.Day.DayOfWeek.ToString(),
+                        Semester = learningDay.Semester,
+                        Period = period,
+                        TimeStart = string.IsNullOrWhiteSpace(row.TimeStart) ? generatedStart : row.TimeStart,
+                        TimeEnd = string.IsNullOrWhiteSpace(row.TimeEnd) ? generatedEnd : row.TimeEnd,
+                        SubjectCode = row.SubjectCode,
+                        TopicCode = string.IsNullOrWhiteSpace(row.TopicCode) ? row.SubjectCode : row.TopicCode,
+                        TopicDescription = row.TopicDescription,
+                        Lpn = row.Lpn,
+                        LessonPlanDescription = row.LessonPlanDescription,
+                        AssessmentCriteriaDescription = row.AssessmentCriteriaDescription,
+                        LecturerActions = row.LecturerActions,
+                        LearnerActions = row.LearnerActions,
+                        LearningAids = row.LearningAids
+                    });
+                }
+            }
+
+            return rollout;
+        }
+
+        private static byte[] BuildProjectRolloutWorkbook(
+            ProjectRolloutPreviewResponse preview,
+            IReadOnlyList<RolloutPlanRow> rolloutRows)
+        {
+            using var ms = new MemoryStream();
+            using (var doc = SpreadsheetDocument.Create(ms, SpreadsheetDocumentType.Workbook, true))
+            {
+                var workbookPart = doc.AddWorkbookPart();
+                workbookPart.Workbook = new Workbook();
+                var sheets = workbookPart.Workbook.AppendChild(new Sheets());
+
+                AddWorksheet(workbookPart, sheets, 1U, "1 - Overview", BuildOverviewSheet(preview, rolloutRows));
+                AddWorksheet(workbookPart, sheets, 2U, "2 - Semester Plan", BuildSemesterSheet(preview));
+                AddWorksheet(workbookPart, sheets, 3U, "3 - Daily Preview", BuildDailyPreviewSheet(preview));
+                AddWorksheet(workbookPart, sheets, 4U, "4 - Rollout Schedule", BuildRolloutScheduleSheet(rolloutRows));
+
+                workbookPart.Workbook.Save();
+            }
+
+            ms.Position = 0;
+            return ms.ToArray();
+        }
+
+        private static void AddWorksheet(
+            WorkbookPart workbookPart,
+            Sheets sheets,
+            uint sheetId,
+            string name,
+            IEnumerable<string[]> rows)
+        {
+            var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            worksheetPart.Worksheet = new Worksheet(new SheetData());
+            var data = worksheetPart.Worksheet.GetFirstChild<SheetData>()!;
+            foreach (var row in rows)
+            {
+                AppendTextRow(data, row);
+            }
+
+            sheets.Append(new Sheet
+            {
+                Id = workbookPart.GetIdOfPart(worksheetPart),
+                SheetId = sheetId,
+                Name = name
+            });
+        }
+
+        private static IEnumerable<string[]> BuildOverviewSheet(
+            ProjectRolloutPreviewResponse preview,
+            IReadOnlyList<RolloutPlanRow> rolloutRows)
+        {
+            var rows = new List<string[]>
+            {
+                new[] { "Project Rollout Plan - Overview" },
+                new[] { "Generator", "ETDP native rollout generator" },
+                new[] { "Qualification Id", preview.QualificationId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty },
+                new[] { "Qualification Number", preview.QualificationNumber ?? string.Empty },
+                new[] { "Template / Mode", preview.TemplatePath ?? string.Empty },
+                new[] { "Schedule CSV Source", preview.ScheduleCsvPath ?? string.Empty },
+                new[] { "Start Date", preview.StartDate },
+                new[] { "End Date", preview.EndDate },
+                new[] { "Credits", preview.Credits.ToString(CultureInfo.InvariantCulture) },
+                new[] { "Notional Hours", preview.NotionalHours.ToString(CultureInfo.InvariantCulture) },
+                new[] { "Learning Days", preview.LearningDays.ToString(CultureInfo.InvariantCulture) },
+                new[] { "Semesters", preview.Semesters.ToString(CultureInfo.InvariantCulture) },
+                new[] { "Break Days", preview.BreakDays.ToString(CultureInfo.InvariantCulture) },
+                new[] { "Source Sessions", preview.SourceSessions.ToString(CultureInfo.InvariantCulture) },
+                new[] { "Rollout Sessions Planned", (rolloutRows?.Count ?? 0).ToString(CultureInfo.InvariantCulture) },
+                new[] { "Sessions / Day Min", preview.SessionsPerDayMin.ToString(CultureInfo.InvariantCulture) },
+                new[] { "Sessions / Day Max", preview.SessionsPerDayMax.ToString(CultureInfo.InvariantCulture) },
+                new[] { "Sessions / Day Average", preview.SessionsPerDayAverage.ToString("0.00", CultureInfo.InvariantCulture) }
+            };
+
+            rows.Add(Array.Empty<string>());
+            rows.Add(new[] { "Semester", "Start Date", "End Date", "Learning Days" });
+            foreach (var item in preview.SemesterRanges ?? new List<SemesterRange>())
+            {
+                rows.Add(new[]
+                {
+                    item.Semester.ToString(CultureInfo.InvariantCulture),
+                    item.StartDate,
+                    item.EndDate,
+                    item.LearningDays.ToString(CultureInfo.InvariantCulture)
+                });
+            }
+
+            return rows;
+        }
+
+        private static IEnumerable<string[]> BuildSemesterSheet(ProjectRolloutPreviewResponse preview)
+        {
+            var rows = new List<string[]>
+            {
+                new[] { "Semester", "Start Date", "End Date", "Learning Days", "Break After Semester", "Break Start", "Break End", "Break Days" }
+            };
+
+            var breaksBySemester = (preview.BreakRanges ?? new List<BreakRange>())
+                .ToDictionary(x => x.AfterSemester, x => x);
+
+            foreach (var semester in preview.SemesterRanges ?? new List<SemesterRange>())
+            {
+                breaksBySemester.TryGetValue(semester.Semester, out var breakRange);
+                rows.Add(new[]
+                {
+                    semester.Semester.ToString(CultureInfo.InvariantCulture),
+                    semester.StartDate,
+                    semester.EndDate,
+                    semester.LearningDays.ToString(CultureInfo.InvariantCulture),
+                    breakRange != null ? breakRange.AfterSemester.ToString(CultureInfo.InvariantCulture) : string.Empty,
+                    breakRange?.StartDate ?? string.Empty,
+                    breakRange?.EndDate ?? string.Empty,
+                    breakRange?.BreakDays.ToString(CultureInfo.InvariantCulture) ?? string.Empty
+                });
+            }
+
+            return rows;
+        }
+
+        private static IEnumerable<string[]> BuildDailyPreviewSheet(ProjectRolloutPreviewResponse preview)
+        {
+            var rows = new List<string[]>
+            {
+                new[] { "Day Number", "Date", "Day Name", "Semester", "Session Count" }
+            };
+
+            foreach (var item in preview.DailyPreview ?? new List<DailyPreviewRow>())
+            {
+                rows.Add(new[]
+                {
+                    item.DayNumber.ToString(CultureInfo.InvariantCulture),
+                    item.Date,
+                    item.DayName,
+                    item.Semester.ToString(CultureInfo.InvariantCulture),
+                    item.SessionCount.ToString(CultureInfo.InvariantCulture)
+                });
+            }
+
+            return rows;
+        }
+
+        private static IEnumerable<string[]> BuildRolloutScheduleSheet(IReadOnlyList<RolloutPlanRow> rolloutRows)
+        {
+            var rows = new List<string[]>
+            {
+                new[]
+                {
+                    "Date",
+                    "Day",
+                    "Semester",
+                    "Period",
+                    "Time Start",
+                    "Time End",
+                    "Subject Code",
+                    "Topic Code",
+                    "Topic Description",
+                    "LPN",
+                    "Lesson Plan Description",
+                    "Assessment Criteria Description",
+                    "Lecturer Actions",
+                    "Learner Actions",
+                    "Learning Aids"
+                }
+            };
+
+            foreach (var item in rolloutRows ?? Array.Empty<RolloutPlanRow>())
+            {
+                rows.Add(new[]
+                {
+                    item.Date,
+                    item.DayName,
+                    item.Semester.ToString(CultureInfo.InvariantCulture),
+                    item.Period.ToString(CultureInfo.InvariantCulture),
+                    item.TimeStart,
+                    item.TimeEnd,
+                    item.SubjectCode,
+                    item.TopicCode,
+                    item.TopicDescription,
+                    item.Lpn,
+                    item.LessonPlanDescription,
+                    item.AssessmentCriteriaDescription,
+                    item.LecturerActions,
+                    item.LearnerActions,
+                    item.LearningAids
+                });
+            }
+
+            return rows;
+        }
+
+        private static string BuildProjectRolloutSummaryMarkdown(
+            ResolvedRolloutRequest resolved,
+            ProjectRolloutPreviewResponse preview,
+            IReadOnlyList<RolloutPlanRow> rolloutRows,
+            string outputPath)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("# Project Rollout Plan Summary");
+            sb.AppendLine();
+            sb.AppendLine($"- Generated UTC: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine($"- Generator: ETDP native rollout generator");
+            sb.AppendLine($"- Qualification Id: {resolved.QualificationId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty}");
+            sb.AppendLine($"- Qualification Number: {resolved.QualificationNumber ?? string.Empty}");
+            sb.AppendLine($"- Start Date: {preview.StartDate}");
+            sb.AppendLine($"- End Date: {preview.EndDate}");
+            sb.AppendLine($"- Credits: {preview.Credits}");
+            sb.AppendLine($"- Notional Hours: {preview.NotionalHours}");
+            sb.AppendLine($"- Learning Days: {preview.LearningDays}");
+            sb.AppendLine($"- Semesters: {preview.Semesters}");
+            sb.AppendLine($"- Break Days: {preview.BreakDays}");
+            sb.AppendLine($"- Source Sessions: {preview.SourceSessions}");
+            sb.AppendLine($"- Planned Rollout Sessions: {rolloutRows?.Count ?? 0}");
+            sb.AppendLine($"- Sessions / Day Range: {preview.SessionsPerDayMin} to {preview.SessionsPerDayMax}");
+            sb.AppendLine($"- Output Workbook: {outputPath}");
+            sb.AppendLine($"- Schedule CSV Source: {resolved.ScheduleCsvPath}");
+            sb.AppendLine();
+            sb.AppendLine("## Semester Plan");
+            foreach (var semester in preview.SemesterRanges ?? new List<SemesterRange>())
+            {
+                sb.AppendLine($"- Semester {semester.Semester}: {semester.StartDate} to {semester.EndDate} ({semester.LearningDays} learning days)");
+            }
+
+            if (preview.BreakRanges?.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("## Breaks");
+                foreach (var breakRange in preview.BreakRanges)
+                {
+                    sb.AppendLine($"- After Semester {breakRange.AfterSemester}: {breakRange.StartDate} to {breakRange.EndDate} ({breakRange.BreakDays} days)");
+                }
+            }
+
+            return sb.ToString().Trim();
+        }
+
+        private static void AppendTextRow(SheetData sheetData, params string[] values)
+        {
+            var row = new Row();
+            foreach (var value in values ?? Array.Empty<string>())
+            {
+                row.Append(new Cell
+                {
+                    DataType = CellValues.InlineString,
+                    InlineString = new InlineString(new Text(value ?? string.Empty))
+                });
+            }
+
+            sheetData.Append(row);
+        }
+
+        private static int TryParsePositiveInt(string? value)
+        {
+            return int.TryParse((value ?? string.Empty).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+                ? parsed
+                : 0;
+        }
+
         public sealed class ProjectRolloutRequest
         {
             public string? StartDate { get; set; }
@@ -788,6 +1210,43 @@ namespace ETD.Api.Controllers
             public string DayName { get; set; } = string.Empty;
             public int Semester { get; set; }
             public int SessionCount { get; set; }
+        }
+
+        private sealed class RolloutScheduleSourceRow
+        {
+            public string Date { get; init; } = string.Empty;
+            public string Day { get; init; } = string.Empty;
+            public string Period { get; init; } = string.Empty;
+            public string TimeStart { get; init; } = string.Empty;
+            public string TimeEnd { get; init; } = string.Empty;
+            public string SubjectCode { get; init; } = string.Empty;
+            public string TopicCode { get; init; } = string.Empty;
+            public string TopicDescription { get; init; } = string.Empty;
+            public string Lpn { get; init; } = string.Empty;
+            public string LessonPlanDescription { get; init; } = string.Empty;
+            public string AssessmentCriteriaDescription { get; init; } = string.Empty;
+            public string LecturerActions { get; init; } = string.Empty;
+            public string LearnerActions { get; init; } = string.Empty;
+            public string LearningAids { get; init; } = string.Empty;
+        }
+
+        private sealed class RolloutPlanRow
+        {
+            public string Date { get; init; } = string.Empty;
+            public string DayName { get; init; } = string.Empty;
+            public int Semester { get; init; }
+            public int Period { get; init; }
+            public string TimeStart { get; init; } = string.Empty;
+            public string TimeEnd { get; init; } = string.Empty;
+            public string SubjectCode { get; init; } = string.Empty;
+            public string TopicCode { get; init; } = string.Empty;
+            public string TopicDescription { get; init; } = string.Empty;
+            public string Lpn { get; init; } = string.Empty;
+            public string LessonPlanDescription { get; init; } = string.Empty;
+            public string AssessmentCriteriaDescription { get; init; } = string.Empty;
+            public string LecturerActions { get; init; } = string.Empty;
+            public string LearnerActions { get; init; } = string.Empty;
+            public string LearningAids { get; init; } = string.Empty;
         }
     }
 }

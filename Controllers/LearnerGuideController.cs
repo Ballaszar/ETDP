@@ -1,5 +1,6 @@
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
+using SX = DocumentFormat.OpenXml.Spreadsheet;
 using DocumentFormat.OpenXml.Wordprocessing;
 using A = DocumentFormat.OpenXml.Drawing;
 using DW = DocumentFormat.OpenXml.Drawing.Wordprocessing;
@@ -25,8 +26,10 @@ namespace ETD.Api.Controllers
         private readonly ApplicationDbContext _context;
         private static readonly HttpClient _http = new();
         private const string DefaultModeratorResponsesEndpoint = "";
-        private const string AssessmentCriteriaLeadLine = "By the end of this subject the learner will be able to demonstrate competence against the following assessment criteria:";
-        private const string ChapterSummaryLeadLine = "In this chapter we have discussed all the tasks and activities to adhere to the assessment criteria applicable to this Chapter namely:";
+        private const string AutoCurriculumDraftMarker = "[AUTO_CURRICULUM_EVIDENCE_DRAFT]";
+        private const string AutoCurriculumCoverageGapMarker = "[AUTO_CURRICULUM_INSUFFICIENT_COVERAGE]";
+        private const string AssessmentCriteriaLeadLine = "Assessment criteria for this subject:";
+        private const string ChapterSummaryLeadLine = "This chapter covers the following assessment criteria in full:";
 
         public LearnerGuideController(ApplicationDbContext context)
         {
@@ -171,7 +174,7 @@ namespace ETD.Api.Controllers
             var lessonPlans = _context.LessonPlans.Where(lp => criteria.Select(c => c.Id).Contains(lp.AssessmentCriteriaId))
                 .OrderBy(lp => lp.SortOrder).ThenBy(lp => lp.Id).ToList();
             var toolkit = _context.LecturerToolkitEntries
-                .Where(e => e.QualificationsId <= 0 || e.QualificationsId == qualification.Id)
+                .Where(e => e.QualificationsId == qualification.Id)
                 .ToList()
                 .OrderBy(e => ParseLpnSort(e.Lpn))
                 .ThenBy(e => e.Id)
@@ -204,7 +207,7 @@ namespace ETD.Api.Controllers
                             {
                                 var label = NormalizeLpn(tk.Lpn);
                                 var desc = string.IsNullOrWhiteSpace(tk.LessonPlanDescription) ? "Lesson Plan" : tk.LessonPlanDescription.Trim();
-                                var content = (tk.LessonPlanContent ?? string.Empty).Trim();
+                                var content = NormalizeToolkitLessonContentForGuide(tk);
                                 var block = string.IsNullOrWhiteSpace(content) ? $"{label}: {desc}" : $"{label}: {desc}\n{content}";
                                 if (!string.IsNullOrWhiteSpace(block) && block.Length >= 32) uniqueTexts.Add(block.Trim());
                             }
@@ -437,7 +440,7 @@ namespace ETD.Api.Controllers
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             var toolkit = _context.LecturerToolkitEntries
-                .Where(e => e.QualificationsId <= 0 || e.QualificationsId == qualification.Id)
+                .Where(e => e.QualificationsId == qualification.Id)
                 .ToList()
                 .OrderBy(e => ParseLpnSort(e.Lpn))
                 .ThenBy(e => e.Id)
@@ -635,6 +638,64 @@ namespace ETD.Api.Controllers
                 buildResult.FileName);
         }
 
+        [HttpGet("save-to-workspace")]
+        public async Task<IActionResult> SaveToWorkspace(
+            [FromQuery] int? qualificationId = null,
+            [FromQuery] int? subjectId = null,
+            [FromQuery] bool paraphrase = false,
+            [FromQuery] bool useWorkflowCache = true,
+            [FromQuery] bool includeIllustrations = true,
+            [FromQuery] bool generateIllustrations = false,
+            [FromQuery] int maxIllustrationsPerTopic = 2)
+        {
+            var qualification = qualificationId.HasValue && qualificationId.Value > 0
+                ? _context.Qualifications.FirstOrDefault(q => q.Id == qualificationId.Value)
+                : _context.Qualifications.FirstOrDefault();
+            if (qualification == null) return BadRequest("No qualification available for Learner Guide export.");
+
+            var qualificationSubjects = _context.Subjects
+                .Where(s => s.QualificationId == qualification.Id)
+                .OrderBy(s => s.CurriculumPhaseId)
+                .ThenBy(s => s.SubjectCode)
+                .ToList();
+            qualificationSubjects = qualificationSubjects.Where(HasSubjectIdentity).ToList();
+            if (qualificationSubjects.Count == 0) return BadRequest("No subjects found for this qualification.");
+
+            if (subjectId.HasValue && subjectId.Value > 0)
+            {
+                qualificationSubjects = qualificationSubjects.Where(s => s.Id == subjectId.Value).ToList();
+            }
+            if (qualificationSubjects.Count == 0) return BadRequest("Selected subjectId was not found for this qualification.");
+
+            var buildResult = await BuildLearnerGuideDocumentAsync(
+                qualification,
+                qualificationSubjects,
+                paraphrase,
+                useWorkflowCache,
+                includeIllustrations,
+                generateIllustrations,
+                maxIllustrationsPerTopic,
+                HttpContext.RequestAborted);
+            if (!buildResult.Success)
+            {
+                return BadRequest(buildResult.ErrorMessage);
+            }
+
+            var savedPath = LearningMaterialWorkspacePaths.SaveBytes(
+                qualification,
+                qualification.Id,
+                "Learner Guide",
+                buildResult.FileName,
+                buildResult.FileBytes);
+
+            return Ok(new
+            {
+                fileName = Path.GetFileName(savedPath),
+                savedPath,
+                folderPath = Path.GetDirectoryName(savedPath)
+            });
+        }
+
         [HttpGet("download-range")]
         public async Task<IActionResult> DownloadRange(
             [FromQuery] int qualificationId,
@@ -702,6 +763,84 @@ namespace ETD.Api.Controllers
                 buildResult.FileBytes,
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 buildResult.FileName);
+        }
+
+        [HttpGet("save-range-to-workspace")]
+        public async Task<IActionResult> SaveRangeToWorkspace(
+            [FromQuery] int qualificationId,
+            [FromQuery] int? subjectFromId = null,
+            [FromQuery] int? subjectToId = null,
+            [FromQuery] bool paraphrase = false,
+            [FromQuery] bool useWorkflowCache = true,
+            [FromQuery] bool includeIllustrations = true,
+            [FromQuery] bool generateIllustrations = false,
+            [FromQuery] int maxIllustrationsPerTopic = 2)
+        {
+            if (qualificationId <= 0) return BadRequest("qualificationId is required for range export.");
+
+            var qualification = _context.Qualifications.FirstOrDefault(q => q.Id == qualificationId);
+            if (qualification == null) return BadRequest("No qualification available for Learner Guide range export.");
+
+            var subjects = _context.Subjects
+                .Where(s => s.QualificationId == qualification.Id)
+                .OrderBy(s => s.CurriculumPhaseId)
+                .ThenBy(s => s.SubjectCode)
+                .ToList();
+            subjects = subjects.Where(HasSubjectIdentity).ToList();
+            if (subjects.Count == 0) return BadRequest("No subjects found for this qualification.");
+
+            var fromIndex = 0;
+            var toIndex = subjects.Count - 1;
+
+            if (subjectFromId.HasValue && subjectFromId.Value > 0)
+            {
+                fromIndex = subjects.FindIndex(s => s.Id == subjectFromId.Value);
+                if (fromIndex < 0) return BadRequest("subjectFromId was not found for this qualification.");
+            }
+            if (subjectToId.HasValue && subjectToId.Value > 0)
+            {
+                toIndex = subjects.FindIndex(s => s.Id == subjectToId.Value);
+                if (toIndex < 0) return BadRequest("subjectToId was not found for this qualification.");
+            }
+
+            if (fromIndex > toIndex)
+            {
+                (fromIndex, toIndex) = (toIndex, fromIndex);
+            }
+
+            var scopedSubjects = subjects
+                .Skip(fromIndex)
+                .Take((toIndex - fromIndex) + 1)
+                .ToList();
+            if (scopedSubjects.Count == 0) return BadRequest("No subjects were resolved for the selected range.");
+
+            var buildResult = await BuildLearnerGuideDocumentAsync(
+                qualification,
+                scopedSubjects,
+                paraphrase,
+                useWorkflowCache,
+                includeIllustrations,
+                generateIllustrations,
+                maxIllustrationsPerTopic,
+                HttpContext.RequestAborted);
+            if (!buildResult.Success)
+            {
+                return BadRequest(buildResult.ErrorMessage);
+            }
+
+            var savedPath = LearningMaterialWorkspacePaths.SaveBytes(
+                qualification,
+                qualification.Id,
+                "Learner Guide",
+                buildResult.FileName,
+                buildResult.FileBytes);
+
+            return Ok(new
+            {
+                fileName = Path.GetFileName(savedPath),
+                savedPath,
+                folderPath = Path.GetDirectoryName(savedPath)
+            });
         }
 
         private sealed class LearnerGuideBuildResult
@@ -788,6 +927,7 @@ namespace ETD.Api.Controllers
                 var settingsPart = main.AddNewPart<DocumentSettingsPart>();
                 settingsPart.Settings = new Settings(new UpdateFieldsOnOpen() { Val = true });
                 settingsPart.Settings.Save();
+                EnsureLearnerGuideStyles(main);
 
                 var portraitHeaderRelId = EnsureLearnerGuideHeader(main, qualification);
 
@@ -801,7 +941,8 @@ namespace ETD.Api.Controllers
                 {
                     DocumentTitle = "Learner Guide",
                     DocumentType = "Learning Material",
-                    Phase = "Knowledge Learning"
+                    Phase = "Knowledge Learning",
+                    IncludeAiAssistedLegalBlock = false
                 });
                 body.Append(PageBreak());
 
@@ -901,11 +1042,12 @@ namespace ETD.Api.Controllers
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             var toolkit = _context.LecturerToolkitEntries
-                .Where(e => e.QualificationsId <= 0 || e.QualificationsId == qualification.Id)
+                .Where(e => e.QualificationsId == qualification.Id)
                 .ToList()
                 .OrderBy(e => ParseLpnSort(e.Lpn))
                 .ThenBy(e => e.Id)
                 .ToList();
+            var uploadedLessonPlanRows = LoadUploadedLessonPlanRowsForSubject(qualification, subject);
 
             var criteriaByTopic = criteriaGroups
                 .GroupBy(g => g.TopicKey)
@@ -924,43 +1066,28 @@ namespace ETD.Api.Controllers
                 {
                     var criterion = criterionGroup.Representative;
                     var lessonBlocks = new List<GuideLessonBlock>();
+                    var fallbackPlans = ResolveLessonPlansForCriteria(lessonByCriteria, criterionGroup.Members);
+                    var sourceRows = ResolveUploadedLessonPlanRowsForCriteria(uploadedLessonPlanRows, subject, topic, criterionGroup.Members);
 
-                    var toolkitRows = ResolveToolkitRowsForCriteria(toolkit, criterionGroup.Members, subject);
-                    if (toolkitRows.Count > 0)
+                    if (sourceRows.Count > 0)
                     {
-                        var availableRows = toolkitRows
-                            .Where(row => consumedToolkitRowIds.Add(row.Id))
-                            .OrderBy(x => ParseLpnSort(x.Lpn))
-                            .ThenBy(x => x.Id)
-                            .ToList();
-
-                        foreach (var row in availableRows)
+                        foreach (var row in sourceRows)
                         {
-                            var lessonDescription = (row.LessonPlanDescription ?? string.Empty).Trim();
-                            var fallbackPlans = ResolveLessonPlansForCriteria(lessonByCriteria, criterionGroup.Members);
-                            if (string.IsNullOrWhiteSpace(lessonDescription))
-                            {
-                                lessonDescription = fallbackPlans
-                                    .Select(x => (x.Title ?? string.Empty).Trim())
-                                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
-                                    ?? string.Empty;
-                            }
+                            var lessonDescription = ResolveGuideLessonDescription(
+                                sourceLessonDescription: row.LessonPlanDescription,
+                                fallbackPlans: fallbackPlans,
+                                fallbackCriteriaDescription: criterion.Description,
+                                fallbackTopicDescription: topic.TopicDescription);
+                            var lessonContent = NormalizeLessonContentForGuide(row.LessonPlanContent);
+                            lessonContent = HasMeaningfulLessonContent(lessonContent)
+                                ? lessonContent
+                                : string.Join("\n\n", fallbackPlans
+                                    .Select(x => NormalizeLessonContentForGuide(x.Content))
+                                    .Where(HasMeaningfulLessonContent));
 
-                            var lessonContent = (row.LessonPlanContent ?? string.Empty).Trim();
-                            if (string.IsNullOrWhiteSpace(lessonContent))
-                            {
-                                lessonContent = string.Join("\n\n", fallbackPlans
-                                    .Select(x => (x.Content ?? string.Empty).Trim())
-                                    .Where(x => !string.IsNullOrWhiteSpace(x)));
-                            }
-
-                            var lecturerActions = (row.LecturerActions ?? string.Empty).Trim();
-                            var learnerActions = (row.LearnerActions ?? string.Empty).Trim();
                             if (paraphrase)
                             {
                                 lessonDescription = await ParaphraseForGuideAsync(lessonDescription, true, cache);
-                                lecturerActions = await ParaphraseForGuideAsync(lecturerActions, true, cache);
-                                learnerActions = await ParaphraseForGuideAsync(learnerActions, true, cache);
                             }
 
                             lessonBlocks.Add(new GuideLessonBlock
@@ -968,21 +1095,79 @@ namespace ETD.Api.Controllers
                                 Lpn = NormalizeLpn(row.Lpn),
                                 LessonPlanDescription = lessonDescription,
                                 LessonContent = lessonContent,
-                                LecturerActions = lecturerActions,
-                                LearnerActions = learnerActions,
-                                LearningAids = (row.LearningAids ?? string.Empty).Trim(),
-                                TimeStart = (row.TimeStart ?? string.Empty).Trim(),
-                                TimeEnd = (row.TimeEnd ?? string.Empty).Trim()
+                                LecturerActions = string.Empty,
+                                LearnerActions = string.Empty,
+                                LearningAids = string.Empty,
+                                TimeStart = string.Empty,
+                                TimeEnd = string.Empty
                             });
+                        }
+                    }
+                    else
+                    {
+                        var toolkitRows = ResolveToolkitRowsForCriteria(toolkit, criterionGroup.Members, subject);
+                        if (toolkitRows.Count > 0)
+                        {
+                            var availableRows = toolkitRows
+                                .Where(row => consumedToolkitRowIds.Add(row.Id))
+                                .OrderByDescending(ScoreToolkitRowForGuide)
+                                .ThenBy(x => ParseLpnSort(x.Lpn))
+                                .ThenBy(x => x.Id)
+                                .ToList();
+
+                            foreach (var row in availableRows)
+                            {
+                                var lessonDescription = ResolveGuideLessonDescription(
+                                    sourceLessonDescription: row.LessonPlanDescription,
+                                    fallbackPlans: fallbackPlans,
+                                    fallbackCriteriaDescription: criterion.Description,
+                                    fallbackTopicDescription: topic.TopicDescription);
+
+                                var normalizedToolkitLessonContent = NormalizeToolkitLessonContentForGuide(row);
+                                var lessonContent = HasMeaningfulLessonContent(normalizedToolkitLessonContent)
+                                    ? normalizedToolkitLessonContent
+                                    : string.Join("\n\n", fallbackPlans
+                                        .Select(x => NormalizeLessonContentForGuide(x.Content))
+                                        .Where(HasMeaningfulLessonContent));
+
+                                var lecturerActions = (row.LecturerActions ?? string.Empty).Trim();
+                                var learnerActions = (row.LearnerActions ?? string.Empty).Trim();
+                                if (paraphrase)
+                                {
+                                    lessonDescription = await ParaphraseForGuideAsync(lessonDescription, true, cache);
+                                    lecturerActions = await ParaphraseForGuideAsync(lecturerActions, true, cache);
+                                    learnerActions = await ParaphraseForGuideAsync(learnerActions, true, cache);
+                                }
+
+                                lessonBlocks.Add(new GuideLessonBlock
+                                {
+                                    Lpn = NormalizeLpn(row.Lpn),
+                                    LessonPlanDescription = lessonDescription,
+                                    LessonContent = lessonContent,
+                                    LecturerActions = lecturerActions,
+                                    LearnerActions = learnerActions,
+                                    LearningAids = (row.LearningAids ?? string.Empty).Trim(),
+                                    TimeStart = (row.TimeStart ?? string.Empty).Trim(),
+                                    TimeEnd = (row.TimeEnd ?? string.Empty).Trim()
+                                });
+                            }
                         }
                     }
 
                     if (lessonBlocks.Count == 0)
                     {
-                        var fallbackPlans = ResolveLessonPlansForCriteria(lessonByCriteria, criterionGroup.Members);
                         foreach (var plan in fallbackPlans.OrderBy(x => x.SortOrder).ThenBy(x => x.Id))
                         {
                             var lessonDescription = (plan.Title ?? string.Empty).Trim();
+                            if (string.IsNullOrWhiteSpace(lessonDescription))
+                            {
+                                lessonDescription = ResolveGuideLessonDescription(
+                                    sourceLessonDescription: string.Empty,
+                                    fallbackPlans: fallbackPlans,
+                                    fallbackCriteriaDescription: criterion.Description,
+                                    fallbackTopicDescription: topic.TopicDescription);
+                            }
+
                             if (paraphrase)
                             {
                                 lessonDescription = await ParaphraseForGuideAsync(lessonDescription, true, cache);
@@ -992,7 +1177,7 @@ namespace ETD.Api.Controllers
                             {
                                 Lpn = plan.SortOrder > 0 ? $"LPN {plan.SortOrder}" : "LPN 1",
                                 LessonPlanDescription = lessonDescription,
-                                LessonContent = plan.Content ?? string.Empty,
+                                LessonContent = NormalizeLessonContentForGuide(plan.Content),
                                 LecturerActions = string.Empty,
                                 LearnerActions = string.Empty,
                                 LearningAids = string.Empty,
@@ -1193,11 +1378,12 @@ namespace ETD.Api.Controllers
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             var toolkit = _context.LecturerToolkitEntries
-                .Where(e => e.QualificationsId <= 0 || e.QualificationsId == qualification.Id)
+                .Where(e => e.QualificationsId == qualification.Id)
                 .ToList()
                 .OrderBy(e => ParseLpnSort(e.Lpn))
                 .ThenBy(e => e.Id)
                 .ToList();
+            var uploadedLessonPlanRows = LoadUploadedLessonPlanRowsForSubject(qualification, subject);
 
             var cache = new Dictionary<string, string>(StringComparer.Ordinal);
             var criteriaByTopic = criteria.GroupBy(c => c.TopicId).ToDictionary(g => g.Key, g => g.ToList());
@@ -1213,36 +1399,27 @@ namespace ETD.Api.Controllers
                 foreach (var criterion in topicCriteria)
                 {
                     var lessonBlocks = new List<GuideLessonBlock>();
-                    var toolkitRows = ResolveToolkitRowsForCriterion(toolkit, criterion, subject);
-                    if (toolkitRows.Count > 0)
+                    var fallbackPlans = lessonByCriteria.TryGetValue(criterion.Id, out var criterionPlans)
+                        ? criterionPlans
+                        : new List<LessonPlan>();
+                    var sourceRows = ResolveUploadedLessonPlanRowsForCriteria(uploadedLessonPlanRows, subject, topic, new[] { criterion });
+
+                    if (sourceRows.Count > 0)
                     {
-                        var availableRows = toolkitRows
-                            .Where(row => consumedToolkitRowIds.Add(row.Id))
-                            .OrderBy(x => ParseLpnSort(x.Lpn))
-                            .ThenBy(x => x.Id)
-                            .ToList();
-
-                        foreach (var row in availableRows)
+                        foreach (var row in sourceRows)
                         {
-                            var lessonDescription = (row.LessonPlanDescription ?? string.Empty).Trim();
-                            if (string.IsNullOrWhiteSpace(lessonDescription) &&
-                                lessonByCriteria.TryGetValue(criterion.Id, out var titleFallbackRows))
-                            {
-                                lessonDescription = titleFallbackRows
-                                    .Select(x => (x.Title ?? string.Empty).Trim())
-                                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
-                                    ?? string.Empty;
-                            }
-
-                            var lessonContent = (row.LessonPlanContent ?? string.Empty).Trim();
-                            if (string.IsNullOrWhiteSpace(lessonContent) &&
-                                lessonByCriteria.TryGetValue(criterion.Id, out var contentFallbackRows))
-                            {
-                                lessonContent = string.Join("\n\n", contentFallbackRows
-                                    .Select(x => (x.Content ?? string.Empty).Trim())
-                                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                            var lessonDescription = ResolveGuideLessonDescription(
+                                sourceLessonDescription: row.LessonPlanDescription,
+                                fallbackPlans: fallbackPlans,
+                                fallbackCriteriaDescription: criterion.Description,
+                                fallbackTopicDescription: topic.TopicDescription);
+                            var lessonContent = NormalizeLessonContentForGuide(row.LessonPlanContent);
+                            lessonContent = HasMeaningfulLessonContent(lessonContent)
+                                ? lessonContent
+                                : string.Join("\n\n", fallbackPlans
+                                    .Select(x => NormalizeLessonContentForGuide(x.Content))
+                                    .Where(HasMeaningfulLessonContent)
                                     .Take(3));
-                            }
 
                             if (paraphrase)
                             {
@@ -1257,20 +1434,70 @@ namespace ETD.Api.Controllers
                                 LessonContent = lessonContent,
                                 LecturerActions = string.Empty,
                                 LearnerActions = string.Empty,
-                                LearningAids = (row.LearningAids ?? string.Empty).Trim(),
+                                LearningAids = string.Empty,
                                 TimeStart = string.Empty,
                                 TimeEnd = string.Empty
                             });
                         }
                     }
+                    else
+                    {
+                        var toolkitRows = ResolveToolkitRowsForCriterion(toolkit, criterion, subject);
+                        if (toolkitRows.Count > 0)
+                        {
+                            var availableRows = toolkitRows
+                                .Where(row => consumedToolkitRowIds.Add(row.Id))
+                                .OrderByDescending(ScoreToolkitRowForGuide)
+                                .ThenBy(x => ParseLpnSort(x.Lpn))
+                                .ThenBy(x => x.Id)
+                                .ToList();
 
-                    if (lessonBlocks.Count == 0 &&
-                        lessonByCriteria.TryGetValue(criterion.Id, out var fallbackPlans))
+                            foreach (var row in availableRows)
+                            {
+                                var lessonDescription = (row.LessonPlanDescription ?? string.Empty).Trim();
+                                if (string.IsNullOrWhiteSpace(lessonDescription))
+                                {
+                                    lessonDescription = fallbackPlans
+                                        .Select(x => (x.Title ?? string.Empty).Trim())
+                                        .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+                                        ?? string.Empty;
+                                }
+
+                                var normalizedToolkitLessonContent = NormalizeToolkitLessonContentForGuide(row);
+                                var lessonContent = HasMeaningfulLessonContent(normalizedToolkitLessonContent)
+                                    ? normalizedToolkitLessonContent
+                                    : string.Join("\n\n", fallbackPlans
+                                        .Select(x => NormalizeLessonContentForGuide(x.Content))
+                                        .Where(HasMeaningfulLessonContent)
+                                        .Take(3));
+
+                                if (paraphrase)
+                                {
+                                    lessonDescription = await ParaphraseForGuideAsync(lessonDescription, true, cache);
+                                    lessonContent = await ParaphraseForGuideAsync(lessonContent, true, cache);
+                                }
+
+                                lessonBlocks.Add(new GuideLessonBlock
+                                {
+                                    Lpn = NormalizeLpn(row.Lpn),
+                                    LessonPlanDescription = lessonDescription,
+                                    LessonContent = lessonContent,
+                                    LecturerActions = string.Empty,
+                                    LearnerActions = string.Empty,
+                                    LearningAids = (row.LearningAids ?? string.Empty).Trim(),
+                                    TimeStart = string.Empty,
+                                    TimeEnd = string.Empty
+                                });
+                            }
+                        }
+                    }
+
+                    if (lessonBlocks.Count == 0)
                     {
                         foreach (var plan in fallbackPlans.OrderBy(x => x.SortOrder).ThenBy(x => x.Id))
                         {
                             var lessonDescription = (plan.Title ?? string.Empty).Trim();
-                            var lessonContent = (plan.Content ?? string.Empty).Trim();
+                            var lessonContent = NormalizeLessonContentForGuide(plan.Content);
                             if (paraphrase)
                             {
                                 lessonDescription = await ParaphraseForGuideAsync(lessonDescription, true, cache);
@@ -1444,6 +1671,43 @@ namespace ETD.Api.Controllers
             return (HeuristicParaphrase(text), "heuristic");
         }
 
+        private static string BuildLearnerGuideParaphrasePrompt(string style, bool preserveTerminology)
+        {
+            var rules = LearningMaterialAuthoringRulesStore.Load();
+            var prompt = new StringBuilder();
+            prompt.AppendLine("Paraphrase the text for a learner guide.");
+            prompt.AppendLine("Keep meaning, sequence, and technical accuracy.");
+            prompt.AppendLine($"Style: {style}.");
+            prompt.AppendLine($"Preserve terminology: {(preserveTerminology ? "yes" : "no")}.");
+            prompt.AppendLine("Address the learner directly as 'you'.");
+            prompt.AppendLine("Do not write 'the learner must' or similar third-person lecturer wording.");
+            prompt.AppendLine("Never refer to shorthand assessment-criteria codes such as KT0101, AC01, KG01, or LPN numbers.");
+            prompt.AppendLine("When assessment criteria must be shown, write the full criteria in plain English.");
+            prompt.AppendLine("Use curriculum subject, topic, and assessment criteria only as headers or section labels, not as filler sentences inside the lesson text.");
+            prompt.AppendLine("Explain the subject matter in full step-by-step detail so the learner can follow the guide without extra lecturer explanation.");
+            prompt.AppendLine("Do not force the lesson into fixed lecturer-style section headings or mandatory subsection blocks. Let each topic expand naturally according to the actual subject matter.");
+            prompt.AppendLine("If the source text contains drafting instructions or lesson-plan directives such as 'Explain KT0101...' or 'Show learners how to apply...', rewrite that into actual learner-facing explanation and remove the instruction wording.");
+            prompt.AppendLine("Do not return meta-instructions about what must be explained. Return the explanation itself.");
+            if (rules.DisableRigidLessonTemplate)
+            {
+                prompt.AppendLine("Do not convert the text into lecturer presentation notes or rigid teaching templates unless explicitly asked.");
+                prompt.AppendLine("Keep the table of contents to one level only when headings are produced.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(rules.SourceMaterialPriorityRules))
+            {
+                prompt.AppendLine($"Source material priority: {rules.SourceMaterialPriorityRules}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(rules.LearnerGuideRules))
+            {
+                prompt.AppendLine($"Learner guide rules: {rules.LearnerGuideRules}");
+            }
+
+            prompt.AppendLine("Return only paraphrased text.");
+            return prompt.ToString().Trim();
+        }
+
         private async Task<string?> TryParaphraseWithFoundryAsync(string text, string style, bool preserveTerminology)
         {
             if (!AiRuntime.AllowFoundry()) return null;
@@ -1451,7 +1715,7 @@ namespace ETD.Api.Controllers
             var foundryApiKey = Environment.GetEnvironmentVariable("FOUNDRY_API_KEY") ?? string.Empty;
             if (string.IsNullOrWhiteSpace(foundryApiKey)) return null;
 
-            var instructions = $"Paraphrase the educational text while preserving meaning and technical terms. Style: {style}. Preserve terminology: {(preserveTerminology ? "yes" : "no")}. Return only paraphrased text.";
+            var instructions = BuildLearnerGuideParaphrasePrompt(style, preserveTerminology);
             var payload = new { input = text, instructions };
             using var msg = new HttpRequestMessage(HttpMethod.Post, endpoint);
             msg.Headers.Add("api-key", foundryApiKey);
@@ -1468,7 +1732,7 @@ namespace ETD.Api.Controllers
             var key = Secrets.GetOpenAIKey();
             if (string.IsNullOrWhiteSpace(key)) return null;
             var model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4o-mini";
-            var prompt = $"Paraphrase the text for a learner guide. Keep meaning and sequence. Style={style}. Preserve terminology={(preserveTerminology ? "yes" : "no")}. Return only paraphrased text.";
+            var prompt = BuildLearnerGuideParaphrasePrompt(style, preserveTerminology);
             var payload = new
             {
                 model,
@@ -1502,7 +1766,7 @@ namespace ETD.Api.Controllers
                 if (string.IsNullOrWhiteSpace(model)) model = "local-paraphrase";
             }
 
-            var prompt = $"Paraphrase the text for a learner guide. Keep meaning and sequence. Style={style}. Preserve terminology={(preserveTerminology ? "yes" : "no")}. Return only paraphrased text.";
+            var prompt = BuildLearnerGuideParaphrasePrompt(style, preserveTerminology);
             var payload = new
             {
                 model,
@@ -1535,12 +1799,29 @@ namespace ETD.Api.Controllers
         private static string? TryExtractChatCompletionText(string json)
         {
             using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("message", out var directMessage)
+                && directMessage.ValueKind == JsonValueKind.Object
+                && directMessage.TryGetProperty("content", out var directContent))
+            {
+                return ReadChatContentText(directContent);
+            }
+            if (doc.RootElement.TryGetProperty("response", out var responseText)
+                && responseText.ValueKind == JsonValueKind.String)
+            {
+                var response = responseText.GetString();
+                if (!string.IsNullOrWhiteSpace(response)) return response;
+            }
             if (!doc.RootElement.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0) return null;
             var m = choices[0].TryGetProperty("message", out var msgObj) ? msgObj : default;
             if (m.ValueKind != JsonValueKind.Object || !m.TryGetProperty("content", out var c)) return null;
-            if (c.ValueKind == JsonValueKind.String) return c.GetString();
-            if (c.ValueKind != JsonValueKind.Array) return null;
-            foreach (var part in c.EnumerateArray())
+            return ReadChatContentText(c);
+        }
+
+        private static string? ReadChatContentText(JsonElement content)
+        {
+            if (content.ValueKind == JsonValueKind.String) return content.GetString();
+            if (content.ValueKind != JsonValueKind.Array) return null;
+            foreach (var part in content.EnumerateArray())
             {
                 if (part.ValueKind == JsonValueKind.Object &&
                     part.TryGetProperty("text", out var txt) &&
@@ -1645,6 +1926,11 @@ namespace ETD.Api.Controllers
             var subjectLine = subject == null
                 ? string.Empty
                 : $"{(subject.SubjectCode ?? string.Empty).Trim()} {(subject.SubjectDescription ?? string.Empty).Trim()}".Trim();
+            const string coverTextColor = "000000";
+            var topBlockStartTwips = CentimetresToTwips(7.0d);
+            var phaseBlockGapTwips = string.IsNullOrWhiteSpace(subjectLine)
+                ? CentimetresToTwips(11.4d)
+                : CentimetresToTwips(9.8d);
             var coverLines = new List<DocxCoverPageOverlay.CoverTextLine>();
             if (!string.IsNullOrWhiteSpace(institutionLine))
             {
@@ -1653,27 +1939,9 @@ namespace ETD.Api.Controllers
                     Text = institutionLine.ToUpperInvariant(),
                     FontSizeHalfPt = 52,
                     Bold = true,
-                    BeforeTwips = 1200,
-                    AfterTwips = 120
-                });
-            }
-            coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
-            {
-                Text = phaseLine,
-                FontSizeHalfPt = 44,
-                Bold = true,
-                BeforeTwips = 420,
-                AfterTwips = 120
-            });
-            if (!string.IsNullOrWhiteSpace(nqfAndCreditsLine))
-            {
-                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
-                {
-                    Text = nqfAndCreditsLine,
-                    FontSizeHalfPt = 40,
-                    Bold = true,
-                    BeforeTwips = 360,
-                    AfterTwips = 120
+                    BeforeTwips = topBlockStartTwips,
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
                 });
             }
             if (!string.IsNullOrWhiteSpace(qualificationLine))
@@ -1684,7 +1952,8 @@ namespace ETD.Api.Controllers
                     FontSizeHalfPt = 50,
                     Bold = true,
                     BeforeTwips = 520,
-                    AfterTwips = 120
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
                 });
             }
             if (!string.IsNullOrWhiteSpace(subjectLine))
@@ -1695,7 +1964,29 @@ namespace ETD.Api.Controllers
                     FontSizeHalfPt = 28,
                     Bold = true,
                     BeforeTwips = 900,
-                    AfterTwips = 0
+                    AfterTwips = 0,
+                    ColorHex = coverTextColor
+                });
+            }
+            coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+            {
+                Text = phaseLine,
+                FontSizeHalfPt = 44,
+                Bold = true,
+                BeforeTwips = phaseBlockGapTwips,
+                AfterTwips = 120,
+                ColorHex = coverTextColor
+            });
+            if (!string.IsNullOrWhiteSpace(nqfAndCreditsLine))
+            {
+                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+                {
+                    Text = nqfAndCreditsLine,
+                    FontSizeHalfPt = 40,
+                    Bold = true,
+                    BeforeTwips = 240,
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
                 });
             }
 
@@ -1770,15 +2061,13 @@ namespace ETD.Api.Controllers
             {
                 var t = topics[i];
                 var criteriaCount = t.Criteria.Count;
-                var lessonCount = t.Criteria.Sum(x => x.Lessons.Count);
-                body.Append(BodyPara($"{i + 1}. {t.TopicCode} - {t.TopicDescription} (Criteria: {criteriaCount}, LPN sections: {lessonCount})", 22, 0));
+                body.Append(BodyPara($"{i + 1}. {t.TopicCode} - {t.TopicDescription} (Criteria: {criteriaCount})", 22, 0));
             }
         }
 
         private static void AppendTableOfContentsPage(Body body)
         {
             body.Append(StyledHeading("TABLE OF CONTENT", "Heading1", 18));
-            body.Append(BodyPara("If the table is blank, right-click inside it in Word and choose Update Field.", 20, 0));
             body.Append(BuildTableOfContentsField());
         }
 
@@ -1786,33 +2075,32 @@ namespace ETD.Api.Controllers
         {
             var year = DateTime.Now.Year;
             var institution = (qualification.LearningInstitutionName ?? string.Empty).Trim();
+            const int disclaimerBodySizeHalfPt = 21;
 
             body.Append(StyledHeading("DISCLAIMER", "Heading1", 18));
-            body.Append(BodyPara("ETDP Courseware Release ETDP RSA PATENT 004/026785", 22, 0));
-            body.Append(BodyPara($"(C) {year} by Dr P.C. Wepener, supported by the professional assistance of OpenAI (CODEX).", 22));
-            body.Append(BodyPara("Neither Dr P.C. Wepener nor OpenAI is accountable or liable for the correctness, completeness, factual, or academic correctness of this document. This document is generated by the ETDP App. The accredited learning institution should be contacted for content inquiries, sources, references, or citations.", 22));
+            body.Append(BodyPara("ETDP Courseware Release ETDP RSA PATENT 004/026785", disclaimerBodySizeHalfPt, 0));
+            body.Append(BodyPara($"(C) {year} by Dr P.C. Wepener, supported by the professional assistance of OpenAI (CODEX).", disclaimerBodySizeHalfPt));
+            body.Append(BodyPara("Neither Dr P.C. Wepener nor OpenAI is accountable or liable for the correctness, completeness, factual, or academic correctness of this document. This document is generated by the ETDP App. The accredited learning institution should be contacted for content inquiries, sources, references, or citations.", disclaimerBodySizeHalfPt));
 
             body.Append(StyledHeading("NOTICE OF RIGHTS", "Heading2", 14));
-            body.Append(BodyPara("No part of this publication may be reproduced, transmitted, transcribed, stored in a retrieval system, or translated into any language or computer language, in any form or by any means, electronic, mechanical, magnetic, optical, chemical, manual, or otherwise, without prior written permission from the branded learning institution that owns the legal and intellectual property rights to the content of this document.", 22));
+            body.Append(BodyPara("No part of this publication may be reproduced, transmitted, transcribed, stored in a retrieval system, or translated into any language or computer language, in any form or by any means, electronic, mechanical, magnetic, optical, chemical, manual, or otherwise, without prior written permission from the branded learning institution that owns the legal and intellectual property rights to the content of this document.", disclaimerBodySizeHalfPt));
 
             body.Append(StyledHeading("TRADEMARK NOTICE", "Heading2", 14));
-            body.Append(BodyPara("Throughout this courseware title, trademark names may be used. Rather than placing a trademark symbol at every occurrence, names are used in an editorial manner for the benefit of the trademark owner, with no intention of infringement.", 22));
+            body.Append(BodyPara("Throughout this courseware title, trademark names may be used. Rather than placing a trademark symbol at every occurrence, names are used in an editorial manner for the benefit of the trademark owner, with no intention of infringement.", disclaimerBodySizeHalfPt));
 
             body.Append(StyledHeading("NOTICE OF LIABILITY", "Heading2", 14));
-            body.Append(BodyPara("The information in this courseware title is distributed on an 'as is' basis, without warranty. While every precaution has been taken in preparation of this courseware, neither Dr P.C. Wepener nor OpenAI shall have any liability to any person or entity for any loss or damage caused, or alleged to be caused, directly or indirectly by the instructions in this document or by the learning design and development processes described in it.", 22));
-
-            body.Append(StyledHeading("DISCLAIMER", "Heading2", 14));
-            body.Append(BodyPara("A sincere effort has been made to ensure typology accuracy of the material; however, no warranty, express or implied, is made regarding quality, correctness, reliability, accuracy, or freedom from error of this document or the products it describes. Data used in examples and sample files may be fictional. Any resemblance to real persons or companies is coincidental.", 22));
+            body.Append(BodyPara("The information in this courseware title is distributed on an 'as is' basis, without warranty. While every precaution has been taken in preparation of this courseware, neither Dr P.C. Wepener nor OpenAI shall have any liability to any person or entity for any loss or damage caused, or alleged to be caused, directly or indirectly by the instructions in this document or by the learning design and development processes described in it.", disclaimerBodySizeHalfPt));
+            body.Append(BodyPara("A sincere effort has been made to ensure typology accuracy of the material; however, no warranty, express or implied, is made regarding quality, correctness, reliability, accuracy, or freedom from error of this document or the products it describes. Data used in examples and sample files may be fictional. Any resemblance to real persons or companies is coincidental.", disclaimerBodySizeHalfPt));
 
             body.Append(StyledHeading("TERMS AND CONDITIONS", "Heading2", 14));
-            body.Append(BodyPara("This document is developed for the learning institution holding a legal permit and may not be resold by the learning institution. Sample versions may be shared but may not be resold to a third party. For licensed users, this document may only be used under the terms of the license agreement between the learning institution and Dr P.C. Wepener.", 22));
+            body.Append(BodyPara("This document is developed for the learning institution holding a legal permit and may not be resold by the learning institution. Sample versions may be shared but may not be resold to a third party. For licensed users, this document may only be used under the terms of the license agreement between the learning institution and Dr P.C. Wepener.", disclaimerBodySizeHalfPt));
 
             if (!string.IsNullOrWhiteSpace(institution))
             {
-                body.Append(BodyPara($"Learning Institution: {institution}", 22, 0, bold: true));
+                body.Append(BodyPara($"Learning Institution: {institution}", disclaimerBodySizeHalfPt, 0, bold: true));
             }
-            body.Append(BodyPara("PC WEPENER (Ph.D.) BUSINESS MANAGEMENT UJ 2005", 22, 0));
-            body.Append(BodyPara($"Pretoria, South Africa, {year}.", 22, 0));
+            body.Append(BodyPara("PC WEPENER (Ph.D.) BUSINESS MANAGEMENT UJ 2005", disclaimerBodySizeHalfPt, 0));
+            body.Append(BodyPara($"Pretoria, South Africa, {year}.", disclaimerBodySizeHalfPt, 0));
         }
 
         private static void AppendSubjectChapter(
@@ -1829,10 +2117,11 @@ namespace ETD.Api.Controllers
         {
             _ = qualification;
             _ = phase;
+            _ = illustrationsByTopic;
+            _ = workbookActivities;
 
             body.Append(BuildChapterHeading($"CHAPTER {chapterNumber}"));
             body.Append(BuildSubjectHeading($"{(subject.SubjectCode ?? string.Empty).Trim()}: {(subject.SubjectDescription ?? string.Empty).Trim()}"));
-            var drawingId = 100U;
 
             if (!string.IsNullOrWhiteSpace(subject.SubjectPurpose))
             {
@@ -1840,8 +2129,8 @@ namespace ETD.Api.Controllers
                 AppendMultilineBody(body, subject.SubjectPurpose, 22);
             }
 
-            body.Append(BuildAssessmentCriteriaHeading("Subject Assessment Criteria"));
-            body.Append(BodyPara(AssessmentCriteriaLeadLine, 22, 0));
+            body.Append(BuildAssessmentCriteriaHeading("Assessment Criteria for this Subject"));
+            body.Append(BodyPara("The following assessment criteria are addressed in full in this chapter. Each criterion is written out in full and is used only as a chapter guide for the detailed subject matter that follows.", 22, 0));
             if (subjectAssessmentCriteria == null || subjectAssessmentCriteria.Count == 0)
             {
                 body.Append(BodyPara("No assessment criteria captured for this chapter.", 22, 0));
@@ -1858,70 +2147,47 @@ namespace ETD.Api.Controllers
             {
                 body.Append(BuildTopicHeading($"TOPIC {topic.TopicCode}: {topic.TopicDescription}"));
 
-                if (illustrationsByTopic.TryGetValue(topic.TopicId, out var topicIllustrations) &&
-                    topicIllustrations != null &&
-                    topicIllustrations.Count > 0)
+                var topicCriteria = topic.Criteria
+                    .Select(criteria => NormalizeDocumentText(criteria.CriteriaDescription))
+                    .Where(text => !string.IsNullOrWhiteSpace(text))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (topicCriteria.Count > 0)
                 {
-                    AppendTopicIllustrations(body, main, topicIllustrations, ref drawingId);
+                    body.Append(BodyPara("Assessment criteria addressed in this topic", 22, 0, bold: true));
+                    foreach (var criterion in topicCriteria)
+                    {
+                        body.Append(BulletBodyPara(criterion, 22));
+                    }
                 }
 
-                if (topic.Criteria.Count == 0)
+                var lessonBlocks = BuildTopicLessonBlocks(topic);
+                if (lessonBlocks.Count == 0)
                 {
-                    body.Append(BodyPara("No assessment criteria captured for this topic.", 22, 0));
+                    body.Append(BodyPara("No lesson plan content has been captured for this topic yet.", 22, 0));
                 }
                 else
                 {
-                    foreach (var criterion in topic.Criteria)
+                    foreach (var lesson in lessonBlocks)
                     {
-                        if (criterion.Lessons.Count == 0)
+                        var lessonHeading = BuildLessonPlanHeadingText(lesson.Lpn, lesson.LessonPlanDescription);
+                        if (!string.IsNullOrWhiteSpace(lessonHeading))
                         {
-                            body.Append(BodyPara("No lesson-plan text available for this criterion yet.", 22, 0));
-                            continue;
+                            body.Append(BodyPara(lessonHeading, 22, 0, bold: true));
                         }
 
-                        foreach (var lesson in criterion.Lessons)
+                        var lessonContent = (lesson.LessonContent ?? string.Empty).Trim();
+                        if (HasMeaningfulLessonContent(lessonContent))
                         {
-                            var lpnDescription = (lesson.LessonPlanDescription ?? string.Empty).Trim();
-                            if (string.IsNullOrWhiteSpace(lpnDescription))
-                            {
-                                lpnDescription = (topic.TopicDescription ?? string.Empty).Trim();
-                            }
-
-                            var lpnHeading = BuildLessonPlanHeadingText(lesson.Lpn, lpnDescription);
-                            body.Append(BuildLessonPlanHeading(lpnHeading));
-
-                            if (!string.IsNullOrWhiteSpace(lesson.LessonContent))
-                            {
-                                AppendExactLessonPlanContent(body, lesson.LessonContent, 22);
-                            }
+                            AppendExactLessonPlanContent(body, lessonContent, 22);
+                        }
+                        else if (!string.IsNullOrWhiteSpace(lesson.LessonPlanDescription))
+                        {
+                            body.Append(BodyPara(lesson.LessonPlanDescription, 22, 0));
                         }
                     }
                 }
-            }
-
-            body.Append(BuildSubjectHeading($"Summary of Chapter {chapterNumber}"));
-            body.Append(BodyPara(ChapterSummaryLeadLine, 22, 0));
-            if (subjectAssessmentCriteria == null || subjectAssessmentCriteria.Count == 0)
-            {
-                body.Append(BodyPara("No assessment criteria captured for this chapter.", 22, 0));
-            }
-            else
-            {
-                foreach (var criterion in subjectAssessmentCriteria)
-                {
-                    body.Append(BodyPara(criterion, 22, 0));
-                }
-            }
-
-            body.Append(BuildWorkbookActivitiesHeading("Workbook Activities to complete"));
-            var activityCount = ResolveWorkbookActivityCount(topics, workbookActivities);
-            if (activityCount <= 0)
-            {
-                body.Append(BodyPara("No workbook activities captured for this chapter.", 22, 0));
-            }
-            else
-            {
-                body.Append(BodyPara(BuildWorkbookActivitiesSummaryLine(activityCount), 22, 0));
             }
         }
 
@@ -2321,10 +2587,7 @@ namespace ETD.Api.Controllers
 
         private static string BuildTopicSummary(TopicGuideSection topic)
         {
-            var contentBlocks = topic.Criteria
-                .SelectMany(c => c.Lessons)
-                .Select(l => (l.LessonContent ?? string.Empty).Trim())
-                .Where(x => !string.IsNullOrWhiteSpace(x))
+            var contentBlocks = BuildTopicContentBlocks(topic)
                 .Take(10)
                 .ToList();
 
@@ -2334,6 +2597,86 @@ namespace ETD.Api.Controllers
             }
 
             return BuildSummary(contentBlocks, $"{topic.TopicCode} - {topic.TopicDescription}");
+        }
+
+        private static List<GuideLessonBlock> BuildTopicLessonBlocks(TopicGuideSection topic)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var lessons = new List<GuideLessonBlock>();
+
+            var orderedLessons = topic.Criteria
+                .SelectMany(c => c.Lessons)
+                .OrderBy(l => ParseLpnSort(l.Lpn))
+                .ThenBy(l => NormalizeLooseText(l.LessonPlanDescription))
+                .ToList();
+
+            var preferredLessons = orderedLessons
+                .Where(l => HasMeaningfulLessonContent(l.LessonContent))
+                .ToList();
+            if (preferredLessons.Count == 0)
+            {
+                preferredLessons = orderedLessons
+                    .Where(l => !LooksGenericLessonDescription(l.LessonPlanDescription))
+                    .ToList();
+            }
+
+            foreach (var lesson in (preferredLessons.Count > 0 ? preferredLessons : orderedLessons))
+            {
+                var signature = string.Join("|", new[]
+                {
+                    NormalizeLooseText(lesson.Lpn),
+                    NormalizeLooseText(lesson.LessonPlanDescription),
+                    NormalizeLooseText(lesson.LessonContent)
+                });
+                if (string.IsNullOrWhiteSpace(signature) || !seen.Add(signature))
+                {
+                    continue;
+                }
+
+                lessons.Add(lesson);
+            }
+
+            return lessons;
+        }
+
+        private static List<string> BuildTopicContentBlocks(TopicGuideSection topic)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var blocks = new List<string>();
+
+            foreach (var block in topic.Criteria
+                .SelectMany(c => c.Lessons)
+                .Select(l => (l.LessonContent ?? string.Empty).Trim())
+                .Where(HasMeaningfulLessonContent))
+            {
+                var signature = NormalizeLooseText(block);
+                if (string.IsNullOrWhiteSpace(signature) || !seen.Add(signature))
+                {
+                    continue;
+                }
+
+                blocks.Add(block);
+            }
+
+            if (blocks.Count > 0)
+            {
+                return blocks;
+            }
+
+            foreach (var criteriaText in topic.Criteria
+                .Select(c => (c.CriteriaDescription ?? string.Empty).Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                var signature = NormalizeLooseText(criteriaText);
+                if (string.IsNullOrWhiteSpace(signature) || !seen.Add(signature))
+                {
+                    continue;
+                }
+
+                blocks.Add(criteriaText);
+            }
+
+            return blocks;
         }
 
         private static string BuildLearnerGuideNarrationScript(
@@ -2373,6 +2716,12 @@ namespace ETD.Api.Controllers
                     sb.AppendLine($"Purpose: {topic.TopicPurpose.Trim()}");
                 }
 
+                var topicSummary = BuildTopicSummary(topic);
+                if (!string.IsNullOrWhiteSpace(topicSummary))
+                {
+                    sb.AppendLine($"Summary: {topicSummary}");
+                }
+
                 foreach (var criterion in topic.Criteria ?? new List<CriteriaGuideSection>())
                 {
                     var criterionText = (criterion.CriteriaDescription ?? string.Empty).Trim();
@@ -2380,22 +2729,11 @@ namespace ETD.Api.Controllers
                     {
                         sb.AppendLine($"Assessment criterion: {criterionText}");
                     }
+                }
 
-                    foreach (var lesson in criterion.Lessons ?? new List<GuideLessonBlock>())
-                    {
-                        if (!string.IsNullOrWhiteSpace(lesson.Lpn))
-                        {
-                            sb.AppendLine($"{lesson.Lpn}.");
-                        }
-                        if (!string.IsNullOrWhiteSpace(lesson.LessonPlanDescription))
-                        {
-                            sb.AppendLine($"Lesson focus: {lesson.LessonPlanDescription.Trim()}");
-                        }
-                        if (!string.IsNullOrWhiteSpace(lesson.LessonContent))
-                        {
-                            sb.AppendLine(lesson.LessonContent.Trim());
-                        }
-                    }
+                foreach (var block in BuildTopicContentBlocks(topic))
+                {
+                    sb.AppendLine(block.Trim());
                 }
 
                 sb.AppendLine();
@@ -2597,6 +2935,193 @@ namespace ETD.Api.Controllers
             return Regex.Replace((value ?? string.Empty).Trim().ToLowerInvariant(), @"\s+", " ");
         }
 
+        private static string NormalizeCodeKey(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            var chars = value
+                .Trim()
+                .Where(char.IsLetterOrDigit)
+                .Select(char.ToUpperInvariant)
+                .ToArray();
+            return new string(chars);
+        }
+
+        private static bool HasMeaningfulLessonContent(string? value)
+        {
+            var raw = NormalizeLessonContentForGuide(value);
+            return raw.Length > 0 && !IsPlaceholderLessonContent(raw);
+        }
+
+        private static string NormalizeToolkitLessonContentForGuide(LecturerToolkitEntry? row)
+        {
+            return NormalizeLessonContentForGuide(row?.LessonPlanContent, row?.LearningAids);
+        }
+
+        private static string NormalizeLessonContentForGuide(string? lessonPlanContent, string? learningAids = null)
+        {
+            if (ContainsAutoCurriculumCoverageGapMarker(lessonPlanContent) ||
+                ContainsAutoCurriculumCoverageGapMarker(learningAids))
+            {
+                return string.Empty;
+            }
+
+            var content = (lessonPlanContent ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return string.Empty;
+            }
+
+            var lines = content
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n')
+                .Split('\n', StringSplitOptions.None);
+
+            var headings = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "overview",
+                "core technical understanding",
+                "detailed technical content",
+                "procedure and application",
+                "safety and quality checks",
+                "common faults / errors",
+                "summary"
+            };
+
+            var boilerplatePrefixes = new[]
+            {
+                "this lesson develops the learner's ability to",
+                "key emphasis areas for",
+                "show learners how to apply",
+                "emphasise the specific safety",
+                "emphasise the safe method of work",
+                "highlight the common mistakes learners may make",
+                "conclude the lesson by checking that learners can explain and apply"
+            };
+
+            var kept = new List<string>();
+            foreach (var rawLine in lines)
+            {
+                var line = NormalizeDocumentText(rawLine);
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                line = TrimLeadingGuideNoiseSentences(line);
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                var comparison = NormalizeLooseText(line);
+                if (headings.Contains(comparison))
+                {
+                    continue;
+                }
+
+                if (LooksLikeLessonCodeLabel(line))
+                {
+                    continue;
+                }
+
+                if (boilerplatePrefixes.Any(prefix => comparison.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                if (LooksLikeLessonInstructionDirective(line) || LooksLikeLessonReferenceNoise(line))
+                {
+                    continue;
+                }
+
+                line = StripCurriculumCodesFromText(line);
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                kept.Add(line);
+            }
+
+            return string.Join("\n", kept).Trim();
+        }
+
+        private static bool IsPlaceholderLessonContent(string? value)
+        {
+            var raw = NormalizeLooseText(value);
+            if (string.IsNullOrWhiteSpace(raw)) return false;
+            return raw.Equals("[done]", StringComparison.Ordinal)
+                || raw.Equals(NormalizeLooseText(AutoCurriculumCoverageGapMarker), StringComparison.Ordinal)
+                || raw.Equals("done", StringComparison.Ordinal)
+                || raw.Equals("[todo]", StringComparison.Ordinal)
+                || raw.Equals("todo", StringComparison.Ordinal)
+                || raw.Equals("n/a", StringComparison.Ordinal)
+                || raw.Equals("na", StringComparison.Ordinal)
+                || raw.Equals("tbc", StringComparison.Ordinal)
+                || raw.StartsWith("insufficient grounded subject matter coverage", StringComparison.Ordinal);
+        }
+
+        private static bool LooksGenericLessonDescription(string? value)
+        {
+            var raw = (value ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(raw)) return true;
+            return raw.Equals("Lesson activities", StringComparison.OrdinalIgnoreCase)
+                || raw.StartsWith("Lesson activities for ", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ResolveGuideLessonDescription(
+            string? sourceLessonDescription,
+            IEnumerable<LessonPlan>? fallbackPlans,
+            string? fallbackCriteriaDescription,
+            string? fallbackTopicDescription)
+        {
+            var lessonDescription = NormalizeGuideLessonDescription(sourceLessonDescription);
+            if (LooksGenericLessonDescription(lessonDescription))
+            {
+                lessonDescription = string.Empty;
+            }
+            if (!string.IsNullOrWhiteSpace(lessonDescription))
+            {
+                return lessonDescription;
+            }
+
+            var titleFallback = (fallbackPlans ?? Enumerable.Empty<LessonPlan>())
+                .Select(x => NormalizeGuideLessonDescription(x.Title))
+                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x) && !LooksGenericLessonDescription(x));
+            if (string.IsNullOrWhiteSpace(titleFallback))
+            {
+                titleFallback = (fallbackPlans ?? Enumerable.Empty<LessonPlan>())
+                    .Select(x => NormalizeGuideLessonDescription(x.Title))
+                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+            }
+            if (!string.IsNullOrWhiteSpace(titleFallback))
+            {
+                return titleFallback;
+            }
+
+            var criteriaDescription = StripCurriculumCodesFromText(fallbackCriteriaDescription);
+            if (!string.IsNullOrWhiteSpace(criteriaDescription))
+            {
+                return criteriaDescription;
+            }
+
+            var topicDescription = StripCurriculumCodesFromText(fallbackTopicDescription);
+            if (!string.IsNullOrWhiteSpace(topicDescription))
+            {
+                return topicDescription;
+            }
+
+            return "Lesson content";
+        }
+
+        private static int ScoreToolkitRowForGuide(LecturerToolkitEntry row)
+        {
+            var score = 0;
+            if (HasMeaningfulLessonContent(NormalizeToolkitLessonContentForGuide(row))) score += 100;
+            if (!LooksGenericLessonDescription(NormalizeGuideLessonDescription(row.LessonPlanDescription))) score += 10;
+            return score;
+        }
+
         private static bool HasSubjectIdentity(Subject subject)
         {
             return !string.IsNullOrWhiteSpace((subject.SubjectCode ?? string.Empty).Trim()) ||
@@ -2605,11 +3130,25 @@ namespace ETD.Api.Controllers
 
         private static bool ToolkitMatchesSubjectCode(LecturerToolkitEntry row, Subject subject)
         {
-            var rowSubjectCode = (row.SubjectCode ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(rowSubjectCode)) return true;
-            var subjectCode = (subject.SubjectCode ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(subjectCode)) return true;
-            return string.Equals(rowSubjectCode, subjectCode, StringComparison.OrdinalIgnoreCase);
+            var rowSubjectCode = NormalizeCodeKey(row.SubjectCode);
+            var subjectCode = NormalizeCodeKey(subject.SubjectCode);
+            if (!string.IsNullOrWhiteSpace(rowSubjectCode) &&
+                !string.IsNullOrWhiteSpace(subjectCode) &&
+                string.Equals(rowSubjectCode, subjectCode, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var rowSubjectDescription = NormalizeLooseText(row.SubjectDescription);
+            var subjectDescription = NormalizeLooseText(subject.SubjectDescription);
+            if (!string.IsNullOrWhiteSpace(rowSubjectDescription) &&
+                !string.IsNullOrWhiteSpace(subjectDescription) &&
+                string.Equals(rowSubjectDescription, subjectDescription, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private static string BuildTopicIdentity(Topic topic)
@@ -2636,16 +3175,16 @@ namespace ETD.Api.Controllers
         private static bool HasGuideSourceContent(LecturerToolkitEntry? row)
         {
             if (row == null) return false;
-            return !string.IsNullOrWhiteSpace((row.LessonPlanContent ?? string.Empty).Trim()) ||
-                   !string.IsNullOrWhiteSpace((row.LessonPlanDescription ?? string.Empty).Trim()) ||
-                   !string.IsNullOrWhiteSpace((row.LecturerActions ?? string.Empty).Trim()) ||
-                   !string.IsNullOrWhiteSpace((row.LearnerActions ?? string.Empty).Trim());
+            if (IsAutoCurriculumCoverageGapRow(row)) return false;
+            return HasMeaningfulLessonContent(NormalizeToolkitLessonContentForGuide(row)) ||
+                   (!LooksGenericLessonDescription(row.LessonPlanDescription) &&
+                    !string.IsNullOrWhiteSpace((row.LessonPlanDescription ?? string.Empty).Trim()));
         }
 
         private static bool HasGuideSourceContent(LessonPlan? row)
         {
             if (row == null) return false;
-            return !string.IsNullOrWhiteSpace((row.Content ?? string.Empty).Trim()) ||
+            return HasMeaningfulLessonContent(row.Content) ||
                    !string.IsNullOrWhiteSpace((row.Title ?? string.Empty).Trim());
         }
 
@@ -2680,6 +3219,7 @@ namespace ETD.Api.Controllers
         {
             var allRows = (toolkitRows ?? Enumerable.Empty<LecturerToolkitEntry>())
                 .Where(row => ToolkitMatchesSubjectCode(row, subject))
+                .Where(row => !IsAutoCurriculumCoverageGapRow(row))
                 .ToList();
 
             var matches = new List<LecturerToolkitEntry>();
@@ -2712,9 +3252,22 @@ namespace ETD.Api.Controllers
             }
 
             return matches
-                .OrderBy(row => ParseLpnSort(row.Lpn))
+                .OrderByDescending(ScoreToolkitRowForGuide)
+                .ThenBy(row => ParseLpnSort(row.Lpn))
                 .ThenBy(row => row.Id)
                 .ToList();
+        }
+
+        private static bool ContainsAutoCurriculumCoverageGapMarker(string? value)
+        {
+            return (value ?? string.Empty).IndexOf(AutoCurriculumCoverageGapMarker, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsAutoCurriculumCoverageGapRow(LecturerToolkitEntry? row)
+        {
+            if (row == null) return false;
+            return ContainsAutoCurriculumCoverageGapMarker(row.LessonPlanContent) ||
+                   ContainsAutoCurriculumCoverageGapMarker(row.LearningAids);
         }
 
         private static List<LecturerToolkitEntry> ResolveToolkitRowsForCriteria(
@@ -2761,6 +3314,630 @@ namespace ETD.Api.Controllers
                 .OrderBy(row => row.SortOrder)
                 .ThenBy(row => row.Id)
                 .ToList();
+        }
+
+        private static List<UploadedLessonPlanSourceRow> LoadUploadedLessonPlanRowsForSubject(
+            Qualification qualification,
+            Subject subject)
+        {
+            var sourcePath = ResolveUploadedLessonPlanSourcePath();
+            if (string.IsNullOrWhiteSpace(sourcePath) || !System.IO.File.Exists(sourcePath))
+            {
+                return new List<UploadedLessonPlanSourceRow>();
+            }
+
+            var sourceMetadata = LoadUploadedLessonPlanSourceMetadata(sourcePath);
+            if (UploadedLessonPlanSourceHasScope(sourceMetadata) &&
+                !UploadedLessonPlanSourceMatchesQualification(sourceMetadata, qualification))
+            {
+                return new List<UploadedLessonPlanSourceRow>();
+            }
+
+            List<string[]> rows;
+            try
+            {
+                rows = ReadUploadedLessonPlanRows(sourcePath);
+            }
+            catch
+            {
+                return new List<UploadedLessonPlanSourceRow>();
+            }
+
+            if (rows.Count <= 1)
+            {
+                return new List<UploadedLessonPlanSourceRow>();
+            }
+
+            var header = rows[0] ?? Array.Empty<string>();
+            var cQualificationsId = FindLessonPlanColumnIndex(header, "QualificationsId", "QualificationsID");
+            var cQualificationCode = FindLessonPlanColumnIndex(header, "Qualification Code", "Qualification Number", "QualificationNo", "Qualification No", "Qaulification Code");
+            var cSubjectCode = FindLessonPlanColumnIndex(header, "Subject Code", "SubjectCode");
+            var cSubjectDescription = FindLessonPlanColumnIndex(header, "Subject Description", "Subject Decription", "SubjectDescription");
+            var cTopicCode = FindLessonPlanColumnIndex(header, "Topic Code", "TopicCode");
+            var cTopicDescription = FindLessonPlanColumnIndex(header, "Topic Description", "TopicDescription");
+            var cCriteriaDescription = FindLessonPlanColumnIndex(header, "Assesment Criteria Description", "Assessment Criteria Description", "AssessmentCriteriaDescription");
+            var cLpn = FindLessonPlanColumnIndex(header, "LPN", "Lesson Plan Number (LPN)");
+            var cLessonDescription = FindLessonPlanColumnIndex(header, "Lesson Plan Description", "Lesson Plan Description ", "LessonPlanDescription", "Description");
+            var cLessonContent = FindLessonPlanColumnIndex(header, "Lesson Plan Content", "LessonPlanContent");
+
+            var wantedSubjectCode = NormalizeCodeKey(subject.SubjectCode);
+            var wantedSubjectDescription = NormalizeLooseText(subject.SubjectDescription);
+            var allowMetadataScopedRows = UploadedLessonPlanSourceHasScope(sourceMetadata);
+            var loaded = new List<UploadedLessonPlanSourceRow>();
+            var sourceOrder = 0;
+            var lastQualificationId = 0;
+            var lastQualificationCode = string.Empty;
+            var lastSubjectCode = string.Empty;
+            var lastSubjectDescription = string.Empty;
+
+            foreach (var row in rows.Skip(1))
+            {
+                if (row == null || row.Length == 0) continue;
+
+                var lessonContent = LessonPlanCell(row, cLessonContent);
+                var lessonDescription = LessonPlanCell(row, cLessonDescription);
+                if (!HasMeaningfulLessonContent(lessonContent) && string.IsNullOrWhiteSpace(lessonDescription))
+                {
+                    continue;
+                }
+
+                var rowQualificationId = ParsePositiveInt(LessonPlanCell(row, cQualificationsId));
+                var rowQualificationCode = LessonPlanCell(row, cQualificationCode);
+                var rowSubjectCode = LessonPlanCell(row, cSubjectCode);
+                var rowSubjectDescription = LessonPlanCell(row, cSubjectDescription);
+
+                if ((rowQualificationId.HasValue || !string.IsNullOrWhiteSpace(rowQualificationCode) ||
+                     !string.IsNullOrWhiteSpace(rowSubjectCode) || !string.IsNullOrWhiteSpace(rowSubjectDescription)) &&
+                    (HasMeaningfulLessonContent(lessonContent) || !string.IsNullOrWhiteSpace(lessonDescription)))
+                {
+                    if (rowQualificationId.HasValue && rowQualificationId.Value > 0)
+                    {
+                        lastQualificationId = rowQualificationId.Value;
+                    }
+                    if (!string.IsNullOrWhiteSpace(rowQualificationCode))
+                    {
+                        lastQualificationCode = rowQualificationCode;
+                    }
+                    if (!string.IsNullOrWhiteSpace(rowSubjectCode))
+                    {
+                        lastSubjectCode = rowSubjectCode;
+                    }
+                    if (!string.IsNullOrWhiteSpace(rowSubjectDescription))
+                    {
+                        lastSubjectDescription = rowSubjectDescription;
+                    }
+                }
+
+                if (!rowQualificationId.HasValue && lastQualificationId > 0)
+                {
+                    rowQualificationId = lastQualificationId;
+                }
+                if (string.IsNullOrWhiteSpace(rowQualificationCode) && !string.IsNullOrWhiteSpace(lastQualificationCode))
+                {
+                    rowQualificationCode = lastQualificationCode;
+                }
+                if (string.IsNullOrWhiteSpace(rowSubjectCode) && !string.IsNullOrWhiteSpace(lastSubjectCode))
+                {
+                    rowSubjectCode = lastSubjectCode;
+                }
+                if (string.IsNullOrWhiteSpace(rowSubjectDescription) && !string.IsNullOrWhiteSpace(lastSubjectDescription))
+                {
+                    rowSubjectDescription = lastSubjectDescription;
+                }
+
+                if (!UploadedLessonPlanRowMatchesQualification(
+                        rowQualificationId,
+                        rowQualificationCode,
+                        qualification,
+                        allowMetadataScopedRows))
+                {
+                    continue;
+                }
+
+                if (!UploadedLessonPlanRowMatchesSubject(
+                        rowSubjectCode,
+                        rowSubjectDescription,
+                        wantedSubjectCode,
+                        wantedSubjectDescription))
+                {
+                    continue;
+                }
+
+                loaded.Add(new UploadedLessonPlanSourceRow
+                {
+                    QualificationId = rowQualificationId,
+                    QualificationCode = rowQualificationCode,
+                    SubjectCode = rowSubjectCode,
+                    SubjectDescription = rowSubjectDescription,
+                    TopicCode = LessonPlanCell(row, cTopicCode),
+                    TopicDescription = LessonPlanCell(row, cTopicDescription),
+                    CriteriaDescription = LessonPlanCell(row, cCriteriaDescription),
+                    Lpn = LessonPlanCell(row, cLpn),
+                    LessonPlanDescription = lessonDescription,
+                    LessonPlanContent = lessonContent,
+                    SourceOrder = sourceOrder++
+                });
+            }
+
+            return loaded;
+        }
+
+        private static List<UploadedLessonPlanSourceRow> ResolveUploadedLessonPlanRowsForCriteria(
+            IReadOnlyList<UploadedLessonPlanSourceRow> sourceRows,
+            Subject subject,
+            Topic topic,
+            IEnumerable<AssessmentCriteria> criteria)
+        {
+            var candidates = (sourceRows ?? Array.Empty<UploadedLessonPlanSourceRow>())
+                .Where(row => UploadedLessonPlanRowMatchesSubject(row, subject))
+                .Where(row => UploadedLessonPlanRowMatchesTopic(row, topic))
+                .ToList();
+            if (candidates.Count == 0)
+            {
+                return new List<UploadedLessonPlanSourceRow>();
+            }
+
+            var criteriaDescriptions = (criteria ?? Enumerable.Empty<AssessmentCriteria>())
+                .Select(c => NormalizeLooseText(c.Description))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            var criteriaMatches = criteriaDescriptions.Count == 0
+                ? candidates
+                : candidates
+                    .Where(row => criteriaDescriptions.Any(criteriaDescription =>
+                        UploadedLessonPlanRowMatchesCriteria(row, criteriaDescription)))
+                    .ToList();
+
+            var selected = criteriaDescriptions.Count == 0 ? candidates : criteriaMatches;
+            if (selected.Count == 0)
+            {
+                return new List<UploadedLessonPlanSourceRow>();
+            }
+            var deduped = new List<UploadedLessonPlanSourceRow>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var row in selected
+                .OrderBy(x => ParseLpnSort(x.Lpn))
+                .ThenBy(x => x.SourceOrder))
+            {
+                var signature = string.Join("|", new[]
+                {
+                    NormalizeLooseText(row.TopicCode),
+                    NormalizeLooseText(row.CriteriaDescription),
+                    NormalizeLooseText(row.Lpn),
+                    NormalizeLooseText(row.LessonPlanDescription),
+                    NormalizeLooseText(row.LessonPlanContent)
+                });
+                if (string.IsNullOrWhiteSpace(signature) || !seen.Add(signature))
+                {
+                    continue;
+                }
+
+                deduped.Add(row);
+            }
+
+            return deduped;
+        }
+
+        private static bool UploadedLessonPlanRowMatchesSubject(UploadedLessonPlanSourceRow row, Subject subject)
+        {
+            return UploadedLessonPlanRowMatchesSubject(
+                row.SubjectCode,
+                row.SubjectDescription,
+                NormalizeCodeKey(subject.SubjectCode),
+                NormalizeLooseText(subject.SubjectDescription));
+        }
+
+        private static bool UploadedLessonPlanRowMatchesSubject(
+            string? rowSubjectCode,
+            string? rowSubjectDescription,
+            string wantedSubjectCode,
+            string wantedSubjectDescription)
+        {
+            var normalizedRowSubjectCode = NormalizeCodeKey(rowSubjectCode);
+            if (!string.IsNullOrWhiteSpace(normalizedRowSubjectCode) &&
+                !string.IsNullOrWhiteSpace(wantedSubjectCode) &&
+                string.Equals(normalizedRowSubjectCode, wantedSubjectCode, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var normalizedRowSubjectDescription = NormalizeLooseText(rowSubjectDescription);
+            if (!string.IsNullOrWhiteSpace(normalizedRowSubjectDescription) &&
+                !string.IsNullOrWhiteSpace(wantedSubjectDescription) &&
+                string.Equals(normalizedRowSubjectDescription, wantedSubjectDescription, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool UploadedLessonPlanRowMatchesQualification(
+            int? rowQualificationId,
+            string? rowQualificationCode,
+            Qualification qualification,
+            bool allowMetadataScopedRows)
+        {
+            if (rowQualificationId.HasValue && rowQualificationId.Value > 0)
+            {
+                return rowQualificationId.Value == qualification.Id;
+            }
+
+            var normalizedRowQualificationCode = NormalizeLooseText(rowQualificationCode);
+            var normalizedWantedQualificationCode = NormalizeLooseText(qualification.QualificationNumber);
+            if (!string.IsNullOrWhiteSpace(normalizedRowQualificationCode) &&
+                !string.IsNullOrWhiteSpace(normalizedWantedQualificationCode))
+            {
+                return string.Equals(normalizedRowQualificationCode, normalizedWantedQualificationCode, StringComparison.Ordinal);
+            }
+
+            return allowMetadataScopedRows;
+        }
+
+        private static bool UploadedLessonPlanRowMatchesTopic(UploadedLessonPlanSourceRow row, Topic topic)
+        {
+            var rowTopicCode = NormalizeCodeKey(row.TopicCode);
+            var topicCode = NormalizeCodeKey(topic.TopicCode);
+            if (!string.IsNullOrWhiteSpace(rowTopicCode) &&
+                !string.IsNullOrWhiteSpace(topicCode) &&
+                string.Equals(rowTopicCode, topicCode, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var rowTopicDescription = NormalizeLooseText(row.TopicDescription);
+            var topicDescription = NormalizeLooseText(topic.TopicDescription);
+            if (!string.IsNullOrWhiteSpace(rowTopicDescription) &&
+                !string.IsNullOrWhiteSpace(topicDescription) &&
+                string.Equals(rowTopicDescription, topicDescription, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool UploadedLessonPlanRowMatchesCriteria(UploadedLessonPlanSourceRow row, string criteriaDescription)
+        {
+            var rowCriteriaDescription = NormalizeLooseText(row.CriteriaDescription);
+            if (string.IsNullOrWhiteSpace(rowCriteriaDescription) || string.IsNullOrWhiteSpace(criteriaDescription))
+            {
+                return false;
+            }
+
+            return string.Equals(rowCriteriaDescription, criteriaDescription, StringComparison.Ordinal) ||
+                   rowCriteriaDescription.Contains(criteriaDescription, StringComparison.Ordinal) ||
+                   criteriaDescription.Contains(rowCriteriaDescription, StringComparison.Ordinal);
+        }
+
+        private static int? ParsePositiveInt(string? value)
+        {
+            if (int.TryParse((value ?? string.Empty).Trim(), out var parsed) && parsed > 0)
+            {
+                return parsed;
+            }
+
+            return null;
+        }
+
+        private static bool UploadedLessonPlanSourceHasScope(UploadedLessonPlanSourceMetadata? metadata)
+        {
+            return metadata != null &&
+                   (metadata.QualificationId.GetValueOrDefault() > 0 ||
+                    !string.IsNullOrWhiteSpace((metadata.QualificationCode ?? string.Empty).Trim()));
+        }
+
+        private static bool UploadedLessonPlanSourceMatchesQualification(
+            UploadedLessonPlanSourceMetadata? metadata,
+            Qualification qualification)
+        {
+            if (metadata == null) return false;
+            var metadataQualificationId = metadata.QualificationId.GetValueOrDefault();
+            if (metadataQualificationId > 0)
+            {
+                return metadataQualificationId == qualification.Id;
+            }
+
+            var metadataQualificationCode = NormalizeLooseText(metadata.QualificationCode);
+            var qualificationCode = NormalizeLooseText(qualification.QualificationNumber);
+            if (!string.IsNullOrWhiteSpace(metadataQualificationCode) &&
+                !string.IsNullOrWhiteSpace(qualificationCode))
+            {
+                return string.Equals(metadataQualificationCode, qualificationCode, StringComparison.Ordinal);
+            }
+
+            return false;
+        }
+
+        private static UploadedLessonPlanSourceMetadata? LoadUploadedLessonPlanSourceMetadata(string sourcePath)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath)) return null;
+            var metadataPath = $"{sourcePath}.metadata.json";
+            if (!System.IO.File.Exists(metadataPath)) return null;
+
+            try
+            {
+                var raw = System.IO.File.ReadAllText(metadataPath);
+                return JsonSerializer.Deserialize<UploadedLessonPlanSourceMetadata>(raw, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string? ResolveUploadedLessonPlanSourcePath()
+        {
+            var candidates = new[]
+            {
+                Path.Combine("Imports", "ExcelCSVTemplates", "Lesson Plan.xlsx"),
+                Path.Combine("Imports", "ExcelCSVTemplates", "Lesson PLan.csv"),
+                Path.Combine("Imports", "ExcelCSVTemplates", "Lesson Plan.csv"),
+                Path.Combine("ETDP", "Imports", "ExcelCSVTemplates", "Lesson Plan.xlsx"),
+                Path.Combine("ETDP", "Imports", "ExcelCSVTemplates", "Lesson PLan.csv"),
+                Path.Combine("ETDP", "Imports", "ExcelCSVTemplates", "Lesson Plan.csv"),
+                @"E:\ETDP\ETDP\Imports\ExcelCSVTemplates\Lesson Plan.xlsx",
+                @"E:\ETDP\ETDP\Imports\ExcelCSVTemplates\Lesson PLan.csv",
+                @"E:\ETDP\ETDP\Imports\ExcelCSVTemplates\Lesson Plan.csv",
+                @"C:\ETDP\ETDP\Imports\ExcelCSVTemplates\Lesson Plan.xlsx",
+                @"C:\ETDP\ETDP\Imports\ExcelCSVTemplates\Lesson PLan.csv",
+                @"C:\ETDP\ETDP\Imports\ExcelCSVTemplates\Lesson Plan.csv"
+            };
+
+            foreach (var candidate in candidates)
+            {
+                var resolved = Path.IsPathRooted(candidate)
+                    ? candidate
+                    : ResolveFromCurrentOrParents(candidate, 6);
+                if (!string.IsNullOrWhiteSpace(resolved) && System.IO.File.Exists(resolved))
+                {
+                    return resolved;
+                }
+            }
+
+            return null;
+        }
+
+        private static List<string[]> ReadUploadedLessonPlanRows(string path)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            return ext switch
+            {
+                ".xlsx" => ReadUploadedLessonPlanRowsFromXlsx(path),
+                ".csv" => ReadUploadedLessonPlanRowsFromCsv(path),
+                _ => new List<string[]>()
+            };
+        }
+
+        private static List<string[]> ReadUploadedLessonPlanRowsFromCsv(string path)
+        {
+            var headerLine = System.IO.File.ReadLines(path).FirstOrDefault() ?? string.Empty;
+            var delimiter = DetectUploadedLessonPlanDelimiter(headerLine);
+            try
+            {
+                return Csv.ReadDelimitedCsv(path, delimiter);
+            }
+            catch
+            {
+                return ReadUploadedLessonPlanRowsFromCsvWithEncoding(path, delimiter, Encoding.GetEncoding(1252));
+            }
+        }
+
+        private static List<string[]> ReadUploadedLessonPlanRowsFromCsvWithEncoding(string path, char delimiter, Encoding encoding)
+        {
+            var rows = new List<string[]>();
+            using var reader = new StreamReader(path, encoding);
+            var fields = new List<string>();
+            var sb = new StringBuilder();
+            var inQuotes = false;
+            int c;
+
+            while ((c = reader.Read()) != -1)
+            {
+                var ch = (char)c;
+                if (inQuotes)
+                {
+                    if (ch == '"')
+                    {
+                        var peek = reader.Peek();
+                        if (peek == '"')
+                        {
+                            reader.Read();
+                            sb.Append('"');
+                        }
+                        else
+                        {
+                            inQuotes = false;
+                        }
+                    }
+                    else
+                    {
+                        sb.Append(ch);
+                    }
+                }
+                else
+                {
+                    if (ch == '"')
+                    {
+                        inQuotes = true;
+                    }
+                    else if (ch == delimiter)
+                    {
+                        fields.Add(sb.ToString());
+                        sb.Clear();
+                    }
+                    else if (ch == '\r')
+                    {
+                        // Consume on \n.
+                    }
+                    else if (ch == '\n')
+                    {
+                        fields.Add(sb.ToString());
+                        sb.Clear();
+                        rows.Add(fields.ToArray());
+                        fields.Clear();
+                    }
+                    else
+                    {
+                        sb.Append(ch);
+                    }
+                }
+            }
+
+            if (sb.Length > 0 || fields.Count > 0)
+            {
+                fields.Add(sb.ToString());
+                rows.Add(fields.ToArray());
+            }
+
+            return rows;
+        }
+
+        private static List<string[]> ReadUploadedLessonPlanRowsFromXlsx(string path)
+        {
+            using var document = SpreadsheetDocument.Open(path, false);
+            var workbookPart = document.WorkbookPart;
+            if (workbookPart?.Workbook?.Sheets == null) return new List<string[]>();
+
+            var firstSheet = workbookPart.Workbook.Sheets.Elements<SX.Sheet>().FirstOrDefault();
+            if (firstSheet?.Id == null) return new List<string[]>();
+
+            var worksheetPart = workbookPart.GetPartById(firstSheet.Id!) as WorksheetPart;
+            var sheetData = worksheetPart?.Worksheet?.Elements<SX.SheetData>().FirstOrDefault();
+            if (sheetData == null) return new List<string[]>();
+
+            var captured = new List<(int RowIndex, Dictionary<int, string> Cells)>();
+            var maxColumn = -1;
+
+            foreach (var row in sheetData.Elements<SX.Row>())
+            {
+                var map = new Dictionary<int, string>();
+                foreach (var cell in row.Elements<SX.Cell>())
+                {
+                    var columnIndex = UploadedLessonPlanColumnIndexFromReference(cell.CellReference?.Value);
+                    if (columnIndex < 0) continue;
+                    map[columnIndex] = UploadedLessonPlanGetCellText(cell, workbookPart);
+                    if (columnIndex > maxColumn) maxColumn = columnIndex;
+                }
+
+                captured.Add(((int)(row.RowIndex?.Value ?? 0), map));
+            }
+
+            if (maxColumn < 0) return new List<string[]>();
+
+            var rows = new List<string[]>();
+            foreach (var row in captured.OrderBy(x => x.RowIndex))
+            {
+                var values = Enumerable.Repeat(string.Empty, maxColumn + 1).ToArray();
+                foreach (var kv in row.Cells)
+                {
+                    if (kv.Key >= 0 && kv.Key < values.Length)
+                    {
+                        values[kv.Key] = kv.Value ?? string.Empty;
+                    }
+                }
+
+                rows.Add(values);
+            }
+
+            return rows;
+        }
+
+        private static string UploadedLessonPlanGetCellText(SX.Cell cell, WorkbookPart workbookPart)
+        {
+            var raw = cell.CellValue?.InnerText ?? cell.InnerText ?? string.Empty;
+            if (cell.DataType == null) return raw;
+
+            return cell.DataType.Value switch
+            {
+                SX.CellValues.SharedString => UploadedLessonPlanReadSharedString(raw, workbookPart),
+                SX.CellValues.Boolean => raw == "1" ? "TRUE" : "FALSE",
+                SX.CellValues.InlineString => cell.InlineString?.Text?.Text ?? cell.InlineString?.InnerText ?? raw,
+                _ => raw
+            };
+        }
+
+        private static string UploadedLessonPlanReadSharedString(string raw, WorkbookPart workbookPart)
+        {
+            if (!int.TryParse(raw, out var index)) return raw;
+            var table = workbookPart.SharedStringTablePart?.SharedStringTable;
+            var item = table?.Elements<SX.SharedStringItem>().ElementAtOrDefault(index);
+            return item?.InnerText ?? raw;
+        }
+
+        private static int UploadedLessonPlanColumnIndexFromReference(string? cellReference)
+        {
+            if (string.IsNullOrWhiteSpace(cellReference)) return -1;
+
+            var index = 0;
+            foreach (var ch in cellReference)
+            {
+                if (!char.IsLetter(ch)) break;
+                index = index * 26 + (char.ToUpperInvariant(ch) - 'A' + 1);
+            }
+
+            return index > 0 ? index - 1 : -1;
+        }
+
+        private static char DetectUploadedLessonPlanDelimiter(string? headerLine)
+        {
+            var line = headerLine ?? string.Empty;
+            var semicolons = line.Count(ch => ch == ';');
+            var commas = line.Count(ch => ch == ',');
+            var tabs = line.Count(ch => ch == '\t');
+            if (tabs > semicolons && tabs > commas) return '\t';
+            return semicolons >= commas ? ';' : ',';
+        }
+
+        private static int FindLessonPlanColumnIndex(string[] header, params string[] aliases)
+        {
+            if (header == null || header.Length == 0 || aliases == null || aliases.Length == 0) return -1;
+
+            for (var i = 0; i < header.Length; i++)
+            {
+                var value = (header[i] ?? string.Empty).Trim();
+                if (value.Length == 0) continue;
+                foreach (var alias in aliases)
+                {
+                    if (string.Equals(value, (alias ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return i;
+                    }
+                }
+            }
+
+            var normalizedAliases = aliases
+                .Select(NormalizeLessonPlanColumnAlias)
+                .Where(x => x.Length > 0)
+                .ToHashSet(StringComparer.Ordinal);
+
+            for (var i = 0; i < header.Length; i++)
+            {
+                if (normalizedAliases.Contains(NormalizeLessonPlanColumnAlias(header[i])))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static string NormalizeLessonPlanColumnAlias(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            var chars = value.Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray();
+            return new string(chars);
+        }
+
+        private static string LessonPlanCell(string[] row, int index)
+        {
+            if (row == null || index < 0 || index >= row.Length) return string.Empty;
+            return (row[index] ?? string.Empty).Trim();
         }
 
         private static List<GuideLessonBlock> DeduplicateLessonBlocks(IEnumerable<GuideLessonBlock>? lessons)
@@ -2882,6 +4059,29 @@ namespace ETD.Api.Controllers
             public List<GuideLessonBlock> Lessons { get; init; } = new();
         }
 
+        private sealed class UploadedLessonPlanSourceRow
+        {
+            public int? QualificationId { get; init; }
+            public string QualificationCode { get; init; } = string.Empty;
+            public string SubjectCode { get; init; } = string.Empty;
+            public string SubjectDescription { get; init; } = string.Empty;
+            public string TopicCode { get; init; } = string.Empty;
+            public string TopicDescription { get; init; } = string.Empty;
+            public string CriteriaDescription { get; init; } = string.Empty;
+            public string Lpn { get; init; } = string.Empty;
+            public string LessonPlanDescription { get; init; } = string.Empty;
+            public string LessonPlanContent { get; init; } = string.Empty;
+            public int SourceOrder { get; init; }
+        }
+
+        private sealed class UploadedLessonPlanSourceMetadata
+        {
+            public int? QualificationId { get; init; }
+            public string QualificationCode { get; init; } = string.Empty;
+            public string SourceFileName { get; init; } = string.Empty;
+            public DateTime UpdatedAtUtc { get; init; }
+        }
+
         private sealed class GuideLessonBlock
         {
             public string Lpn { get; init; } = string.Empty;
@@ -2920,7 +4120,8 @@ namespace ETD.Api.Controllers
                 allCaps: true,
                 beforeTwips: 120,
                 afterTwips: 240,
-                justification: JustificationValues.Left);
+                justification: JustificationValues.Left,
+                outlineLevel: 0);
         }
 
         private static Paragraph BuildSubjectHeading(string text)
@@ -2934,7 +4135,8 @@ namespace ETD.Api.Controllers
                 beforeTwips: 240,
                 afterTwips: 240,
                 justification: JustificationValues.Left,
-                bottomBorderSize: 12);
+                bottomBorderSize: 12,
+                outlineLevel: 1);
         }
 
         private static Paragraph BuildPurposeHeading(string text)
@@ -2963,7 +4165,8 @@ namespace ETD.Api.Controllers
                 justification: JustificationValues.Left,
                 topBorderSize: 12,
                 bottomBorderSize: 12,
-                shadingFill: "D9D9D9");
+                shadingFill: "D9D9D9",
+                outlineLevel: 2);
         }
 
         private static Paragraph BuildTopicHeading(string text)
@@ -2977,7 +4180,8 @@ namespace ETD.Api.Controllers
                 beforeTwips: 160,
                 afterTwips: 160,
                 justification: JustificationValues.Left,
-                bottomBorderSize: 12);
+                bottomBorderSize: 12,
+                outlineLevel: 3);
         }
 
         private static Paragraph BuildLessonPlanHeading(string text)
@@ -2987,10 +4191,11 @@ namespace ETD.Api.Controllers
                 "Heading5",
                 28,
                 bold: true,
-                allCaps: false,
+                allCaps: true,
                 beforeTwips: 0,
                 afterTwips: 240,
-                justification: JustificationValues.Right);
+                justification: JustificationValues.Right,
+                outlineLevel: 4);
         }
 
         private static Paragraph BuildLessonContentTitleHeading(string text)
@@ -3000,11 +4205,12 @@ namespace ETD.Api.Controllers
                 "Heading6",
                 24,
                 bold: true,
-                allCaps: false,
+                allCaps: true,
                 beforeTwips: 0,
                 afterTwips: 240,
                 justification: JustificationValues.Left,
-                topBorderSize: 8);
+                topBorderSize: 8,
+                outlineLevel: 5);
         }
 
         private static Paragraph BuildWorkbookActivitiesHeading(string text)
@@ -3031,7 +4237,8 @@ namespace ETD.Api.Controllers
             JustificationValues justification,
             uint? topBorderSize = null,
             uint? bottomBorderSize = null,
-            string? shadingFill = null)
+            string? shadingFill = null,
+            int? outlineLevel = null)
         {
             var runProperties = new RunProperties
             {
@@ -3054,6 +4261,11 @@ namespace ETD.Api.Controllers
             if (!string.IsNullOrWhiteSpace(styleId))
             {
                 paragraphProperties.ParagraphStyleId = new ParagraphStyleId { Val = styleId };
+            }
+
+            if (outlineLevel.HasValue && outlineLevel.Value >= 0)
+            {
+                paragraphProperties.OutlineLevel = new OutlineLevel { Val = outlineLevel.Value };
             }
 
             if (topBorderSize.HasValue || bottomBorderSize.HasValue)
@@ -3125,6 +4337,19 @@ namespace ETD.Api.Controllers
             return new Paragraph(pp, new Run(rp, new Text(SanitizeXmlText(text ?? string.Empty))));
         }
 
+        private static Paragraph BulletBodyPara(string text, int sizeHalfPt)
+        {
+            var rp = new RunProperties
+            {
+                FontSize = new FontSize { Val = sizeHalfPt.ToString() },
+                RunFonts = new RunFonts { Ascii = "Times New Roman", HighAnsi = "Times New Roman" }
+            };
+            var pp = new ParagraphProperties(
+                new SpacingBetweenLines { Line = "360", LineRule = LineSpacingRuleValues.Auto },
+                new Indentation { Left = "720", Hanging = "240" });
+            return new Paragraph(pp, new Run(rp, new Text(SanitizeXmlText($"- {text ?? string.Empty}"))));
+        }
+
         private static void AppendMultilineBody(Body body, string text, int sizeHalfPt)
         {
             var normalized = NormalizeDocumentText(text);
@@ -3153,6 +4378,32 @@ namespace ETD.Api.Controllers
             foreach (var rawLine in raw.Split('\n', StringSplitOptions.None))
             {
                 var line = NormalizeDocumentText(rawLine);
+                line = TrimLeadingGuideNoiseSentences(line);
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    FlushLessonContentParagraph(body, buffer, sizeHalfPt);
+                    continue;
+                }
+
+                if (IsRigidLessonHeading(line))
+                {
+                    FlushLessonContentParagraph(body, buffer, sizeHalfPt);
+                    continue;
+                }
+
+                if (LooksLikeLessonCodeLabel(line) || LooksLikeLessonInstructionDirective(line))
+                {
+                    FlushLessonContentParagraph(body, buffer, sizeHalfPt);
+                    continue;
+                }
+
+                if (LooksLikeLessonReferenceNoise(line))
+                {
+                    FlushLessonContentParagraph(body, buffer, sizeHalfPt);
+                    continue;
+                }
+
+                line = StripCurriculumCodesFromText(line);
                 if (string.IsNullOrWhiteSpace(line))
                 {
                     FlushLessonContentParagraph(body, buffer, sizeHalfPt);
@@ -3175,8 +4426,157 @@ namespace ETD.Api.Controllers
         private static void FlushLessonContentParagraph(Body body, List<string> buffer, int sizeHalfPt)
         {
             if (buffer.Count == 0) return;
-            body.Append(BodyPara(string.Join(" ", buffer), sizeHalfPt, 0));
+            var paragraph = SanitizeLessonNarrativeText(string.Join(" ", buffer));
+            if (!string.IsNullOrWhiteSpace(paragraph))
+            {
+                body.Append(BodyPara(paragraph, sizeHalfPt, 0));
+            }
             buffer.Clear();
+        }
+
+        private static bool IsRigidLessonHeading(string line)
+        {
+            var normalized = NormalizeDocumentText(line).Trim().TrimEnd(':').ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(normalized)) return false;
+
+            return normalized is "overview"
+                or "core technical understanding"
+                or "detailed technical content"
+                or "procedure and application"
+                or "safety and quality checks"
+                or "common faults / errors"
+                or "common faults"
+                or "errors"
+                or "summary"
+                or "assessment focus";
+        }
+
+        private static string TrimLeadingGuideNoiseSentences(string text)
+        {
+            var current = NormalizeDocumentText(text);
+            if (string.IsNullOrWhiteSpace(current))
+            {
+                return string.Empty;
+            }
+
+            current = current.Replace(AutoCurriculumDraftMarker, string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
+            while (!string.IsNullOrWhiteSpace(current))
+            {
+                var sentenceMatch = Regex.Match(current, @"^(?<lead>.*?[\.!?])\s*(?<tail>.+)$");
+                if (!sentenceMatch.Success)
+                {
+                    break;
+                }
+
+                var lead = NormalizeDocumentText(sentenceMatch.Groups["lead"].Value);
+                if (!LooksLikeLessonEvidenceLeadIn(lead) && !LooksLikeLessonInstructionDirective(lead) && !LooksLikeLessonCodeLabel(lead))
+                {
+                    break;
+                }
+
+                current = NormalizeDocumentText(sentenceMatch.Groups["tail"].Value);
+            }
+
+            return current.Trim();
+        }
+
+        private static bool LooksLikeLessonEvidenceLeadIn(string line)
+        {
+            var normalized = NormalizeLooseText(StripCurriculumCodesFromText(line));
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            return normalized.StartsWith("the mapped technical evidence for", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool LooksLikeLessonInstructionDirective(string line)
+        {
+            var normalized = NormalizeLooseText(StripCurriculumCodesFromText(line));
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            if (normalized.StartsWith("this lesson develops the learner's ability to", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("key emphasis areas for", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("focus your study of", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("build your understanding of", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("show learners how to apply", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("emphasise the specific safety", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("emphasise the safe method of work", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("highlight the common mistakes learners may make", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("conclude the lesson by checking", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("study the lesson material for", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("introduce ", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("you must understand ", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return Regex.IsMatch(
+                normalized,
+                @"^(?:explain|describe|demonstrate|discuss|clarify|show|outline|identify|state)\b.*(?:\bin detail\b|\bby clarifying\b|\bhow it works\b|\bwhen it is applied\b|\bthe learner will\b|\blearners will\b|\bhow you will recognise\b|\bhow the learner will recognise\b)",
+                RegexOptions.IgnoreCase);
+        }
+
+        private static bool LooksLikeLessonCodeLabel(string line)
+        {
+            var text = NormalizeDocumentText(line);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            if (Regex.IsMatch(text, @"^\s*LPN\s+[A-Z0-9\-]+\s*:", RegexOptions.IgnoreCase))
+            {
+                return true;
+            }
+
+            if (Regex.IsMatch(text, @"^\s*TOPIC\s+(?:KT|AC|KG)\s*-?\s*\d+[A-Z0-9\-]*\s*:", RegexOptions.IgnoreCase))
+            {
+                return true;
+            }
+
+            if (Regex.IsMatch(text, @"^\s*(?:KT|AC|KG)\s*-?\s*\d+[A-Z0-9\-]*\s*[:\-]", RegexOptions.IgnoreCase))
+            {
+                return true;
+            }
+
+            return Regex.IsMatch(text, @"^\s*Topic\s*:\s*(?:KT|AC|KG)\s*-?\s*\d+[A-Z0-9\-]*\b", RegexOptions.IgnoreCase);
+        }
+
+        private static string StripCurriculumCodesFromText(string? text)
+        {
+            var normalized = NormalizeDocumentText(text);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return string.Empty;
+            }
+
+            normalized = normalized.Replace(AutoCurriculumDraftMarker, string.Empty, StringComparison.OrdinalIgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bLPN\s+[A-Z0-9\-]+\b:?", string.Empty, RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bAUTO-(?:KT|AC|KG)[A-Z0-9\-]*\b", string.Empty, RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\b(?:KT|AC|KG)\s*-?\s*\d+[A-Z0-9\-]*\b", string.Empty, RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\s{2,}", " ").Trim(' ', '-', ':', ';', '.');
+            return normalized;
+        }
+
+        private static string SanitizeLessonNarrativeText(string text)
+        {
+            var normalized = StripCurriculumCodesFromText(text);
+            if (string.IsNullOrWhiteSpace(normalized)) return string.Empty;
+
+            normalized = Regex.Replace(normalized, @"\bthe learner must be able to\b", "you must", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bthe learner must understand\b", "you must understand", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bthe learner must\b", "you must", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\blearners must\b", "you must", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bthe learner should\b", "you should", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bthe learner will\b", "you will", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\blearners will\b", "you will", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\s{2,}", " ").Trim();
+            return normalized;
         }
 
         private static bool LooksLikeLessonContentTitle(string line)
@@ -3195,13 +4595,53 @@ namespace ETD.Api.Controllers
             return words.Count(word => char.IsLetter(word.FirstOrDefault())) >= 2;
         }
 
+        private static bool LooksLikeLessonReferenceNoise(string line)
+        {
+            var text = NormalizeDocumentText(line);
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            if (Regex.IsMatch(text, @"^(citations?|bibliography|references|assessment alignment)\b", RegexOptions.IgnoreCase))
+            {
+                return true;
+            }
+
+            return Regex.IsMatch(
+                text,
+                @"^\[\d+\]\s*|[A-Za-z]:\\|\.pdf\b|\.docx\b|\.pptx\b|\.xlsx\b|##\s*Page\b|https?://|\bcurriculum\s+content\s+map\b",
+                RegexOptions.IgnoreCase);
+        }
+
         private static string BuildLessonPlanHeadingText(string? lpn, string? description)
         {
-            var normalizedLpn = NormalizeLpn(lpn);
-            var normalizedDescription = NormalizeDocumentText(description);
-            if (string.IsNullOrWhiteSpace(normalizedDescription)) return normalizedLpn;
-            if (string.IsNullOrWhiteSpace(normalizedLpn)) return normalizedDescription;
-            return $"{normalizedLpn}: {normalizedDescription}";
+            _ = lpn;
+            var normalizedDescription = NormalizeGuideLessonDescription(description);
+            if (!string.IsNullOrWhiteSpace(normalizedDescription)) return normalizedDescription;
+            return string.Empty;
+        }
+
+        private static string NormalizeGuideLessonDescription(string? text)
+        {
+            var normalized = StripCurriculumCodesFromText(text);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return string.Empty;
+            }
+
+            var directiveMatch = Regex.Match(
+                normalized,
+                @"^(?:explain|describe|demonstrate|discuss|show|outline|identify|clarify)\s+(?<title>.+?)(?:\s+in\s+detail\b|\s+step\s+by\s+step\b|\s+for\s+the\s+learner\b|$)",
+                RegexOptions.IgnoreCase);
+            if (directiveMatch.Success)
+            {
+                normalized = NormalizeDocumentText(directiveMatch.Groups["title"].Value);
+            }
+
+            normalized = Regex.Replace(normalized, @"\s{2,}", " ").Trim(' ', '-', ':', ';', '.');
+            if (LooksGenericLessonDescription(normalized) || LooksLikeLessonInstructionDirective(normalized))
+            {
+                return string.Empty;
+            }
+
+            return normalized;
         }
 
         private static int ResolveWorkbookActivityCount(
@@ -3223,20 +4663,119 @@ namespace ETD.Api.Controllers
         {
             if (activityCount <= 1)
             {
-                return "Complete all Workbook activities based on the topic and Lesson Plan Numbers (LPN) for this Chapter which is activity 1.";
+                return "Complete the workbook activity linked to this chapter, which is activity 1.";
             }
 
-            return $"Complete all Workbook activities based on the topic and Lesson Plan Numbers (LPN) for this Chapter which are activities 1 – {activityCount}.";
+            return $"Complete the workbook activities linked to this chapter, which are activities 1 – {activityCount}.";
         }
 
         private static Paragraph BuildTableOfContentsField()
         {
             return new Paragraph(
                 new Run(new FieldChar() { FieldCharType = FieldCharValues.Begin }),
-                new Run(new FieldCode(" TOC \\o \"1-6\" \\h \\z \\u ") { Space = SpaceProcessingModeValues.Preserve }),
+                new Run(new FieldCode(" TOC \\o \"1-1\" \\h \\z \\u ") { Space = SpaceProcessingModeValues.Preserve }),
                 new Run(new FieldChar() { FieldCharType = FieldCharValues.Separate }),
                 new Run(new Text("Table of contents will populate after field update.") { Space = SpaceProcessingModeValues.Preserve }),
                 new Run(new FieldChar() { FieldCharType = FieldCharValues.End }));
+        }
+
+        private static void EnsureLearnerGuideStyles(MainDocumentPart main)
+        {
+            var stylePart = main.StyleDefinitionsPart ?? main.AddNewPart<StyleDefinitionsPart>();
+            stylePart.Styles ??= new Styles();
+
+            UpsertParagraphStyle(stylePart.Styles, BuildNormalStyle());
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading1", "heading 1", 0));
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading2", "heading 2", 1));
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading3", "heading 3", 2));
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading4", "heading 4", 3));
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading5", "heading 5", 4));
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading6", "heading 6", 5));
+            UpsertParagraphStyle(stylePart.Styles, BuildTocStyle("TOC1", "toc 1", 0, bold: true));
+            stylePart.Styles.Save();
+        }
+
+        private static void UpsertParagraphStyle(Styles styles, Style style)
+        {
+            var existing = styles.Elements<Style>()
+                .FirstOrDefault(candidate => string.Equals(candidate.StyleId?.Value, style.StyleId?.Value, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                existing.Remove();
+            }
+
+            styles.Append(style);
+        }
+
+        private static Style BuildNormalStyle()
+        {
+            var style = new Style
+            {
+                Type = StyleValues.Paragraph,
+                StyleId = "Normal",
+                Default = true
+            };
+            style.Append(
+                new StyleName { Val = "Normal" },
+                new PrimaryStyle(),
+                new StyleRunProperties(
+                    new RunFonts { Ascii = "Times New Roman", HighAnsi = "Times New Roman" },
+                    new FontSize { Val = "22" },
+                    new FontSizeComplexScript { Val = "22" }));
+            return style;
+        }
+
+        private static Style BuildHeadingStyle(string styleId, string styleName, int outlineLevel)
+        {
+            var style = new Style
+            {
+                Type = StyleValues.Paragraph,
+                StyleId = styleId,
+                CustomStyle = false
+            };
+            style.Append(
+                new StyleName { Val = styleName },
+                new BasedOn { Val = "Normal" },
+                new NextParagraphStyle { Val = "Normal" },
+                new UIPriority { Val = 9 },
+                new UnhideWhenUsed(),
+                new PrimaryStyle(),
+                new StyleParagraphProperties(
+                    new OutlineLevel { Val = outlineLevel }),
+                new StyleRunProperties(
+                    new RunFonts { Ascii = "Times New Roman", HighAnsi = "Times New Roman" }));
+            return style;
+        }
+
+        private static Style BuildTocStyle(string styleId, string styleName, int leftIndentTwips, bool bold)
+        {
+            var runProperties = new StyleRunProperties(
+                new RunFonts { Ascii = "Times New Roman", HighAnsi = "Times New Roman" },
+                new FontSize { Val = "22" },
+                new FontSizeComplexScript { Val = "22" });
+            if (bold)
+            {
+                runProperties.Bold = new Bold();
+            }
+
+            var style = new Style
+            {
+                Type = StyleValues.Paragraph,
+                StyleId = styleId,
+                CustomStyle = false
+            };
+            style.Append(
+                new StyleName { Val = styleName },
+                new BasedOn { Val = "Normal" },
+                new NextParagraphStyle { Val = "Normal" },
+                new AutoRedefine(),
+                new UIPriority { Val = 39 },
+                new UnhideWhenUsed(),
+                new StyleParagraphProperties(
+                    new SpacingBetweenLines { After = "100" },
+                    new Indentation { Left = leftIndentTwips.ToString() }),
+                runProperties);
+            return style;
         }
 
         private const uint PortraitA4PageWidthTwips = 11906U;
@@ -3244,6 +4783,11 @@ namespace ETD.Api.Controllers
         private const uint PortraitCoverUsableWidthTwips = 9866U;
 
         private static long TwipsToEmu(uint twips) => twips * 635L;
+
+        private static int CentimetresToTwips(double centimetres)
+        {
+            return Math.Max(0, (int)Math.Round(centimetres * 1440d / 2.54d));
+        }
 
         private static string EnsureLearnerGuideHeader(MainDocumentPart main, Qualification qualification)
         {
@@ -3330,9 +4874,8 @@ namespace ETD.Api.Controllers
         {
             var qualificationNumber = (qualification.QualificationNumber ?? string.Empty).Trim();
             var qualificationDescription = (qualification.QualificationDescription ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(qualificationNumber)) return qualificationDescription;
-            if (string.IsNullOrWhiteSpace(qualificationDescription)) return qualificationNumber;
-            return $"{qualificationNumber} {qualificationDescription}".Trim();
+            if (!string.IsNullOrWhiteSpace(qualificationDescription)) return qualificationDescription;
+            return qualificationNumber;
         }
 
         private static string BuildLearnerGuideCoverNqfCreditsLine(Qualification qualification)

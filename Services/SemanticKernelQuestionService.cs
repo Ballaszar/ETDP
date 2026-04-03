@@ -18,7 +18,7 @@ namespace ETD.Api.Services
             _enabled = ResolveEnabledFlag();
             _model = (Environment.GetEnvironmentVariable("SK_OPENAI_MODEL")
                 ?? Environment.GetEnvironmentVariable("OPENAI_MODEL")
-                ?? "gpt-4o-mini").Trim();
+                ?? "gpt-5-mini").Trim();
 
             if (!_enabled || !AiRuntime.AllowOpenAi())
             {

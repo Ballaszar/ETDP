@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ETD.Api.Data;
 using ETD.Api.Models;
+using ETD.Api.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -73,8 +74,13 @@ namespace ETD.Api.Controllers
             {
                 req.RunImports,
                 req.RunSeedWrite,
+                req.StartPage,
+                req.ForceRestart,
                 BackendBase = backendBase,
-                ScriptPath = string.IsNullOrWhiteSpace(req.ScriptPath) ? @"C:\ETDP\ETDP\AzureAgent\smoke-test-agent.ps1" : req.ScriptPath,
+                ExecutionMode = string.IsNullOrWhiteSpace(req.ExecutionMode) ? "internal_pipeline" : req.ExecutionMode.Trim(),
+                ScriptPath = string.IsNullOrWhiteSpace(req.ScriptPath)
+                    ? EtdpPaths.CombineProject("AzureAgent", "smoke-test-agent.ps1")
+                    : req.ScriptPath,
                 PowerShellPath = string.IsNullOrWhiteSpace(req.PowerShellPath) ? "powershell.exe" : req.PowerShellPath
             };
 
@@ -143,6 +149,9 @@ namespace ETD.Api.Controllers
             public bool RequiresApproval { get; set; } = true;
             public string? RequestedBy { get; set; }
             public string? BackendBase { get; set; }
+            public int? StartPage { get; set; }
+            public bool ForceRestart { get; set; }
+            public string? ExecutionMode { get; set; }
             public string? ScriptPath { get; set; }
             public string? PowerShellPath { get; set; }
         }

@@ -7,7 +7,14 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "AI_MODE": "offline",
-        "OCR_ENGINE": "tesseract"
+        "OCR_ENGINE": "tesseract",
+        "LOCAL_LLM_ENDPOINT": "http://127.0.0.1:5000/api/chat",
+        "LOCAL_LLM_MODEL": "qwen2.5-coder:14b",
+        "QWEN_ENABLED": "true",
+        "QWEN_BASE_URL": "http://127.0.0.1:5000",
+        "SMI_ENABLED": "true",
+        "SMI_BASE_URL": "http://127.0.0.1:5000",
+        "SMI_TIMEOUT_SECONDS": "4"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5299"
@@ -19,7 +26,14 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "AI_MODE": "offline",
-        "OCR_ENGINE": "tesseract"
+        "OCR_ENGINE": "tesseract",
+        "LOCAL_LLM_ENDPOINT": "http://127.0.0.1:5000/api/chat",
+        "LOCAL_LLM_MODEL": "qwen2.5-coder:14b",
+        "QWEN_ENABLED": "true",
+        "QWEN_BASE_URL": "http://127.0.0.1:5000",
+        "SMI_ENABLED": "true",
+        "SMI_BASE_URL": "http://127.0.0.1:5000",
+        "SMI_TIMEOUT_SECONDS": "4"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "https://localhost:7280;http://localhost:5299"
@@ -31,7 +45,14 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "AI_MODE": "offline",
-        "OCR_ENGINE": "tesseract"
+        "OCR_ENGINE": "tesseract",
+        "LOCAL_LLM_ENDPOINT": "http://127.0.0.1:5000/api/chat",
+        "LOCAL_LLM_MODEL": "qwen2.5-coder:14b",
+        "QWEN_ENABLED": "true",
+        "QWEN_BASE_URL": "http://127.0.0.1:5000",
+        "SMI_ENABLED": "true",
+        "SMI_BASE_URL": "http://127.0.0.1:5000",
+        "SMI_TIMEOUT_SECONDS": "4"
       }
     },
     "Container (Dockerfile)": {

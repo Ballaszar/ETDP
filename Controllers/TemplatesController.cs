@@ -130,8 +130,8 @@ namespace ETD.Api.Controllers
         [HttpGet("LessonPlan")]
         public IActionResult LessonPlan()
         {
-            var path = ResolveTemplate("Lesson PLan.csv", "Lesson Plan.csv", "LessonPlan.csv");
-            if (path == null) return NotFound("Template not found: Lesson PLan.csv");
+            var path = ResolveTemplate("Lesson Plan.csv", "Lesson PLan.csv", "LessonPlan.csv");
+            if (path == null) return NotFound("Template not found: Lesson Plan.csv");
             var bytes = System.IO.File.ReadAllBytes(path);
             return File(bytes, "text/csv", "LessonPlan.csv");
         }
@@ -139,10 +139,10 @@ namespace ETD.Api.Controllers
         [HttpGet("LecturerToolkit")]
         public IActionResult LecturerToolkit()
         {
-            var path = ResolveTemplate("Lesson PLan.csv", "Lesson Plan.csv", "LessonPlan.csv");
-            if (path == null) return NotFound("Template not found: Lesson PLan.csv");
+            var path = ResolveTemplate("Lesson Plan.csv", "Lesson PLan.csv", "LessonPlan.csv");
+            if (path == null) return NotFound("Template not found: Lesson Plan.csv");
             var bytes = System.IO.File.ReadAllBytes(path);
-            return File(bytes, "text/csv", "Lesson PLan.csv");
+            return File(bytes, "text/csv", "Lesson Plan.csv");
         }
 
         [HttpGet("Outcomes")]
