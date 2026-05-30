@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import './AIAgentChat.css';
 
 const AGENT_NAME = 'Mira Your Lecturer';
+const MIRA_AVATAR_SRC = `${import.meta.env.BASE_URL}mira-face.png`;
 const defaultWelcome = [
   { sender: 'ai', text: `Hi! I am ${AGENT_NAME}. How can I help you today?` }
 ];
@@ -127,9 +128,7 @@ export default function AIAgentChat() {
         <div className="ai-agent-chat-window">
           <div className="ai-agent-chat-header">
             <div className={`ai-agent-chat-avatar${typing ? ' talking' : ''}`} aria-hidden="true">
-              <span className="ai-agent-eye ai-agent-eye-left" />
-              <span className="ai-agent-eye ai-agent-eye-right" />
-              <span className="ai-agent-mouth" />
+              <img className="ai-agent-chat-avatar-image" src={MIRA_AVATAR_SRC} alt="" loading="eager" decoding="async" />
             </div>
             <div className="ai-agent-chat-header-text">
               <strong>{AGENT_NAME}</strong>

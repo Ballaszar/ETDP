@@ -1,3 +1,4 @@
+#pragma warning disable SKEXP0010
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -13,20 +14,29 @@ namespace ETD.Api.Services
         private readonly bool _enabled;
         private readonly string _model;
 
-        public SemanticKernelQuestionService()
+                public SemanticKernelQuestionService()
         {
             _enabled = ResolveEnabledFlag();
             _model = (Environment.GetEnvironmentVariable("SK_OPENAI_MODEL")
                 ?? Environment.GetEnvironmentVariable("OPENAI_MODEL")
                 ?? "gpt-5-mini").Trim();
 
-            if (!_enabled || !AiRuntime.AllowOpenAi())
+            if (!_enabled)
             {
                 return;
             }
 
+            var localEndpoint = AiRuntime.GetLocalLlmEndpoint();
             var apiKey = (Environment.GetEnvironmentVariable("SK_OPENAI_API_KEY") ?? Secrets.GetOpenAIKey() ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(apiKey))
+            
+            // If we have a local endpoint, we can use it even in offline mode.
+            // Otherwise, we need cloud mode to be enabled.
+            if (string.IsNullOrWhiteSpace(localEndpoint) && !AiRuntime.AllowOpenAi())
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(apiKey) && string.IsNullOrWhiteSpace(localEndpoint))
             {
                 return;
             }
@@ -34,7 +44,18 @@ namespace ETD.Api.Services
             try
             {
                 var builder = Kernel.CreateBuilder();
-                builder.AddOpenAIChatCompletion(modelId: _model, apiKey: apiKey);
+                if (!string.IsNullOrWhiteSpace(localEndpoint))
+                {
+                    // Use local LLM (Qwen, etc.) via OpenAI-compatible endpoint
+                    builder.AddOpenAIChatCompletion(
+                        modelId: _model,
+                        apiKey: string.IsNullOrWhiteSpace(apiKey) ? "no-key" : apiKey,
+                        endpoint: new Uri(localEndpoint));
+                }
+                else
+                {
+                    builder.AddOpenAIChatCompletion(modelId: _model, apiKey: apiKey);
+                }
                 _kernel = builder.Build();
             }
             catch
@@ -43,8 +64,7 @@ namespace ETD.Api.Services
             }
         }
 
-        public bool IsAvailable()
-            => _enabled && _kernel != null && AiRuntime.AllowOpenAi();
+        public bool IsAvailable() => _enabled && _kernel != null;
 
         public async Task<AssessmentDrivenQuestionGenerator.GeneratedQuestion?> GenerateTrueFalseQuestionAsync(
             AssessmentDrivenQuestionGenerator.LessonEvidenceItem item,
@@ -339,12 +359,15 @@ namespace ETD.Api.Services
             sb.AppendLine("- Keep options homogeneous in style and roughly similar length.");
             sb.AppendLine("- Do not use \"All of the above\" or \"None of the above\".");
             sb.AppendLine("- Avoid negative stems such as \"Which is NOT...\".");
+            sb.AppendLine("- Use trade-specific or workplace context from the evidence when available, such as tools, components, measurements, safety controls, inspection steps, or reporting decisions.");
+            sb.AppendLine("- The correct answer must not be noticeably longer, more detailed, or more formal than the distractors.");
+            sb.AppendLine("- Each wrong option must be a plausible near-miss, not a silly answer, and should reflect a realistic misconception, shortcut, wrong unit, wrong sequence, wrong tool, or safety mistake.");
             if (string.Equals(questionType, "TrueFalse", StringComparison.OrdinalIgnoreCase))
             {
-                sb.AppendLine("- Build one stem and exactly OptionCount statements.");
-                sb.AppendLine("- Exactly one statement must be true.");
-                sb.AppendLine("- Every option must be a full statement about the task context.");
-                sb.AppendLine("- correctAnswer format must be like: \"A=True; B=False; C=False; D=False\".");
+                sb.AppendLine("- Build one self-contained factual statement that can be marked True or False without reading any other option.");
+                sb.AppendLine("- options must be exactly [\"True\", \"False\"].");
+                sb.AppendLine("- correctAnswer format must be exactly \"True\" or \"False\".");
+                sb.AppendLine("- Avoid statements that begin with \"It is incorrect that\" or \"It is false that\"; alter the technical detail itself instead.");
             }
             else
             {
@@ -424,3 +447,6 @@ namespace ETD.Api.Services
         }
     }
 }
+
+
+

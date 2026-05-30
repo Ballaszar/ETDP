@@ -22,6 +22,11 @@ Frontend injects these automatically from browser storage:
 - `localStorage.appApiKey`
 - `localStorage.activationToken`
 
+## Manual lecturer logon
+- The current runtime uses the activation flow as the lecturer manual logon.
+- Distribute activation keys manually by email to lecturers.
+- The login screen records the lecturer email in the activation token so the signed-in identity is visible in the UI.
+
 ## Production requirements (validated at startup)
 - `RequireApiKey = true` must have at least 1 API key.
 - `RequireActivation = true` must have at least 1 activation key.

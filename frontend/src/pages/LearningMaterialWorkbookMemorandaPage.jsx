@@ -54,6 +54,7 @@ export default function LearningMaterialWorkbookMemorandaPage() {
     p.set('subjectFromId', range.fromId);
     p.set('subjectToId', range.toId);
     p.set('maxActivities', String(Number(params.maxActivities || 30)));
+    p.set('activityScope', 'all');
     openUrl(`${API}/Workbook/download-report-range?${p.toString()}`);
     setStatus('Workbook memoranda report export requested.');
     setError('');
@@ -88,7 +89,7 @@ export default function LearningMaterialWorkbookMemorandaPage() {
               Open Workbook Preview
             </button>
             <button type="button" onClick={() => { void runAction(exportWorkbookMemoranda); }}>
-              Save Workbook Memoranda Range (.docx/.zip)
+              Save Workbook Memoranda Range (.zip)
             </button>
             <button type="button" onClick={() => { void runAction(exportWorkbookReports); }}>
               Save Workbook Memoranda Reports

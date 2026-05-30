@@ -1,6 +1,6 @@
 param(
-    [string]$EnvRoot = "E:\ETDP\ETDP\tools\smi-knowledge-env",
-    [string]$KnowledgeRoot = "E:\ETDP\ETDP\Imports\SMIKnowledge",
+    [string]$EnvRoot = "$(Split-Path $PSScriptRoot -Parent)\tools\smi-knowledge-env",
+    [string]$KnowledgeRoot = "$(Split-Path $PSScriptRoot -Parent)\Imports\SMIKnowledge",
     [string]$PythonSelector = "-3.12",
     [switch]$ImportToEtdp,
     [string]$ApiBase = "http://localhost:5299/api"
@@ -162,8 +162,8 @@ function Write-EnvironmentArtifacts {
     $lines.Add("")
     $lines.Add("## Wrappers")
     $lines.Add("")
-    $lines.Add(("- PowerShell Python wrapper: E:\ETDP\ETDP\scripts\run_smi_python.ps1"))
-    $lines.Add(("- PowerShell npm wrapper: E:\ETDP\ETDP\scripts\run_smi_npm.ps1"))
+    $lines.Add(("- PowerShell Python wrapper: $(Join-Path $PSScriptRoot "run_smi_python.ps1")"))
+    $lines.Add(("- PowerShell npm wrapper: $(Join-Path $PSScriptRoot "run_smi_npm.ps1")"))
     $lines.Add("")
     $lines.Add("## Ingestion Use")
     $lines.Add("")
@@ -179,7 +179,7 @@ function Invoke-OptionalImport {
         [string]$ApiBaseUrl
     )
 
-    $syncScript = "E:\ETDP\ETDP\scripts\sync_smi_knowledge_sources.ps1"
+    $syncScript = Join-Path $PSScriptRoot "sync_smi_knowledge_sources.ps1"
     & powershell -ExecutionPolicy Bypass -File $syncScript -SkipSync -ImportToEtdp -ApiBase $ApiBaseUrl
     if ($LASTEXITCODE -ne 0) {
         throw "SMI knowledge import failed after environment bootstrap."

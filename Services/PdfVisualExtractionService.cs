@@ -38,6 +38,9 @@ namespace ETD.Api.Services
             public int MaxImages { get; set; } = 12;
         }
 
+        // Helper to persist extracted visuals directly into SourceMaterial model via ApplicationDbContext
+        // Note: keep this minimal and optional; callers may instead use VisualBackfillController which orchestrates storage and DB writes.
+
         public sealed class PersistedVisual
         {
             public string FilePath { get; set; } = string.Empty;

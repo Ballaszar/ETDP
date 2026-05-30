@@ -289,16 +289,16 @@ namespace ETD.Api.Controllers
         {
             if (!IsSmiIntegrationEnabled())
             {
-                return BadRequest("SMI integration is disabled. Set SMI_ENABLED=true to enable SMI-first generation.");
+                return BadRequest("Gemma integration is disabled. Set SMI_ENABLED=true to enable Gemma-first generation.");
             }
 
             var payload = request ?? new SmiDraftRequest();
             var qualificationId = payload.QualificationId > 0 ? payload.QualificationId : (int?)null;
             var subjectId = payload.SubjectId > 0 ? payload.SubjectId : (int?)null;
             var subject = ResolveSubject(subjectId, qualificationId);
-            if (subject == null) return BadRequest("No subject available for SMI draft generation.");
+            if (subject == null) return BadRequest("No subject available for Gemma draft generation.");
             var qualification = ResolveQualification(subject, qualificationId);
-            if (qualification == null) return BadRequest("No qualification available for SMI draft generation.");
+            if (qualification == null) return BadRequest("No qualification available for Gemma draft generation.");
 
             var trueFalseCount = Math.Clamp(payload.TrueFalseCount, 0, 80);
             var multipleChoiceCount = Math.Clamp(payload.MultipleChoiceCount, 0, 80);
@@ -349,15 +349,15 @@ namespace ETD.Api.Controllers
 
             if (smiResult.Questions.Count == 0)
             {
-                return BadRequest("SMI did not return parseable questionnaire JSON for the selected lesson content.");
+                return BadRequest("Gemma did not return parseable questionnaire JSON for the selected lesson content.");
             }
 
             var response = new SmiDraftResponse
             {
                 Success = true,
                 QuestionSource = smiResult.UsedDeterministicFallback
-                    ? "Generated with the lesson-plan-content-only SMI workflow (deterministic fallback used for non-parseable responses)."
-                    : "Generated with the lesson-plan-content-only SMI workflow",
+                    ? "Generated with the lesson-plan-content-only Gemma workflow (deterministic fallback used for non-parseable responses)."
+                    : "Generated with the lesson-plan-content-only Gemma workflow",
                 TotalQuestions = smiResult.Questions.Count,
                 TrueFalseQuestions = smiResult.Questions.Count(q => string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
                 MultipleChoiceQuestions = smiResult.Questions.Count(q => !string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
@@ -425,7 +425,7 @@ namespace ETD.Api.Controllers
         {
             if (!IsSmiIntegrationEnabled())
             {
-                return BadRequest("SMI integration is disabled. Set SMI_ENABLED=true to enable SMI-first generation.");
+                return BadRequest("Gemma integration is disabled. Set SMI_ENABLED=true to enable Gemma-first generation.");
             }
 
             var payload = request ?? new PhaseSmiDraftRequest();
@@ -522,7 +522,7 @@ namespace ETD.Api.Controllers
                 .FirstOrDefault(q => q != null);
             if (qualification == null)
             {
-                return BadRequest("No qualification available for SMI draft generation.");
+                return BadRequest("No qualification available for Gemma draft generation.");
             }
 
             var minimumQuestionsPerCriterion = payload.MinimumQuestionsPerCriterion.HasValue
@@ -554,7 +554,7 @@ namespace ETD.Api.Controllers
 
             if (smiResult.Questions.Count == 0)
             {
-                return BadRequest("SMI did not return parseable questionnaire JSON for the selected knowledge-learning phase.");
+                return BadRequest("Gemma did not return parseable questionnaire JSON for the selected knowledge-learning phase.");
             }
 
             var seedLookup = phaseSeeds.ToDictionary(
@@ -594,8 +594,8 @@ namespace ETD.Api.Controllers
             {
                 Success = true,
                 QuestionSource = smiResult.UsedDeterministicFallback
-                    ? "Generated with the consolidated lesson-plan-content-only SMI workflow (deterministic fallback used where SMI output was not parseable)."
-                    : "Generated with the consolidated lesson-plan-content-only SMI workflow",
+                    ? "Generated with the consolidated lesson-plan-content-only Gemma workflow (deterministic fallback used where Gemma output was not parseable)."
+                    : "Generated with the consolidated lesson-plan-content-only Gemma workflow",
                 TotalQuestions = smiResult.Questions.Count,
                 TrueFalseQuestions = smiResult.Questions.Count(q => string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
                 MultipleChoiceQuestions = smiResult.Questions.Count(q => !string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
@@ -652,7 +652,7 @@ namespace ETD.Api.Controllers
         {
             if (!IsSmiIntegrationEnabled())
             {
-                return BadRequest("SMI integration is disabled. Set SMI_ENABLED=true to enable SMI-first generation.");
+                return BadRequest("Gemma integration is disabled. Set SMI_ENABLED=true to enable Gemma-first generation.");
             }
 
             var payload = request ?? new ContentPhaseSmiDraftRequest();
@@ -713,7 +713,7 @@ namespace ETD.Api.Controllers
                 .FirstOrDefault(q => q != null);
             if (qualification == null)
             {
-                return BadRequest("No qualification available for SMI draft generation.");
+                return BadRequest("No qualification available for Gemma draft generation.");
             }
 
             var trueFalseCount = Math.Max(0, payload.TrueFalseCount);
@@ -740,7 +740,7 @@ namespace ETD.Api.Controllers
 
             if (smiResult.Questions.Count == 0)
             {
-                return BadRequest("SMI did not return parseable questionnaire JSON for the selected lesson-plan content.");
+                return BadRequest("Gemma did not return parseable questionnaire JSON for the selected lesson-plan content.");
             }
 
             var seedLookup = phaseSeeds.ToDictionary(
@@ -780,8 +780,8 @@ namespace ETD.Api.Controllers
             {
                 Success = true,
                 QuestionSource = smiResult.UsedDeterministicFallback
-                    ? "Generated with the lesson-plan-content-only SMI workflow using free content seeds (deterministic fallback used where SMI output was not parseable)."
-                    : "Generated with the lesson-plan-content-only SMI workflow using free content seeds",
+                    ? "Generated with the lesson-plan-content-only Gemma workflow using free content seeds (deterministic fallback used where Gemma output was not parseable)."
+                    : "Generated with the lesson-plan-content-only Gemma workflow using free content seeds",
                 TotalQuestions = smiResult.Questions.Count,
                 TrueFalseQuestions = smiResult.Questions.Count(q => string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
                 MultipleChoiceQuestions = smiResult.Questions.Count(q => !string.Equals(q.Type, "TrueFalse", StringComparison.OrdinalIgnoreCase)),
@@ -1763,7 +1763,7 @@ namespace ETD.Api.Controllers
             foreach (var code in report.TopicCodes) sb.AppendLine($"- {code}");
             sb.AppendLine();
             sb.AppendLine("Learning Resource Suggestions:");
-            if (report.LearningResourceSuggestions.Count == 0) sb.AppendLine("- No SMI resource suggestions were returned.");
+            if (report.LearningResourceSuggestions.Count == 0) sb.AppendLine("- No Gemma resource suggestions were returned.");
             foreach (var line in report.LearningResourceSuggestions) sb.AppendLine($"- {line}");
             sb.AppendLine();
             sb.AppendLine("Bibliography Preview:");
@@ -3611,7 +3611,7 @@ namespace ETD.Api.Controllers
             var rationale = AssessmentDrivenQuestionGenerator.SanitizeQuestionText(parsed.Rationale);
             if (string.IsNullOrWhiteSpace(rationale))
             {
-                rationale = "Generated by SMI using lesson-plan content only.";
+                rationale = "Generated by Gemma using lesson-plan content only.";
             }
 
             string prompt;
@@ -3899,6 +3899,9 @@ namespace ETD.Api.Controllers
             sb.AppendLine("- When the stem refers to the lesson, use the actual topic name instead of phrases like 'topic content' or 'lesson content'.");
             sb.AppendLine("- Keep options homogeneous and realistic.");
             sb.AppendLine("- Do not use 'All of the above' or 'None of the above'.");
+            sb.AppendLine("- Use trade-specific or workplace context from the evidence when available, such as tools, components, measurements, safety controls, inspection steps, or reporting decisions.");
+            sb.AppendLine("- Wrong options must be plausible near-misses: common shortcuts, wrong units, wrong sequence, wrong tool choice, safety misconceptions, reporting/accountability mistakes, or similar realistic errors.");
+            sb.AppendLine("- The correct answer must not be noticeably longer or more polished than the distractors.");
             sb.AppendLine("- Simple factual checks are acceptable when they are genuinely about the technical subject matter and not about the curriculum wording.");
             if (variantCount > 1)
             {
@@ -3913,6 +3916,7 @@ namespace ETD.Api.Controllers
                 sb.AppendLine("- options must be exactly [\"True\", \"False\"].");
                 sb.AppendLine("- correctAnswer format: \"True\" or \"False\".");
                 sb.AppendLine("- The statement may be simple and lesson-plan-direct, but it must still be accurate and unambiguous.");
+                sb.AppendLine("- Avoid statements that begin with 'It is incorrect that' or 'It is false that'; alter a technical detail, sequence, unit, tool, safety rule, or workplace decision instead.");
                 sb.AppendLine("- Do not ask the learner to explain, discuss, motivate, or justify the answer.");
             }
             else
@@ -4555,9 +4559,9 @@ namespace ETD.Api.Controllers
                     "Follow the lesson content accurately.");
                 return (fallbackSource, new List<string>
                 {
-                    AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement($"It is incorrect that {fallbackSource.TrimEnd('.', '!', '?')}."),
-                    AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement($"It is false that {fallbackSource.TrimEnd('.', '!', '?')}."),
-                    AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement($"This is not correct regarding {fallbackSource.TrimEnd('.', '!', '?')}.")
+                    AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement($"A shortcut is acceptable when completing {fallbackSource.TrimEnd('.', '!', '?')}."),
+                    AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement($"The task can be completed without checking {fallbackSource.TrimEnd('.', '!', '?')}."),
+                    AssessmentDrivenQuestionGenerator.NormalizeQuestionStatement($"Speed is more important than accuracy when completing {fallbackSource.TrimEnd('.', '!', '?')}.")
                 });
             }
 
@@ -5031,8 +5035,8 @@ namespace ETD.Api.Controllers
 
             body.Append(HeadingPara("DISCLAIMER", 18));
             body.Append(BodyPara("ETDP Courseware Release ETDP RSA PATENT 004/026785", 22));
-            body.Append(BodyPara($"(C) {year} by Dr P.C. Wepener, supported by the professional assistance of OpenAI (CODEX).", 22));
-            body.Append(BodyPara("Neither Dr P.C. Wepener nor OpenAI is accountable or liable for the correctness, completeness, factual, or academic correctness of this document. This document is generated by the ETDP App. The accredited learning institution should be contacted for content inquiries, sources, references, or citations.", 22));
+            body.Append(BodyPara($"(C) {year} by Dr P.C. Wepener. This document is generated by the ETDP App under the authority and final approval of the authorised learning-material owner.", 22));
+            body.Append(BodyPara("Neither Dr P.C. Wepener nor the ETDP App is accountable or liable for the correctness, completeness, factual, or academic correctness of this document. The accredited learning institution should be contacted for content inquiries, sources, references, or citations.", 22));
 
             body.Append(HeadingPara("NOTICE OF RIGHTS", 14));
             body.Append(BodyPara("No part of this publication may be reproduced, transmitted, transcribed, stored in a retrieval system, or translated into any language or computer language, in any form or by any means, electronic, mechanical, magnetic, optical, chemical, manual, or otherwise, without prior written permission from the branded learning institution that owns the legal and intellectual property rights to the content of this document.", 22));
@@ -5041,7 +5045,7 @@ namespace ETD.Api.Controllers
             body.Append(BodyPara("Throughout this courseware title, trademark names may be used. Rather than placing a trademark symbol at every occurrence, names are used in an editorial manner for the benefit of the trademark owner, with no intention of infringement.", 22));
 
             body.Append(HeadingPara("NOTICE OF LIABILITY", 14));
-            body.Append(BodyPara("The information in this courseware title is distributed on an 'as is' basis, without warranty. While every precaution has been taken in preparation of this courseware, neither Dr P.C. Wepener nor OpenAI shall have any liability to any person or entity for any loss or damage caused, or alleged to be caused, directly or indirectly by the instructions in this document or by the learning design and development processes described in it.", 22));
+            body.Append(BodyPara("The information in this courseware title is distributed on an 'as is' basis, without warranty. While every precaution has been taken in preparation of this courseware, neither Dr P.C. Wepener nor the ETDP App shall have any liability to any person or entity for any loss or damage caused, or alleged to be caused, directly or indirectly by the instructions in this document or by the learning design and development processes described in it.", 22));
 
             body.Append(HeadingPara("TERMS AND CONDITIONS", 14));
             body.Append(BodyPara("This document is developed for the learning institution holding a legal permit and may not be resold by the learning institution. Sample versions may be shared but may not be resold to a third party. For licensed users, this document may only be used under the terms of the license agreement between the learning institution and Dr P.C. Wepener.", 22));

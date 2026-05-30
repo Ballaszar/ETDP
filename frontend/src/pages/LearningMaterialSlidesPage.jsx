@@ -3,7 +3,6 @@ import { useQualification } from '../context/QualificationContext';
 import LearningMaterialFooterNav from '../components/LearningMaterialFooterNav';
 import PowerPointSlidesPage from './PowerPointSlidesPage';
 import {
-  downloadBlobResponse,
   ensureQualificationId,
   getLearningMaterialParamsWithFallback,
   buildSubjectRange,
@@ -27,7 +26,7 @@ export default function LearningMaterialSlidesPage() {
       subjectToId: range.toId
     });
 
-    const res = await fetch('/api/Content/export-slides-batch-download', {
+    const res = await fetch('/api/Content/export-slides-batch-save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -37,8 +36,8 @@ export default function LearningMaterialSlidesPage() {
       })
     });
     if (!res.ok) throw new Error(await res.text());
-    await downloadBlobResponse(res, 'PowerPoint_Slides.zip');
-    return 'Slide deck save request submitted.';
+    const data = await res.json();
+    return `Saved ${data?.fileName || 'slide deck'} to ${data?.savedPath || data?.folderPath || 'the qualification SlideShows folder'}.`;
   };
 
   return (

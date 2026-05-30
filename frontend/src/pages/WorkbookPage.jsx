@@ -4,9 +4,16 @@ import DocxPreviewModal from '../components/DocxPreviewModal';
 import { fetchDocxPreview } from '../utils/docxPreview';
 
 const API = '/api';
+const WORKBOOK_SCOPE_OPTIONS = [
+  { value: 'topic', label: 'Topic Workbook' },
+  { value: 'assessment', label: 'Assessment Criteria Workbook' },
+  { value: 'lessonplan', label: 'Lesson Plan Workbook' },
+  { value: 'all', label: 'All Workbook Sets (.zip)' }
+];
 
 const asCode = (s) => s?.subjectCode ?? s?.SubjectCode ?? s?.phasesCode ?? s?.PhasesCode ?? '';
 const asDesc = (s) => s?.subjectDescription ?? s?.SubjectDescription ?? '';
+const scopeLabelOf = (scope) => WORKBOOK_SCOPE_OPTIONS.find((option) => option.value === scope)?.label || 'Workbook';
 
 const WorkbookPage = () => {
   const { qualificationId } = useQualification() || { qualificationId: null };
@@ -17,6 +24,7 @@ const WorkbookPage = () => {
   const [subjectFromId, setSubjectFromId] = useState('');
   const [subjectToId, setSubjectToId] = useState('');
   const [maxActivities, setMaxActivities] = useState(30);
+  const [activityScope, setActivityScope] = useState('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -65,7 +73,7 @@ const WorkbookPage = () => {
   useEffect(() => {
     setReportData(null);
     setReportError('');
-  }, [subjectId, qid, maxActivities]);
+  }, [subjectId, qid, maxActivities, activityScope]);
 
   const selectedSubject = useMemo(
     () => subjects.find(s => String(s?.id ?? s?.Id) === String(subjectId)) || null,
@@ -77,8 +85,9 @@ const WorkbookPage = () => {
     if (qid > 0) p.set('qualificationId', String(qid));
     if (subjectId) p.set('subjectId', String(subjectId));
     p.set('maxActivities', String(maxActivities));
+    p.set('activityScope', activityScope);
     return p.toString();
-  }, [qid, subjectId, maxActivities]);
+  }, [qid, subjectId, maxActivities, activityScope]);
 
   const buildWorkbookUrl = () => {
     if (!subjectId) {
@@ -122,6 +131,7 @@ const WorkbookPage = () => {
     if (subjectFromId) p.set('subjectFromId', String(subjectFromId));
     if (subjectToId) p.set('subjectToId', String(subjectToId));
     p.set('maxActivities', String(maxActivities));
+    p.set('activityScope', activityScope);
     return p.toString();
   };
 
@@ -164,8 +174,12 @@ const WorkbookPage = () => {
   };
 
   const handlePreviewWorkbook = async () => {
+    if (activityScope === 'all') {
+      setError('Select Topic, Assessment Criteria, or Lesson Plan to preview a single workbook.');
+      return;
+    }
     const url = buildWorkbookUrl();
-    await openPreview(url, 'Workbook Preview', 'Workbook.docx');
+    await openPreview(url, `${scopeLabelOf(activityScope)} Preview`, 'Workbook.docx');
   };
 
   const handlePreviewMemorandum = async () => {
@@ -186,6 +200,10 @@ const WorkbookPage = () => {
   };
 
   const handleGenerateReport = async () => {
+    if (activityScope === 'all') {
+      setReportError('Select Topic, Assessment Criteria, or Lesson Plan to generate a single workbook report.');
+      return;
+    }
     const url = buildReportUrl();
     if (!url) return;
     setReportBusy(true);
@@ -225,10 +243,10 @@ const WorkbookPage = () => {
     <div className="mainpage-root">
       <h2 className="mainpage-title">Workbook Export</h2>
       <p style={{ marginTop: 4, color: '#4b6075' }}>
-        Auto-generated workbook activities are aligned to topic, lesson plan and assessment criteria.
+        Workbook exports now follow the discussion-based activity format. Generate Topic, Assessment Criteria, Lesson Plan, or all workbook sets.
       </p>
 
-      <div style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 220px', gap: 12, maxWidth: 900 }}>
+      <div style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 220px 260px', gap: 12, maxWidth: 1160 }}>
         <label>
           Subject
           <select
@@ -261,6 +279,18 @@ const WorkbookPage = () => {
             value={maxActivities}
             onChange={(e) => setMaxActivities(Number(e.target.value || 30))}
           />
+        </label>
+        <label>
+          Workbook Set
+          <select
+            className="mainpage-input"
+            value={activityScope}
+            onChange={(e) => setActivityScope(e.target.value)}
+          >
+            {WORKBOOK_SCOPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
         </label>
       </div>
 
@@ -311,7 +341,7 @@ const WorkbookPage = () => {
 
       {selectedSubject ? (
         <div style={{ marginBottom: 16, color: '#3d566e' }}>
-          <strong>Selected:</strong> {asCode(selectedSubject)} - {asDesc(selectedSubject)}
+          <strong>Selected:</strong> {asCode(selectedSubject)} - {asDesc(selectedSubject)} | <strong>Workbook Set:</strong> {scopeLabelOf(activityScope)}
         </div>
       ) : null}
 
@@ -326,10 +356,10 @@ const WorkbookPage = () => {
 
       <div style={{ marginBottom: 24 }}>
         <button onClick={handleDownloadWorkbook} disabled={!subjectId || loading}>
-          Download Workbook (.docx)
+          {activityScope === 'all' ? 'Download All Workbook Sets (.zip)' : 'Download Workbook (.docx)'}
         </button>
         <button onClick={handleDownloadMemorandum} style={{ marginLeft: 16 }} disabled={!subjectId || loading}>
-          Download Memorandum (.docx)
+          Download Workbook Memorandum (.docx)
         </button>
       </div>
 
@@ -344,7 +374,7 @@ const WorkbookPage = () => {
 
       <div style={{ marginBottom: 24 }}>
         <button onClick={handleDownloadWorkbookRange} disabled={!subjectFromId || !subjectToId || loading}>
-          Download Workbook Range (.zip)
+          {activityScope === 'all' ? 'Download Workbook Range All Sets (.zip)' : 'Download Workbook Range (.zip)'}
         </button>
         <button onClick={handleDownloadMemorandumRange} style={{ marginLeft: 16 }} disabled={!subjectFromId || !subjectToId || loading}>
           Download Workbook Memorandum Range (.zip)
@@ -355,6 +385,7 @@ const WorkbookPage = () => {
       {reportData ? (
         <div style={{ border: '1px solid #d8dfeb', borderRadius: 8, padding: 12, marginBottom: 20, background: '#f8fbff' }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>Workbook Report Summary</div>
+          <div>Workbook Set: <strong>{String(reportData?.activityScope || '-')}</strong></div>
           <div>Max Activities Requested: <strong>{Number(reportData?.maxActivitiesRequested || 0)}</strong></div>
           <div>Activities Generated: <strong>{Number(reportData?.activitiesGenerated || 0)}</strong></div>
           <div>Total Questions Generated: <strong>{Number(reportData?.totalQuestionsGenerated || 0)}</strong></div>

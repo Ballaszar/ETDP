@@ -65,7 +65,7 @@ namespace ETD.Api.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
 
-            var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+            var stamp = BuildUniqueRolloutStamp();
             var outputPath = Path.Combine(outputDirectory, $"Project_Plan_Rollout_{stamp}.xlsx");
             var summaryPath = Path.Combine(outputDirectory, $"ProjectPlan_Rollout_Summary_{stamp}.md");
 
@@ -427,7 +427,7 @@ namespace ETD.Api.Controllers
                     "Complete Lesson Plan / Lecturer Toolkit data first so the schedule can be auto-generated.");
             }
 
-            var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+            var stamp = BuildUniqueRolloutStamp();
             var safeNumber = MakeSafePathPart(resolvedQualificationNumber);
             if (string.IsNullOrWhiteSpace(safeNumber))
             {
@@ -694,7 +694,12 @@ namespace ETD.Api.Controllers
                 throw new InvalidOperationException($"Schedule CSV not found: {path}");
             }
 
-            var raw = System.IO.File.ReadAllText(path, Encoding.UTF8);
+            string raw;
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+            {
+                raw = reader.ReadToEnd();
+            }
             var records = ParseCsvRecords(raw);
             if (records.Count == 0)
             {
@@ -809,6 +814,9 @@ namespace ETD.Api.Controllers
 
             return records;
         }
+
+        private static string BuildUniqueRolloutStamp()
+            => $"{DateTime.UtcNow:yyyyMMdd_HHmmss_fffffff}_{Guid.NewGuid():N}"[..33];
 
         private static List<RolloutPlanRow> BuildRolloutPlanRows(
             ResolvedRolloutRequest resolved,

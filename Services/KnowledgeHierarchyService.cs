@@ -45,6 +45,26 @@ namespace ETD.Api.Services
             ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".svg"
         };
 
+        private static readonly string[] LocalSubjectMatterAliasFolders =
+        {
+            "subject_matter",
+            "subject matter",
+            "subjectmatter",
+            "local_source_upload",
+            "local source upload",
+            "localsourceupload"
+        };
+
+        private static readonly string[] DeveloperKnowledgeAliasFolders =
+        {
+            "developer_knowledge_base",
+            "developer knowledge base",
+            "developerknowledgebase",
+            "developer_kb",
+            "developer kb",
+            "dev_knowledge"
+        };
+
         private static readonly HashSet<string> CoverageStopWords = new(StringComparer.OrdinalIgnoreCase)
         {
             "the", "and", "for", "with", "from", "this", "that", "into", "within", "also", "shall", "must",
@@ -834,13 +854,15 @@ namespace ETD.Api.Services
 
             foreach (var folder in qualificationRoots)
             {
-                var qualificationRoot = folder.Path;
                 var qualificationCode = folder.QualificationCode;
                 var qualificationDescription = ResolveQualificationDescription(qualificationCode, folder.QualificationDescription);
                 if (string.IsNullOrWhiteSpace(qualificationDescription))
                 {
                     qualificationDescription = folder.QualificationDescription;
                 }
+                var structure = EnsureQualificationStructure(qualificationCode, qualificationDescription);
+                var qualificationRoot = structure.QualificationRootPath;
+                MirrorCurriculumLibraryKnowledgeAliases(structure, maxFilesPerInbox);
                 var qualificationKey = $"{qualificationCode}|{NormalizeForMatch(qualificationDescription)}";
 
                 var hasCodeFilter = !string.IsNullOrWhiteSpace(qualificationCodeFilter);
@@ -2537,6 +2559,8 @@ namespace ETD.Api.Services
             sb.AppendLine("## Notes");
             sb.AppendLine();
             sb.AppendLine($"- Curriculum Specification and Assessment Specification documents stay outside `KnowledgeHierarchy`. Store them under `{Path.Combine(curriculumRoot, "<QualificationCode>")}` using `QC_CurriculumSpecification.*` and `QC_AssessmentSpecification.*`.");
+            sb.AppendLine($"- For qualification subject matter, you can drop files directly under `{Path.Combine(curriculumRoot, "<QualificationCode>", "subject_matter")}` or `{Path.Combine(curriculumRoot, "<QualificationCode>", "local_source_upload")}`. ETDP mirrors those folders into `KnowledgeHierarchy/.../local_source_upload/inbox` during sync.");
+            sb.AppendLine($"- For structured helper files, developer notes, generated CSVs, or curated support material, use `{Path.Combine(curriculumRoot, "<QualificationCode>", "developer_knowledge_base")}` or `{Path.Combine(curriculumRoot, "<QualificationCode>", "developer_kb")}`. ETDP mirrors those into `KnowledgeHierarchy/.../developer_knowledge_base/inbox` during sync.");
             sb.AppendLine("- Supported file types: `.txt`, `.md`, `.docx`, `.pdf`, `.pptx`, `.csv`, `.json`, `.jsonl`, `.xml`, `.yml`, `.yaml`, `.html`, `.htm`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tif`, `.tiff`, `.svg`.");
             sb.AppendLine("- Files are moved out of `inbox` after processing to avoid duplicate re-indexing.");
             sb.AppendLine("- Folder scaffolding uses `QualificationCode` as the stable key and reuses an existing code folder to avoid duplicates.");
@@ -2544,6 +2568,7 @@ namespace ETD.Api.Services
             sb.AppendLine("- OCR is built-in for scanned images and low-text PDFs using local Tesseract.");
             sb.AppendLine("- OCR environment keys: optional `OCR_ENGINE`, `OCR_PDF_MODE`, `TESSERACT_PATH`, `TESSERACT_LANG`, `TESSERACT_PSM`.");
             sb.AppendLine("- Developer knowledge sync generates timestamped coverage reports in `developer_knowledge_base/reports` with topic mapping and missing-topic lists.");
+            sb.AppendLine("- `CognitiveScan/PipelineJobs` is a job archive, not the primary watched drop-zone. ETDP now promotes curated pipeline extracts into the qualification alias folders above so chat can ingest them on the next sync.");
             sb.AppendLine("- Legacy duplicate qualification folders are automatically consolidated into one canonical folder per `QualificationCode`.");
             sb.AppendLine();
             sb.AppendLine($"Last generated (UTC): {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
@@ -2583,6 +2608,150 @@ namespace ETD.Api.Services
 
                 File.Copy(sourcePath, destinationFile, overwrite: false);
             }
+        }
+
+        private int MirrorCurriculumLibraryKnowledgeAliases(StructureInfo structure, int maxFilesPerInbox)
+        {
+            if (structure == null || string.IsNullOrWhiteSpace(structure.CurriculumLibraryPath) || !Directory.Exists(structure.CurriculumLibraryPath))
+            {
+                return 0;
+            }
+
+            var mirrored = 0;
+            mirrored += MirrorQualificationFilesIntoInbox(
+                structure.QualificationCode,
+                "local_source_upload",
+                Directory.EnumerateFiles(structure.CurriculumLibraryPath, "*", SearchOption.TopDirectoryOnly)
+                    .Where(path => SupportedExtensions.Contains(Path.GetExtension(path)))
+                    .Where(path => !IsImageSidecarFile(path))
+                    .Where(path => !Path.GetFileName(path).StartsWith("QC_", StringComparison.OrdinalIgnoreCase))
+                    .Take(maxFilesPerInbox),
+                structure.LocalInboxPath);
+
+            mirrored += MirrorAliasFolderGroup(structure, LocalSubjectMatterAliasFolders, structure.LocalInboxPath, "local_source_upload", maxFilesPerInbox);
+            mirrored += MirrorAliasFolderGroup(structure, DeveloperKnowledgeAliasFolders, structure.DeveloperInboxPath, "developer_knowledge_base", maxFilesPerInbox);
+            return mirrored;
+        }
+
+        private int MirrorAliasFolderGroup(
+            StructureInfo structure,
+            IReadOnlyList<string> aliases,
+            string targetInboxPath,
+            string sourceType,
+            int maxFilesPerInbox)
+        {
+            var seenDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var mirrored = 0;
+
+            foreach (var alias in aliases)
+            {
+                var aliasPath = Path.Combine(structure.CurriculumLibraryPath, alias);
+                if (!Directory.Exists(aliasPath) || !seenDirectories.Add(aliasPath))
+                {
+                    continue;
+                }
+
+                var sourceDirectories = new List<string> { aliasPath };
+                var nestedInbox = Path.Combine(aliasPath, "inbox");
+                if (Directory.Exists(nestedInbox))
+                {
+                    sourceDirectories.Insert(0, nestedInbox);
+                }
+
+                foreach (var sourceDirectory in sourceDirectories.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    var files = Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories)
+                        .Where(path => SupportedExtensions.Contains(Path.GetExtension(path)))
+                        .Where(path => !IsImageSidecarFile(path))
+                        .Take(maxFilesPerInbox)
+                        .ToList();
+
+                    mirrored += MirrorQualificationFilesIntoInbox(
+                        structure.QualificationCode,
+                        sourceType,
+                        files,
+                        targetInboxPath);
+                }
+            }
+
+            return mirrored;
+        }
+
+        private int MirrorQualificationFilesIntoInbox(
+            string qualificationCode,
+            string sourceType,
+            IEnumerable<string> sourcePaths,
+            string targetInboxPath)
+        {
+            if (string.IsNullOrWhiteSpace(targetInboxPath))
+            {
+                return 0;
+            }
+
+            Directory.CreateDirectory(targetInboxPath);
+            var mirrored = 0;
+
+            foreach (var sourcePath in sourcePaths.Where(File.Exists))
+            {
+                var originalName = Path.GetFileName(sourcePath);
+                if (string.IsNullOrWhiteSpace(originalName))
+                {
+                    continue;
+                }
+
+                if (IsKnowledgeFileAlreadyManaged(qualificationCode, sourceType, originalName, targetInboxPath))
+                {
+                    continue;
+                }
+
+                var destinationPath = Path.Combine(targetInboxPath, originalName);
+                if (!string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Copy(sourcePath, destinationPath, overwrite: false);
+                }
+
+                mirrored++;
+            }
+
+            return mirrored;
+        }
+
+        private bool IsKnowledgeFileAlreadyManaged(
+            string qualificationCode,
+            string sourceType,
+            string originalName,
+            string targetInboxPath)
+        {
+            if (string.IsNullOrWhiteSpace(originalName))
+            {
+                return true;
+            }
+
+            var inboxMatch = Path.Combine(targetInboxPath, originalName);
+            if (File.Exists(inboxMatch))
+            {
+                return true;
+            }
+
+            var sourceMarker = $"Source:{originalName}";
+            var normalizedQualificationCode = (qualificationCode ?? string.Empty).Trim().ToLowerInvariant();
+            var normalizedSourceType = (sourceType ?? string.Empty).Trim().ToLowerInvariant();
+
+            var candidates = _context.SourceMaterials
+                .AsNoTracking()
+                .Where(material =>
+                    (material.QualificationCode ?? string.Empty).ToLower() == normalizedQualificationCode &&
+                    (material.KnowledgeSourceType ?? string.Empty).ToLower() == normalizedSourceType)
+                .Select(material => new
+                {
+                    material.AssessmentCriteriaDescription,
+                    material.Title
+                })
+                .ToList();
+
+            return candidates.Any(material =>
+                (material.AssessmentCriteriaDescription ?? string.Empty).Contains(sourceMarker, StringComparison.OrdinalIgnoreCase) ||
+                (material.Title ?? string.Empty).Contains(originalName, StringComparison.OrdinalIgnoreCase));
         }
     }
 }

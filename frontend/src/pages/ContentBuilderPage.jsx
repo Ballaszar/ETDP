@@ -315,6 +315,14 @@ export default function ContentBuilderPage() {
   const [highlightMatches, setHighlightMatches] = useState(true);
   const [offlineMode, setOfflineMode] = useState(false);
   const [runtimeConfig, setRuntimeConfig] = useState(null);
+  const [runtimeForm, setRuntimeForm] = useState({
+    aiMode: 'offline',
+    openAiModel: 'gpt-5-mini',
+    openAiApiKey: '',
+    localLlmEndpoint: '',
+    localLlmModel: ''
+  });
+  const [runtimeSaving, setRuntimeSaving] = useState(false);
   const [googleCx, setGoogleCx] = useState('');
   const [googleKey, setGoogleKey] = useState('');
   const [googleKeyPresent, setGoogleKeyPresent] = useState(false);
@@ -1021,6 +1029,13 @@ export default function ContentBuilderPage() {
       .then(cfg => {
         if (!active || !cfg) return;
         setRuntimeConfig(cfg);
+        setRuntimeForm(prev => ({
+          ...prev,
+          aiMode: String(cfg?.aiMode || 'offline'),
+          openAiModel: String(cfg?.openAiModel || 'gpt-5-mini'),
+          localLlmEndpoint: String(cfg?.localLlmEndpoint || ''),
+          localLlmModel: String(cfg?.localLlmModel || '')
+        }));
         if (cfg.offlineMode) {
           setOfflineMode(true);
           setProvider('none');
@@ -1031,6 +1046,43 @@ export default function ContentBuilderPage() {
       .catch(() => {});
     return () => { active = false; };
   }, []);
+
+  const saveRuntimeConfig = async () => {
+    if (runtimeSaving) return;
+    setRuntimeSaving(true);
+    setStatus('');
+    try {
+      const res = await fetch(`${API_CONTENT}/runtime-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(runtimeForm)
+      });
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!res.ok) {
+        throw new Error(data?.error || data?.message || `Runtime save failed (${res.status})`);
+      }
+      const refreshed = await fetch(`${API_CONTENT}/runtime-config`).then(r => (r.ok ? r.json() : data));
+      setRuntimeConfig(refreshed);
+      setRuntimeForm(prev => ({ ...prev, openAiApiKey: '' }));
+      if (refreshed?.offlineMode) {
+        setOfflineMode(true);
+        setProvider('none');
+        setUseOpenAI(false);
+      } else {
+        setOfflineMode(false);
+        if (runtimeForm.aiMode === 'cloud') {
+          setUseOpenAI(true);
+          setLocalFirst(false);
+        }
+      }
+      setStatus(`AI mode saved as ${String(refreshed?.aiMode || runtimeForm.aiMode)}. Restart the backend if an environment variable still forces offline mode.`);
+    } catch (err) {
+      setStatus(`AI mode save failed: ${err?.message || err}`);
+    } finally {
+      setRuntimeSaving(false);
+    }
+  };
 
   useEffect(() => {
     fetch(`${API_CONTENT}/google-config`)
@@ -1938,12 +1990,19 @@ export default function ContentBuilderPage() {
         const activeUploadQualification = qualifications.find(
           (qf) => Number(qf?.id ?? 0) === activeUploadQualificationId
         ) || null;
+        const activeUploadQualificationDescription =
+          activeUploadQualification?.qualificationDescription || entry?.QualificationDescription || entry?.qualificationDescription || '';
+        if (activeUploadQualificationId <= 0 || !String(activeUploadQualificationDescription || '').trim()) {
+          setStatus('Select a qualification before uploading local materials.');
+          skipped++;
+          continue;
+        }
         if (activeUploadQualificationId > 0) {
           fd.append('meta.QualificationId', String(activeUploadQualificationId));
         }
         fd.append(
           'meta.QualificationDescription',
-          activeUploadQualification?.qualificationDescription || entry?.QualificationDescription || entry?.qualificationDescription || ''
+          activeUploadQualificationDescription
         );
         fd.append('meta.SubjectDescription', entry?.SubjectDescription || entry?.subjectDescription || '');
         fd.append('meta.TopicDescription', entry?.TopicDescription || entry?.topicDescription || '');
@@ -2322,8 +2381,67 @@ export default function ContentBuilderPage() {
       {runtimeConfig && (
         <div className="cb-entry-card">
           <div><strong>Runtime:</strong> {String(runtimeConfig?.aiMode || 'offline')}</div>
+          <div><strong>OpenAI:</strong> {runtimeConfig?.openAiConfigured ? `${runtimeConfig?.openAiModel || 'configured'} ready` : (runtimeConfig?.openAiEnabled ? 'enabled, key not stored' : 'disabled by AI mode')}</div>
           <div>
             <strong>Local Library:</strong> {localLibraryExists ? 'Available' : 'Missing'} {localLibraryPath ? `• ${localLibraryPath}` : ''}
+          </div>
+          <div className="cb-grid-3" style={{ marginTop: 10 }}>
+            <label>
+              AI Mode
+              <select
+                className="mainpage-input"
+                value={runtimeForm.aiMode}
+                onChange={e => setRuntimeForm(prev => ({ ...prev, aiMode: e.target.value }))}
+              >
+                <option value="offline">offline</option>
+                <option value="hybrid">hybrid</option>
+                <option value="cloud">cloud</option>
+              </select>
+            </label>
+            <label>
+              OpenAI Model
+              <input
+                className="mainpage-input"
+                value={runtimeForm.openAiModel}
+                onChange={e => setRuntimeForm(prev => ({ ...prev, openAiModel: e.target.value }))}
+                placeholder="gpt-5-mini"
+              />
+            </label>
+            <label>
+              OpenAI API Key
+              <input
+                className="mainpage-input"
+                type="password"
+                value={runtimeForm.openAiApiKey}
+                onChange={e => setRuntimeForm(prev => ({ ...prev, openAiApiKey: e.target.value }))}
+                placeholder={runtimeConfig?.openAiConfigured ? 'Stored' : 'Paste key to enable'}
+              />
+            </label>
+          </div>
+          <div className="cb-grid-3" style={{ marginTop: 8 }}>
+            <label>
+              Local LLM Endpoint
+              <input
+                className="mainpage-input"
+                value={runtimeForm.localLlmEndpoint}
+                onChange={e => setRuntimeForm(prev => ({ ...prev, localLlmEndpoint: e.target.value }))}
+                placeholder="http://127.0.0.1:11434/api/chat"
+              />
+            </label>
+            <label>
+              Local LLM Model
+              <input
+                className="mainpage-input"
+                value={runtimeForm.localLlmModel}
+                onChange={e => setRuntimeForm(prev => ({ ...prev, localLlmModel: e.target.value }))}
+                placeholder="llama3.1:8b"
+              />
+            </label>
+            <div style={{ display: 'flex', alignItems: 'end' }}>
+              <button type="button" onClick={saveRuntimeConfig} disabled={runtimeSaving}>
+                {runtimeSaving ? 'Saving...' : 'Save AI Mode'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2347,7 +2465,7 @@ export default function ContentBuilderPage() {
           Refresh Entry Data
         </button>
         <button onClick={() => navigate('/lesson-plan-review', { state: workflowState })}>Open Lesson Plan Review</button>
-        <button onClick={() => navigate('/ai-agent')}>Open Mira Your Lecturer</button>
+        <button onClick={() => navigate('/qualia/mira')}>Open Mira Qualia</button>
       </div>
       {entry ? (
         <div className="cb-entry-card">

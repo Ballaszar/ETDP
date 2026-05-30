@@ -1,3 +1,8 @@
+.ai-agent-collapsed-shell,
+.ai-agent-expanded-shell {
+  min-width: 0;
+}
+
 .mira-header {
   display: flex;
   align-items: center;
@@ -11,11 +16,175 @@
   margin-top: 2px;
 }
 
+.mira-presence-card {
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border: 1px solid #c7d8ea;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+}
+
+.mira-presence-card.warning {
+  border-color: #efd2a5;
+  background: linear-gradient(180deg, #fffaf0 0%, #fff2d8 100%);
+}
+
+.mira-presence-card.progress {
+  border-color: #b7d0ea;
+  background: linear-gradient(180deg, #f5fbff 0%, #e9f3ff 100%);
+}
+
+.mira-presence-card.ready {
+  border-color: #b8ddc1;
+  background: linear-gradient(180deg, #f2fff7 0%, #e6f8ee 100%);
+}
+
+.mira-presence-card.idle {
+  border-color: #d6dfea;
+  background: linear-gradient(180deg, #fafcff 0%, #f2f7fc 100%);
+}
+
+.mira-presence-title {
+  font-weight: 800;
+  color: #1f3f5b;
+  margin-bottom: 4px;
+}
+
+.mira-presence-text {
+  color: #3e5870;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.mira-presence-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.mira-presence-pill {
+  font-size: 0.76rem;
+  color: #22435f;
+  border: 1px solid rgba(44, 96, 145, 0.16);
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.mira-quick-prompts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.mira-quick-prompt {
+  border: 1px solid #c6d8ec;
+  background: #fff;
+  color: #21425f;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.mira-quick-prompt:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #8fb5d8;
+  box-shadow: 0 6px 14px rgba(31, 63, 91, 0.08);
+}
+
+.mira-quick-prompt:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.mira-warning-section {
+  margin-bottom: 12px;
+}
+
+.mira-warning-heading {
+  font-weight: 800;
+  color: #1f3f5b;
+  margin-bottom: 8px;
+}
+
+.mira-warning-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mira-warning-card {
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid #d4e2ef;
+  background: #fff;
+}
+
+.mira-warning-card.danger {
+  border-color: #f0b5b5;
+  background: #fff4f4;
+}
+
+.mira-warning-card.warning {
+  border-color: #efd2a5;
+  background: #fff9ef;
+}
+
+.mira-warning-card.ready {
+  border-color: #b4e1c3;
+  background: #f1fbf4;
+}
+
+.mira-warning-card-title {
+  font-weight: 800;
+  color: #213f59;
+  margin-bottom: 4px;
+}
+
+.mira-warning-card-text {
+  color: #405a71;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.mira-warning-card-action {
+  border: 1px solid #acc7de;
+  background: #ffffff;
+  color: #21425f;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mira-collapsed-shell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 64px;
+  color: #2b3d52;
+  font-size: 0.88rem;
+  border: 1px dashed #c7d6e2;
+  border-radius: 12px;
+  background: rgba(248, 251, 255, 0.98);
+  padding: 8px 10px;
+  gap: 8px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(18, 36, 59, 0.14);
+}
+
 .mira-collapsed-ident {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
 }
 
 .mira-collapsed-text {
@@ -35,13 +204,30 @@
   font-size: 0.73rem;
 }
 
+.mira-collapsed-open {
+  background: #1e7a4a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.mira-collapsed-open:hover {
+  filter: brightness(0.96);
+}
+
 .mira-avatar {
   width: 38px;
   height: 38px;
   border-radius: 999px;
   border: 2px solid #a9dabb;
-  background: radial-gradient(circle at 32% 28%, #f9fffb 0%, #dcf4e7 52%, #b8e1ca 100%);
+  background: linear-gradient(135deg, #fbfffc 0%, #dff4e8 100%);
   position: relative;
+  overflow: hidden;
   flex: 0 0 auto;
   box-shadow: 0 0 0 0 rgba(31, 122, 74, 0.32);
   animation: miraPulse 2.4s ease-in-out infinite;
@@ -52,56 +238,16 @@
   height: 32px;
 }
 
-.mira-eye {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #1d5a40;
-  top: 12px;
+.mira-avatar-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+  transform-origin: center 42%;
 }
 
-.mira-eye-left {
-  left: 11px;
-}
-
-.mira-eye-right {
-  right: 11px;
-}
-
-.mira-mouth {
-  position: absolute;
-  width: 12px;
-  height: 6px;
-  left: 50%;
-  top: 19px;
-  transform: translateX(-50%);
-  border-bottom: 2px solid #1d5a40;
-  border-radius: 0 0 12px 12px;
-  transition: all 0.18s ease;
-}
-
-.mira-avatar.compact .mira-eye {
-  top: 10px;
-}
-
-.mira-avatar.compact .mira-eye-left {
-  left: 9px;
-}
-
-.mira-avatar.compact .mira-eye-right {
-  right: 9px;
-}
-
-.mira-avatar.compact .mira-mouth {
-  width: 10px;
-  height: 5px;
-  top: 15px;
-}
-
-.mira-avatar.talking .mira-mouth {
-  height: 7px;
-  border-radius: 0 0 999px 999px;
+.mira-avatar.talking .mira-avatar-image {
   animation: miraTalk 0.58s ease-in-out infinite alternate;
 }
 
@@ -119,9 +265,9 @@
 
 @keyframes miraTalk {
   0% {
-    transform: translateX(-50%) scaleY(0.78);
+    transform: translateY(0) scale(1);
   }
   100% {
-    transform: translateX(-50%) scaleY(1.2);
+    transform: translateY(-0.5px) scale(1.035);
   }
 }

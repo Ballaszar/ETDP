@@ -16,15 +16,17 @@ const SECTIONS = [
     id: 'workflow',
     title: '2. Recommended Workflow',
     content: [
-      'Main Menu -> Qualification (/main) -> Demographics -> Curriculum Phases -> Subjects -> Outcomes (if qualification uses outcomes) -> Topics -> Lecturer Toolkit -> Library Manager -> Content Builder -> Lesson Plan Review -> Learning Material Dashboard.',
-      'Canonical ecosystem workflow document: `E:\\ETDP\\workflow.readme.md` (single source of truth for startup profile, architecture, test flow, and SMi integration sequence).',
-      'Mira Your Lecturer (`/ai-agent`) now leads this same sequence with in-chat workflow controls and should be used as the operator guide.',
+      'Main Menu -> Qualification (/main) -> Demographics -> Curriculum Phases -> Subjects -> Outcomes (if qualification uses outcomes) -> Topics -> Library Manager -> Lesson Plan Content (Lecturer Toolkit) -> Lesson Plan Review -> Learning Material Dashboard.',
+      'Canonical ecosystem workflow document: `E:\\ETDP\\workflow.readme.md` (single source of truth for startup profile, architecture, test flow, and Qwen integration sequence).',
+      'Mira Your Lecturer (`/qualia/mira`) now leads this same sequence with in-chat workflow controls and should be used as the operator guide.',
+      'Qwen Specialist (`/qualia/qwen`) is the specialist route for deep subject-matter expansion, knowledge-taxonomy alignment, and detailed teaching explanations.',
+      'Mira now shows vital workflow alerts when prerequisite steps are still missing, especially for qualification selection, compulsory specifications, queue build, knowledge uploads, and hierarchy sync.',
       'Workflow guards block capture pages until prerequisite pages contain data; use the warning buttons to go to missing steps.',
       'Keep one canonical qualification record per qualification number.',
       'Use numeric Qualification Id for API-driven pages (subject/topic/engine/report cascades).',
       'Orchestration order in Mira Your Lecturer: upload compulsory specs -> run cognitive queue build -> upload local/developer knowledge -> sync knowledge hierarchy -> continue capture pages -> Lecturer Toolkit lesson upload/import (.xlsx/.csv) -> content builder and exports.',
-      'Mira includes a one-click presentation action that downloads qualification slide packs and opens Text-to-Video with an auto-seeded starter storyboard.',
-      'Mira now uses a default learner-friendly profile: explain app structure first, then give actionable steps.',
+      'Mira includes a one-click presentation action that saves the qualification slide pack and opens Text-to-Video with an auto-seeded starter storyboard.',
+      'Mira now uses a warmer lecturer-style interaction pattern: explain the app structure first, then give the next safe action clearly.',
       'Mira supports normal conversational chat and workflow guidance in the same chat; ask "next step" when you want strict sequence mode.'
     ]
   },
@@ -80,9 +82,13 @@ const SECTIONS = [
       'Lookup parameters: Qualification, Date From, Date To, From Chapter (Subject), To Chapter (Subject), Select Topic, Max Questions, Max Activities.',
       'Range-based save/export actions require Subject From and Subject To and enforce reviewed-subject audit checks before final save.',
       'Each workflow has its own page for focused preview/edit/save: Roll Out Plan (`/learning-material/rollout-plan`), Learning Schedule (`/learning-material/schedule`), Learner Guide (`/learning-material/learner-guide`), Summative Assessment (`/learning-material/summative-assessment`), Summative Memoranda (`/learning-material/summative-memoranda`), Workbook (`/learning-material/workbook`), Workbook Memoranda (`/learning-material/workbook-memoranda`), PowerPoint Slides (`/learning-material/slides`), Learner Registration (`/learning-material/learner-registration`), Logbook (`/learning-material/logbook`), Progress Report (`/learning-material/progress-report`), Template Uploads (`/learning-material/template-uploads`), Flow Diagrams (`/learning-material/flow-diagrams`).',
+      'Workbook export now supports three learner sets: Topic Workbook, Assessment Criteria Workbook, and Lesson Plan Workbook. Workbook Memorandum is a single consolidated memorandum per subject with LPN retained as reference.',
+      'PowerPoint slide export now follows the preview layout instead of an external slide template and saves into the qualification `SlideShows` folder.',
+      'Text-to-Video Editor (`/text-to-video-editor`) can generate storyboard scenes, export project JSON, export subtitles as `.srt`, export shot list `.csv`, and export a visual preview video as `.webm`.',
+      'If external LTX/OpenAI video generation is not configured on the machine, use ETDP storyboard generation plus the built-in `.webm` preview export path.',
+      'Current Text-to-Video limitation: TTS playback is available for preview, but narration is not yet embedded into the exported `.webm` file.',
       'Standard footer navigation is available on Learning Material workflow pages: `Goto Learning Material Dashboard`, `Save`, `Goto Next`, and `Back Parameters`.',
       'Standardized cover pages for print outputs are stored at `C:\\ETDP\\ETDP\\Imports\\Coverpages`.',
-      'Standardized slide layout template is stored at `C:\\ETDP\\ETDP\\Imports\\SlideTemplate`.',
       '`/print-menu` and `/exports` now redirect to `/learning-material`.'
     ]
   },
@@ -112,9 +118,15 @@ const SECTIONS = [
       'Permanent upload root is `Imports\\\\KnowledgeHierarchy` under the configured local library path.',
       'Per qualification root pattern: `<QualificationCode>_<QualificationDescription>`.',
       'Inside each qualification root use `local_source_upload\\\\inbox` and `developer_knowledge_base\\\\inbox` for new uploads.',
+      'Global compulsory Mira/Qwen knowledge is separate from qualifications under `Imports\\\\AgentKnowledge\\\\Shared\\\\inbox`, `Imports\\\\AgentKnowledge\\\\Mira\\\\inbox`, and `Imports\\\\AgentKnowledge\\\\Qwen\\\\inbox`.',
+      'Mira always digests `AgentKnowledge\\\\Shared` plus `AgentKnowledge\\\\Mira`; Qwen always digests `AgentKnowledge\\\\Shared` plus `AgentKnowledge\\\\Qwen`.',
+      'Use `AgentKnowledge` for cross-disciplinary scientific or technical knowledge that must not be tied to a specific qualification, curriculum, or learner-guide pipeline.',
+      'Curriculum Specification and Assessment Specification documents do not belong in `KnowledgeHierarchy`; keep them separately under `Imports\\\\<QualificationCode>` as `QC_CurriculumSpecification.*` and `QC_AssessmentSpecification.*`.',
       'Direct upload endpoints: `/api/Content/upload-material` (local source) and `/api/Content/upload-developer-knowledge` (developer knowledge base).',
+      'Global agent knowledge management endpoints: `/api/Content/agent-knowledge-structure` and `/api/Content/sync-agent-knowledge`.',
       'Indexed files are moved automatically to `archive` folders, and duplicates are moved to `duplicates` folders.',
       'Structure guide file is maintained at `Imports\\\\KnowledgeHierarchy\\\\upload.readme.md`.',
+      'Agent knowledge guide file is maintained at `Imports\\\\AgentKnowledge\\\\readme.md`.',
       'Legacy folder names are auto-consolidated into one canonical folder per qualification code to prevent duplicate roots.',
       'OCR is now permanent: scanned images and scanned/low-text PDFs are OCR-enriched automatically.',
       'OCR order: local Tesseract OCR.',
@@ -127,7 +139,7 @@ const SECTIONS = [
     content: [
       'Quality Council page now supports cognitive scan with a mapping review queue before database commit.',
       'Run `Run Cognitive Scan + Build Review Queue` to parse curriculum data into phase, subject, and topic candidate rows.',
-      'Mira Your Lecturer quick action can run the same queue build from `/ai-agent` for the selected qualification.',
+      'Mira Your Lecturer quick action can run the same queue build from `/qualia/mira` for the selected qualification.',
       'Each queue row receives confidence scoring (`high`, `medium`, `low`) with suggestion signals.',
       'You can enable `Auto-accept high confidence immediately after scan` and set a threshold score (default 85).',
       'Queue actions: `Accept Pending by Threshold` for batch apply, or `Accept` per row for one-click controlled upsert.',
@@ -160,7 +172,8 @@ const SECTIONS = [
       '`Draft` uses runtime fallback order (local LLM -> OpenAI when allowed -> deterministic local draft).',
       'Use `Import From Qualification Folder` to keep local library materials synchronized into Engine results.',
       'When authoring is complete, open `Lesson Plan Review` before proceeding to `Learning Material Dashboard` exports.',
-      'Before opening Engine, ensure Lecturer Toolkit entries exist. You can upload lesson plan content directly from Lecturer Toolkit using `.xlsx` or `.csv`, or capture rows manually. Use Replace Existing mode for clean re-imports without duplicates.'
+      'Before opening Engine, ensure Lecturer Toolkit entries exist. You can upload lesson plan content directly from Lecturer Toolkit using `.xlsx` or `.csv`, or capture rows manually. Use Replace Existing mode for clean re-imports without duplicates.',
+      'Lesson Plan Content upload is the canonical Lecturer Toolkit import path for downstream learner guide, workbook, and questionnaire generation.'
     ]
   },
   {
@@ -169,7 +182,7 @@ const SECTIONS = [
     content: [
       'System Diagnostics page captures backend/frontend errors with timestamps and correlation context.',
       'Technical support channel 1: `/system-diagnostics` for live error logs, correlation ids, and API health check.',
-      'Technical support channel 2: Mira Your Lecturer (`/ai-agent`) for workflow and knowledge-base support tied to qualification context.',
+      'Technical support channel 2: Mira Your Lecturer (`/qualia/mira`) for workflow and knowledge-base support tied to qualification context.',
       'Technical support channel 3: backend diagnostics APIs (`/api/Diagnostics/recent`, `/api/Diagnostics/entry/{id}`, `/api/Diagnostics/download`).',
       'Mira chat context source verification endpoint: `/api/Knowledge/chat-context-sources` to confirm readme, bootstrap, curriculum pools, and roadshow playbooks are loaded.',
       'When escalating a defect, include CorrelationId or ClientCorrelationId from diagnostics so support can trace the exact failure path.',
@@ -177,6 +190,7 @@ const SECTIONS = [
       'If Engine has no Lesson Plan rows, capture/import Lecturer Toolkit entries (LPN + criteria mapping) before opening `/content-builder/:id`.',
       'Lecturer Toolkit upload endpoint: `/api/LecturerToolkit/upload?qualificationId=<id>` with `multipart/form-data` field `file`; supported formats are `.xlsx` and `.csv`.',
       'For clean replacement imports, add query `&replaceExisting=true` (requires `qualificationId`); existing rows for that qualification are removed before new rows are inserted.',
+      'If workbook or learner-guide outputs look empty or generic, verify that Lesson Plan Content was imported into Lecturer Toolkit and not just topic headings.',
       'If topic phase labels look wrong, verify Topic API `PhasesCode` and Subject `CurriculumPhaseId` mapping from backend.',
       'If API returns `503` globally, check and disable `API_MAINTENANCE_MODE` when maintenance is complete.',
       'If cloud searches fail while local works, verify `AI_MODE`, provider keys, and network access.'
@@ -204,23 +218,23 @@ const SECTIONS = [
     ]
   },
   {
-    id: 'ecosystem-runtime-and-smi',
-    title: '16. Ecosystem Runtime Profiles, ETDP Testing, and SMi Access',
+    id: 'ecosystem-runtime-and-qwen',
+    title: '16. Ecosystem Runtime Profiles, ETDP Testing, and Qwen Access',
     content: [
-      'Install profile before testing: `powershell -ExecutionPolicy Bypass -File E:\\ETDP\\scripts\\install_etdp.ps1 -Mode Dev` for full SMi interaction, or `-Mode Runtime` for compute-only distribution behavior.',
+      'Install profile before testing: `powershell -ExecutionPolicy Bypass -File E:\\ETDP\\scripts\\install_etdp.ps1 -Mode Dev` for full Qwen interaction, or `-Mode Runtime` for compute-only distribution behavior.',
       'Standalone C:\\ installer: `powershell -ExecutionPolicy Bypass -File E:\\ETDP\\scripts\\install_etdp_standalone.ps1 -InstallRoot C:\\ETDP\\Stack -Mode Dev -CleanInstall -RunSmokeTest`.',
       'To keep current desktop unchanged during install: add `-SkipDesktopShortcuts` to install script commands.',
-      'Start/Status/Stop scripts: `E:\\ETDP\\scripts\\start_etdp_smi.ps1`, `status_etdp_smi.ps1`, `stop_etdp_smi.ps1` (desktop launch icons call the same procedure).',
-      'Standalone smoke test script: `powershell -ExecutionPolicy Bypass -File C:\\ETDP\\Stack\\scripts\\smoke_test_etdp_smi.ps1 -Mode Dev`.',
-      'Dev profile expected URLs: ETDP UI `http://127.0.0.1:5173`, ETDP API `http://127.0.0.1:5299`, SMi login `http://127.0.0.1:8099/ui/login`, SMi playground `http://127.0.0.1:8099/ui/playground`.',
-      'Runtime profile expected behavior: SMi UI/chat routes disabled; only compute contract remains available at `POST http://127.0.0.1:8099/api/etdp/lesson-content`.',
+      'Legacy start/status/stop scripts still use the old filename pattern: `E:\\ETDP\\scripts\\start_etdp_smi.ps1`, `status_etdp_smi.ps1`, and `stop_etdp_smi.ps1`.',
+      'Standalone smoke test script remains `powershell -ExecutionPolicy Bypass -File C:\\ETDP\\Stack\\scripts\\smoke_test_etdp_smi.ps1 -Mode Dev` until the script names are renamed.',
+      'Dev profile expected URLs: ETDP UI `http://127.0.0.1:5173`, ETDP API `http://127.0.0.1:5299`, and the Qwen specialist service `http://127.0.0.1:5000/api/chat`.',
+      'Runtime profile expected behavior: the Qwen specialist service remains available through `POST http://127.0.0.1:5000/api/chat` and ETDP routes specialist requests through the ETDP backend.',
       'ETDP test sequence: select qualification -> confirm subjects/topics/toolkit rows -> run Content Builder + Lesson Plan Review -> generate Workbook outputs from Learning Material Dashboard -> verify exports and report endpoints.',
-      'SMi from ETDP: generation pages call SMi via ETDP backend automatically; no direct operator API call is required during normal ETDP workflow.',
-      'Direct SMi testing is only for Dev profile: use `/ui/login` and `/ui/playground` for behavior tuning and variant calibration before runtime distribution.',
-      'SMi Codex tunnel status is visible in SMi health (`/health`) and status API (`/api/codex/status`), including `codex_tunnel_provider` and `codex_tunnel_openai_ready`.',
+      'Qwen from ETDP: generation pages call Qwen via the ETDP backend automatically; no direct operator API call is required during the normal ETDP workflow.',
+      'Direct Qwen testing is available through ETDP at `/playground/qwen`, or by calling the Alpha service endpoints when needed.',
+      'Legacy Codex tunnel diagnostics may still appear in older logs and health outputs while the runtime stack transitions fully away from SMi naming.',
       'Remote Codex auth can use `OPENAI_API_KEY` or configured fallback env/file sources; when unavailable, requests are queued and audited under `VocationalLLM\\\\data\\\\codex_tunnel` without breaking ETDP generation flow.',
-      'Status scripts auto-clean stale ETDP PID files; if repeated start/stop cycles were interrupted, run `status_etdp_smi.ps1` once before the next start.',
-      'Workflow document mirrors are synchronized to ETDP and SMi knowledge roots during installer profile execution.'
+      'Status scripts auto-clean stale ETDP PID files; if repeated start/stop cycles were interrupted, run the status script once before the next start.',
+      'Workflow document mirrors are synchronized to ETDP and Qwen knowledge roots during installer profile execution.'
     ]
   }
 ];

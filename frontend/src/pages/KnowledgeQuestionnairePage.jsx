@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DocxPreviewModal from '../components/DocxPreviewModal';
 import { useQualification } from '../context/QualificationContext';
+import { buildKnowledgeQuestionnairePreviewHtml } from '../utils/knowledgeQuestionnaireDocx';
 import { fetchDocxPreview } from '../utils/docxPreview';
-import { downloadBlobFile, normalizeQualification } from '../utils/questionnaireDesigner';
+import { normalizeQualification } from '../utils/questionnaireDesigner';
 import {
-  applyCanonicalVerbRule,
   buildCategoryPlans,
   buildFileStem,
   buildPhaseExamSummary,
@@ -21,7 +21,7 @@ import {
 } from '../utils/knowledgeQuestionnaireV1';
 
 const API = '/api';
-const DEFAULT_VERB_OPTIONS = ['identify', 'describe', 'explain'];
+const SPECIALIST_LABEL = 'Gemma';
 
 const asText = (value) => String(value ?? '').trim();
 
@@ -70,38 +70,52 @@ const parseErrorText = async (response) => {
   return asText(text) || `Request failed with status ${response.status}.`;
 };
 
-const parseDownloadFileName = (response, fallbackName) => {
-  const header = response.headers.get('content-disposition') || '';
-  const utfMatch = header.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utfMatch?.[1]) {
-    try {
-      return decodeURIComponent(utfMatch[1]);
-    } catch {
-      return utfMatch[1];
-    }
+const fileNameFromDisposition = (value, fallbackName) => {
+  const raw = String(value || '');
+  const match = raw.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+  if (!match?.[1]) return fallbackName;
+  try {
+    return decodeURIComponent(match[1].replace(/"/g, '').trim()) || fallbackName;
+  } catch {
+    return match[1].replace(/"/g, '').trim() || fallbackName;
   }
-  const plainMatch = header.match(/filename=\"?([^\";]+)\"?/i);
-  return asText(plainMatch?.[1]) || fallbackName;
+};
+
+const downloadBlobResponse = async (response, fallbackName) => {
+  const blob = await response.blob();
+  const fileName = fileNameFromDisposition(response.headers.get('content-disposition'), fallbackName);
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(url);
+  return fileName;
 };
 
 const normalizePromptKey = (value) => asText(value).toLowerCase().replace(/\s+/g, ' ');
 
-const buildGeneratedQuestionReview = (rows, minimumQuestionsPerCriterion) => {
+const buildGeneratedQuestionReview = (rows) => {
   const list = Array.isArray(rows) ? rows : [];
-  const minRequired = asInt(minimumQuestionsPerCriterion, 0);
   const groups = new Map();
 
   for (const row of list) {
     const key = [
-      asText(row.assessmentCriteriaNumber) || 'UNNUMBERED',
       asText(row.subjectCode),
-      asText(row.topicCode)
+      asText(row.topicCode),
+      asText(row.lessonPlanLabel) || 'NO-LESSON-LABEL'
     ].join('|');
 
     if (!groups.has(key)) {
       groups.set(key, {
         key,
-        assessmentCriteriaNumber: asText(row.assessmentCriteriaNumber) || 'Unnumbered criterion',
+        scopeLabel: [
+          asText(row.subjectCode),
+          asText(row.topicCode),
+          asText(row.lessonPlanLabel)
+        ].filter(Boolean).join(' - ') || 'Unlabeled lesson-content scope',
         rows: [],
         prompts: []
       });
@@ -115,11 +129,8 @@ const buildGeneratedQuestionReview = (rows, minimumQuestionsPerCriterion) => {
   const warnings = [];
   for (const entry of groups.values()) {
     const promptSet = new Set(entry.prompts.filter(Boolean));
-    if (minRequired > 0 && entry.rows.length < minRequired) {
-      warnings.push(`${entry.assessmentCriteriaNumber} only generated ${entry.rows.length} question(s); expected at least ${minRequired}.`);
-    }
     if (entry.rows.length > 1 && promptSet.size < entry.rows.length) {
-      warnings.push(`${entry.assessmentCriteriaNumber} contains repeated prompt text. The question pair is not yet distinct enough.`);
+      warnings.push(`${entry.scopeLabel} contains repeated prompt text. The question set is not yet distinct enough.`);
     }
   }
 
@@ -218,15 +229,6 @@ export default function KnowledgeQuestionnairePage() {
       : [];
     return Array.from(new Set([...serverWarnings, ...validation.warnings].filter(Boolean)));
   }, [draft, validation.warnings]);
-
-  const verbOptions = useMemo(() => {
-    const dynamic = Array.isArray(scopedDraft?.criteria)
-      ? scopedDraft.criteria.map((row) => asText(row.canonicalVerb)).filter(Boolean)
-      : [];
-    return Array.from(new Set([...DEFAULT_VERB_OPTIONS, ...dynamic])).sort((left, right) =>
-      left.localeCompare(right, undefined, { sensitivity: 'base' })
-    );
-  }, [scopedDraft]);
 
   const restoreGeneratedForCategory = (categoryKey, sourceMap = generatedByCategory) => {
     const saved = sourceMap?.[categoryKey];
@@ -427,18 +429,6 @@ export default function KnowledgeQuestionnairePage() {
         nextMetadata[field] = asInt(value, 0);
         nextMetadata.totalQuestions = nextMetadata.trueFalseCount + nextMetadata.multipleChoiceCount;
         nextMetadata.totalMarks = nextMetadata.totalQuestions;
-      } else if (field === 'minimumQuestionsPerCriterion') {
-        nextMetadata[field] = asInt(value, 0);
-        const suggestedTotal = Math.max(0, asInt(selectedCategoryPlan?.stats?.totalCriteria, 0) * nextMetadata.minimumQuestionsPerCriterion);
-        nextMetadata.minimumTotalQuestions = suggestedTotal;
-        if (nextMetadata.totalQuestions < suggestedTotal) {
-          nextMetadata.trueFalseCount = Math.floor(suggestedTotal / 2);
-          nextMetadata.multipleChoiceCount = suggestedTotal - nextMetadata.trueFalseCount;
-          nextMetadata.totalQuestions = suggestedTotal;
-          nextMetadata.totalMarks = suggestedTotal;
-        }
-      } else if (field === 'minimumTotalQuestions') {
-        nextMetadata[field] = asInt(value, 0);
       } else {
         nextMetadata[field] = value;
       }
@@ -459,15 +449,6 @@ export default function KnowledgeQuestionnairePage() {
       if (!current) return current;
       const nextCriteria = current.criteria.map((row) => {
         if (row.intentId !== intentId) return row;
-        if (field === 'canonicalVerb') {
-          return applyCanonicalVerbRule(row, value);
-        }
-        if (field === 'coverageType') {
-          return { ...row, coverageType: value === 'direct' ? 'direct' : 'proxy' };
-        }
-        if (field === 'routingStatus') {
-          return { ...row, routingStatus: value === 'KQ' ? 'KQ' : 'Other Assessment' };
-        }
         return { ...row, [field]: value };
       });
       return { ...current, criteria: nextCriteria };
@@ -538,7 +519,7 @@ export default function KnowledgeQuestionnairePage() {
 
   const generateWithSmi = async () => {
     if (!scopedDraft || !selectedCategoryPlan) {
-      setError('Load the selected main-category draft before generating with SMI.');
+      setError(`Load the selected main-category draft before generating with ${SPECIALIST_LABEL}.`);
       return;
     }
     if (validation.errors.length > 0) {
@@ -557,15 +538,16 @@ export default function KnowledgeQuestionnairePage() {
         qualificationId: qid,
         phaseId,
         subjectIds: selectedCategoryPlan.subjectIds,
-        assessmentCriteriaIds: selectedCategoryPlan.assessmentCriteriaIds,
         trueFalseCount: asInt(scopedDraft.metadata.trueFalseCount, 0),
         multipleChoiceCount: asInt(scopedDraft.metadata.multipleChoiceCount, 0),
-        minimumQuestionsPerCriterion: asInt(scopedDraft.metadata.minimumQuestionsPerCriterion, 0),
-        minimumTotalQuestions: asInt(scopedDraft.metadata.minimumTotalQuestions, 0),
-        mcqDistractors: 3
+        mcqDistractors: 3,
+        persistToDatabase: true,
+        questionnaireTitle: asText(scopedDraft.metadata.questionnaireTitle),
+        mainCategoryCode: asText(selectedCategoryPlan.code),
+        mainCategoryLabel: asText(selectedCategoryPlan.label)
       };
 
-      const response = await fetch(`${API}/KnowledgeQuestionnaire/v1-phase-smi-draft`, {
+      const response = await fetch(`${API}/KnowledgeQuestionnaire/v1-phase-content-smi-draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -574,7 +556,7 @@ export default function KnowledgeQuestionnairePage() {
       const data = await response.json();
       const rows = Array.isArray(data?.questions) ? data.questions.map(normalizeGeneratedQuestion) : [];
       if (rows.length === 0) {
-        setError('SMI returned no questionnaire rows for the selected knowledge-learning phase.');
+        setError(`${SPECIALIST_LABEL} returned no questionnaire rows for the selected knowledge-learning phase.`);
         return;
       }
 
@@ -592,9 +574,14 @@ export default function KnowledgeQuestionnairePage() {
       setSmiSource(nextSource);
       setSmiResources(nextResources);
       setPreviewOpen(false);
-      setStatus(`SMI generated ${rows.length} questionnaire row(s) for ${selectedCategoryPlan.label}.`);
+      const persistedCount = asInt(data?.persistedQuestionnaireCount, 0);
+      setStatus(
+        persistedCount > 0
+          ? `${SPECIALIST_LABEL} generated ${rows.length} questionnaire row(s) for ${selectedCategoryPlan.label} and merged ${persistedCount} content-only questionnaire record(s) into the database.`
+          : `${SPECIALIST_LABEL} generated ${rows.length} questionnaire row(s) for ${selectedCategoryPlan.label}.`
+      );
     } catch (e) {
-      setError(`SMI generation failed: ${e?.message || e}`);
+      setError(`${SPECIALIST_LABEL} generation failed: ${e?.message || e}`);
     } finally {
       setSmiBusy(false);
     }
@@ -689,7 +676,7 @@ export default function KnowledgeQuestionnairePage() {
       throw new Error(`Load the selected main-category draft before ${operationLabel}.`);
     }
     if (generatedQuestions.length === 0) {
-      throw new Error(`Generate the selected category with SMI before ${operationLabel}.`);
+      throw new Error(`Generate the selected category with ${SPECIALIST_LABEL} before ${operationLabel}.`);
     }
     if (validation.errors.length > 0) {
       throw new Error(validation.errors.join(' '));
@@ -697,6 +684,9 @@ export default function KnowledgeQuestionnairePage() {
 
     return {
       qualificationId: qid,
+      qualificationNumber: asText(selectedQualification?.qualificationNumber),
+      qualificationDescription: asText(selectedQualification?.qualificationDescription),
+      learningInstitutionName: asText(selectedQualification?.learningInstitutionName),
       phaseId,
       phaseName: asText(selectedPhase?.name),
       phaseDescription: asText(selectedPhase?.description),
@@ -755,7 +745,14 @@ export default function KnowledgeQuestionnairePage() {
         setPreviewTitle(`Knowledge Questionnaire Preview - ${preview.fileName}`);
       }
     } catch (e) {
-      setPreviewError(`Failed to generate preview: ${e?.message || e}`);
+      try {
+        setPreviewHtml(buildKnowledgeQuestionnairePreviewHtml(payload));
+        setPreviewWarnings([`Backend DOCX preview unavailable. Showing a local preview fallback instead. ${e?.message || e}`]);
+        setPreviewTitle(`Knowledge Questionnaire Preview - ${fallbackName}`);
+        setPreviewFileName(fallbackName);
+      } catch (fallbackError) {
+        setPreviewError(`Failed to generate preview: ${e?.message || e}. Local fallback failed: ${fallbackError?.message || fallbackError}`);
+      }
     } finally {
       setPreviewLoading(false);
     }
@@ -784,13 +781,94 @@ export default function KnowledgeQuestionnairePage() {
         body: JSON.stringify(payload)
       });
       if (!response.ok) throw new Error(await parseErrorText(response));
-
-      const blob = await response.blob();
-      const fileName = parseDownloadFileName(response, fallbackName);
-      downloadBlobFile(fileName, blob);
+      const fileName = await downloadBlobResponse(response, fallbackName);
       setStatus(`Downloaded ${fileName}.`);
     } catch (e) {
-      setError(`DOCX export failed: ${e?.message || e}`);
+      setError(`DOCX download failed: ${e?.message || e}`);
+    }
+  };
+
+  const handlePreviewSelectedCategoryMemorandumDocx = async () => {
+    let payload;
+    let fallbackName = 'KnowledgeQuestionnaire_Memorandum.docx';
+
+    try {
+      payload = buildSelectedCategoryDocxPayload('previewing the memorandum DOCX');
+      fallbackName = `${buildFileStem(scopedDraft)}_Memorandum.docx`;
+    } catch (e) {
+      setError(e?.message || String(e));
+      setStatus('');
+      return;
+    }
+
+    setError('');
+    setStatus('');
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewError('');
+    setPreviewHtml('');
+    setPreviewWarnings([]);
+    setPreviewZoom(1);
+    setPreviewTitle('Knowledge Questionnaire Memorandum Preview');
+    setPreviewFileName(fallbackName);
+
+    try {
+      const preview = await fetchDocxPreview(
+        `${API}/KnowledgeQuestionnaire/v1-phase-export-memorandum-docx`,
+        fallbackName,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }
+      );
+      setPreviewHtml(preview?.html || '');
+      setPreviewWarnings(Array.isArray(preview?.warnings) ? preview.warnings : []);
+      if (preview?.fileName) {
+        setPreviewFileName(preview.fileName);
+        setPreviewTitle(`Knowledge Questionnaire Memorandum Preview - ${preview.fileName}`);
+      }
+    } catch (e) {
+      try {
+        setPreviewHtml(buildKnowledgeQuestionnairePreviewHtml(payload, { memorandum: true }));
+        setPreviewWarnings([`Backend memorandum preview unavailable. Showing a local preview fallback instead. ${e?.message || e}`]);
+        setPreviewTitle(`Knowledge Questionnaire Memorandum Preview - ${fallbackName}`);
+        setPreviewFileName(fallbackName);
+      } catch (fallbackError) {
+        setPreviewError(`Failed to generate memorandum preview: ${e?.message || e}. Local fallback failed: ${fallbackError?.message || fallbackError}`);
+      }
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleDownloadSelectedCategoryMemorandumDocx = async () => {
+    let payload;
+    let fallbackName = 'KnowledgeQuestionnaire_Memorandum.docx';
+
+    try {
+      payload = buildSelectedCategoryDocxPayload('exporting the memorandum DOCX');
+      fallbackName = `${buildFileStem(scopedDraft)}_Memorandum.docx`;
+    } catch (e) {
+      setError(e?.message || String(e));
+      setStatus('');
+      return;
+    }
+
+    setError('');
+    setStatus('');
+
+    try {
+      const response = await fetch(`${API}/KnowledgeQuestionnaire/v1-phase-export-memorandum-docx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error(await parseErrorText(response));
+      const fileName = await downloadBlobResponse(response, fallbackName);
+      setStatus(`Downloaded ${fileName}.`);
+    } catch (e) {
+      setError(`Memorandum DOCX download failed: ${e?.message || e}`);
     }
   };
 
@@ -805,8 +883,8 @@ export default function KnowledgeQuestionnairePage() {
   }, [scopedDraft]);
 
   const generatedQuestionReview = useMemo(
-    () => buildGeneratedQuestionReview(generatedQuestions, scopedDraft?.metadata?.minimumQuestionsPerCriterion),
-    [generatedQuestions, scopedDraft]
+    () => buildGeneratedQuestionReview(generatedQuestions),
+    [generatedQuestions]
   );
 
   return (
@@ -814,9 +892,8 @@ export default function KnowledgeQuestionnairePage() {
       <h2 className="mainpage-title">Knowledge Questionnaire v1</h2>
       <p style={{ marginTop: 4, color: '#4b6075', maxWidth: 1100 }}>
         Standing rule: one Knowledge Questionnaire exam is written after each main category inside the selected
-        Knowledge Learning Phase. Defaults stay locked to two questions per assessable criterion, with True/False and
-        four-option Multiple Choice only. Lecturers may override the parameters, but doing so can destabilize the exam
-        weight ratio.
+        Knowledge Learning Phase. Question generation now uses lesson plan content only. Assessment verbs, Bloom
+        taxonomy labels, and topic-code exclusions are not enforced.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(280px, 1fr))', gap: 12, maxWidth: 1100, marginBottom: 16 }}>
@@ -904,7 +981,7 @@ export default function KnowledgeQuestionnairePage() {
               <div style={{ fontWeight: 700 }}>{phaseExamSummary.totalTopics}</div>
             </div>
             <div style={{ border: '1px solid #d8dfeb', borderRadius: 8, padding: 12, background: '#f8fbff' }}>
-              <div style={{ fontSize: 12, color: '#5b6f86', textTransform: 'uppercase' }}>Assessable Criteria</div>
+              <div style={{ fontSize: 12, color: '#5b6f86', textTransform: 'uppercase' }}>Lesson Topics</div>
               <div style={{ fontWeight: 700 }}>{phaseExamSummary.totalCriteria}</div>
             </div>
             <div style={{ border: '1px solid #d8dfeb', borderRadius: 8, padding: 12, background: '#f8fbff' }}>
@@ -924,10 +1001,12 @@ export default function KnowledgeQuestionnairePage() {
                 <button type="button" onClick={reloadCurrentDraft} disabled={loadingDraft || smiBusy}>Reload Draft</button>
                 <button type="button" onClick={saveCurrentState} disabled={loadingDraft}>Save Local State</button>
                 <button type="button" onClick={resetLocalOverrides} disabled={loadingDraft || smiBusy}>Reset Local Overrides</button>
-                <button type="button" onClick={generateWithSmi} disabled={loadingDraft || smiBusy || !selectedCategoryPlan}>Generate Selected Category With SMI</button>
+                <button type="button" onClick={generateWithSmi} disabled={loadingDraft || smiBusy || !selectedCategoryPlan}>{`Generate Selected Category With ${SPECIALIST_LABEL}`}</button>
                 <button type="button" onClick={clearGeneratedQuestions} disabled={generatedQuestions.length === 0 || smiBusy}>Clear Generated</button>
                 <button type="button" onClick={handlePreviewSelectedCategoryDocx} disabled={loadingDraft || smiBusy || generatedQuestions.length === 0 || !selectedCategoryPlan}>Preview Selected Category DOCX</button>
-                <button type="button" onClick={handleDownloadSelectedCategoryDocx} disabled={loadingDraft || smiBusy || generatedQuestions.length === 0 || !selectedCategoryPlan}>Save Selected Category (.docx)</button>
+                <button type="button" onClick={handleDownloadSelectedCategoryDocx} disabled={loadingDraft || smiBusy || generatedQuestions.length === 0 || !selectedCategoryPlan}>Download Selected Category (.docx)</button>
+                <button type="button" onClick={handlePreviewSelectedCategoryMemorandumDocx} disabled={loadingDraft || smiBusy || generatedQuestions.length === 0 || !selectedCategoryPlan}>Preview Memorandum DOCX</button>
+                <button type="button" onClick={handleDownloadSelectedCategoryMemorandumDocx} disabled={loadingDraft || smiBusy || generatedQuestions.length === 0 || !selectedCategoryPlan}>Download Memorandum (.docx)</button>
                 <button type="button" onClick={() => handleDownload('metadata')} disabled={loadingDraft || smiBusy}>Download Metadata CSV</button>
                 <button type="button" onClick={() => handleDownload('questions')} disabled={loadingDraft || smiBusy}>Download Question Rows CSV</button>
                 <button type="button" onClick={() => handleDownload('both')} disabled={loadingDraft || smiBusy}>Download Both CSVs</button>
@@ -947,7 +1026,7 @@ export default function KnowledgeQuestionnairePage() {
                   {categoryPlans.length === 0 ? <option value="">No main categories available</option> : null}
                   {categoryPlans.map((plan) => (
                     <option key={plan.key} value={plan.key}>
-                      {[plan.code, plan.label, `${plan.stats.totalCriteria} assessable criteria`].filter(Boolean).join(' - ')}
+                      {[plan.code, plan.label, `${plan.stats.totalTopics} lesson topics`].filter(Boolean).join(' - ')}
                     </option>
                   ))}
                 </select>
@@ -971,35 +1050,13 @@ export default function KnowledgeQuestionnairePage() {
               </label>
 
               <label>
-                Bloom Domain
-                <input className="mainpage-input" value={scopedDraft?.metadata.bloomDomain || ''} readOnly />
+                Generation Basis
+                <input className="mainpage-input" value="Lesson plan content only" readOnly />
               </label>
 
               <label>
-                Bloom Target Level
-                <input className="mainpage-input" value={scopedDraft?.metadata.bloomTargetLevel || ''} readOnly />
-              </label>
-
-              <label>
-                Minimum Questions Per Criterion
-                <input
-                  className="mainpage-input"
-                  type="number"
-                  min="0"
-                  value={scopedDraft?.metadata.minimumQuestionsPerCriterion || 0}
-                  onChange={(event) => updateMetadata('minimumQuestionsPerCriterion', event.target.value)}
-                />
-              </label>
-
-              <label>
-                Minimum Total Questions
-                <input
-                  className="mainpage-input"
-                  type="number"
-                  min="0"
-                  value={scopedDraft?.metadata.minimumTotalQuestions || 0}
-                  onChange={(event) => updateMetadata('minimumTotalQuestions', event.target.value)}
-                />
+                Verb / Bloom Rules
+                <input className="mainpage-input" value="Not enforced" readOnly />
               </label>
 
               <label>
@@ -1072,13 +1129,8 @@ export default function KnowledgeQuestionnairePage() {
                 />
               </label>
             </div>
-
             <div style={{ marginTop: 10, color: '#35536b', fontSize: 14 }}>
-              Standing default for {selectedCategoryPlan?.label || 'the selected main category'}: {validation.stats.kqCriteriaCount} assessable criteria x {validation.minimumQuestionsPerCriterion} default questions per criterion = {validation.formulaSuggestedTotalQuestions} question(s).
-              Minimum Total Questions is the manual override enforced during export and SMI generation.
-            </div>
-            <div style={{ marginTop: 6, color: '#7a5b17', fontSize: 13 }}>
-              Changing the default parameters can destabilize the exam weight ratio. The system allows the override, but the risk remains with the lecturer.
+              Question generation cycles across the lesson-plan content linked to the selected category subjects. No minimum-per-criterion rule is applied.
             </div>
           </div>
           <div className="form-section" style={{ maxWidth: 1100 }}>
@@ -1110,135 +1162,17 @@ export default function KnowledgeQuestionnairePage() {
           </div>
 
           <div className="form-section" style={{ maxWidth: 1100 }}>
-            <h3 style={{ marginTop: 0 }}>Criterion Decomposition</h3>
+            <h3 style={{ marginTop: 0 }}>Content-Only Scope</h3>
             <p style={{ marginTop: 0, color: '#4b6075' }}>
-              SMI confirms or corrects noun focus, canonical verb, qualifier, coverage type, and routing status before generation.
-              Rows marked <strong>Other Assessment</strong> stay visible for review but are excluded from the selected main-category exam.
+              {SPECIALIST_LABEL} now generates directly from stored lesson-plan content rows for the selected subjects and lesson topics.
+              Assessment criteria, noun focus, qualifiers, verbs, and Bloom labels are not used to shape question generation.
             </p>
-
-            <div style={{ overflowX: 'auto', border: '1px solid #d8dfeb', borderRadius: 8 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1640 }}>
-                <thead>
-                  <tr style={{ background: '#f3f7fc', textAlign: 'left' }}>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Subject</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Topic</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>AC Number</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Original Criterion</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Noun Focus</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Detected Verb</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Canonical Verb</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Bloom Level</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Qualifier</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Qualifier Source</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Coverage</th>
-                    <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Routing</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(scopedDraft?.criteria ?? []).map((row) => (
-                    <tr
-                      key={row.intentId}
-                      style={{
-                        background: row.routingStatus === 'KQ' ? '#ffffff' : '#f8f3f3',
-                        borderBottom: '1px solid #e4ebf3'
-                      }}
-                    >
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 180 }}>
-                        {[row.subjectCode, row.subjectDescription].filter(Boolean).join(' - ')}
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 220 }}>
-                        {[row.topicCode, row.topicDescription].filter(Boolean).join(' - ')}
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top' }}>
-                        <input
-                          className="mainpage-input"
-                          value={row.assessmentCriteriaNumber}
-                          onChange={(event) => updateCriterion(row.intentId, 'assessmentCriteriaNumber', event.target.value)}
-                        />
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 280 }}>
-                        <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{row.originalCriterionText || 'No criterion text'}</div>
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 220 }}>
-                        <textarea
-                          className="mainpage-input"
-                          value={row.nounFocus}
-                          onChange={(event) => updateCriterion(row.intentId, 'nounFocus', event.target.value)}
-                          rows={3}
-                        />
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 120 }}>
-                        {row.detectedVerb || <span style={{ color: '#8c99a8' }}>Not detected</span>}
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 180 }}>
-                        <input
-                          className="mainpage-input"
-                          list="kq-v1-verb-options"
-                          value={row.canonicalVerb}
-                          onChange={(event) => updateCriterion(row.intentId, 'canonicalVerb', event.target.value)}
-                        />
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 120 }}>
-                        {row.bloomLevel || <span style={{ color: '#8c99a8' }}>Unclassified</span>}
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 240 }}>
-                        <textarea
-                          className="mainpage-input"
-                          value={row.qualifier}
-                          onChange={(event) => updateCriterion(row.intentId, 'qualifier', event.target.value)}
-                          placeholder={row.qualifierSource === 'lesson_plan_fallback'
-                            ? 'Lesson plan content defines the question scope. Manual qualifier entry is optional.'
-                            : ''}
-                          rows={3}
-                        />
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 170 }}>
-                        <select
-                          className="mainpage-input"
-                          value={row.qualifierSource}
-                          onChange={(event) => updateCriterion(row.intentId, 'qualifierSource', event.target.value)}
-                        >
-                          <option value="detected_from_criterion">detected_from_criterion</option>
-                          <option value="lesson_plan_fallback">lesson_plan_fallback</option>
-                          <option value="smi_required">smi_required</option>
-                          <option value="smi_override">smi_override</option>
-                        </select>
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 140 }}>
-                        <select
-                          className="mainpage-input"
-                          value={row.coverageType}
-                          onChange={(event) => updateCriterion(row.intentId, 'coverageType', event.target.value)}
-                        >
-                          <option value="direct">direct</option>
-                          <option value="proxy">proxy</option>
-                        </select>
-                      </td>
-                      <td style={{ padding: 10, verticalAlign: 'top', minWidth: 180 }}>
-                        <select
-                          className="mainpage-input"
-                          value={row.routingStatus}
-                          onChange={(event) => updateCriterion(row.intentId, 'routingStatus', event.target.value)}
-                        >
-                          <option value="KQ">KQ</option>
-                          <option value="Other Assessment">Other Assessment</option>
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <datalist id="kq-v1-verb-options">
-              {verbOptions.map((verb) => <option key={verb} value={verb} />)}
-            </datalist>
           </div>
           <div className="form-section" style={{ maxWidth: 1100 }}>
-            <h3 style={{ marginTop: 0 }}>SMI Output</h3>
+            <h3 style={{ marginTop: 0 }}>{`${SPECIALIST_LABEL} Output`}</h3>
             <p style={{ marginTop: 0, color: '#4b6075' }}>
               The official KQ workflow now generates one questionnaire for the selected main category inside the Knowledge Learning Phase.
-              Downloaded question CSVs will use these generated rows if they are present; otherwise the scaffold rows are exported.
+              Downloaded question CSVs will use these generated rows directly with subject, topic, lesson label, and answer key data from the content-only path.
               Word export uses the generated rows directly and does not require Excel, CSV import, or mail merge.
             </p>
 
@@ -1262,17 +1196,17 @@ export default function KnowledgeQuestionnairePage() {
             ) : null}
 
             {generatedQuestions.length === 0 ? (
-              <div style={{ color: '#5b6f86' }}>No generated questions yet. Use <strong>Generate Selected Category With SMI</strong> after reviewing the decomposition table.</div>
+              <div style={{ color: '#5b6f86' }}>{`No generated questions yet. Use Generate Selected Category With ${SPECIALIST_LABEL} to build questions directly from lesson-plan content.`}</div>
             ) : (
               <div style={{ overflowX: 'auto', border: '1px solid #d8dfeb', borderRadius: 8 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1500 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1380 }}>
                   <thead>
                     <tr style={{ background: '#f3f7fc', textAlign: 'left' }}>
                       <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>#</th>
                       <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Type</th>
                       <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Subject</th>
                       <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Topic</th>
-                      <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>AC Number</th>
+                      <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Lesson Row</th>
                       <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Prompt</th>
                       <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Options</th>
                       <th style={{ padding: 10, borderBottom: '1px solid #d8dfeb' }}>Correct Answer</th>
@@ -1281,12 +1215,12 @@ export default function KnowledgeQuestionnairePage() {
                   </thead>
                   <tbody>
                     {generatedQuestions.map((row) => (
-                      <tr key={`${row.number}-${row.assessmentCriteriaNumber}-${row.type}`} style={{ borderBottom: '1px solid #e4ebf3' }}>
+                      <tr key={`${row.number}-${row.lessonPlanLabel}-${row.type}`} style={{ borderBottom: '1px solid #e4ebf3' }}>
                         <td style={{ padding: 10, verticalAlign: 'top' }}>{row.number}</td>
                         <td style={{ padding: 10, verticalAlign: 'top' }}>{row.type === 'TrueFalse' ? 'True/False' : 'Multiple Choice'}</td>
                         <td style={{ padding: 10, verticalAlign: 'top', minWidth: 180 }}>{[row.subjectCode, row.subjectDescription].filter(Boolean).join(' - ')}</td>
                         <td style={{ padding: 10, verticalAlign: 'top', minWidth: 220 }}>{[row.topicCode, row.topicDescription].filter(Boolean).join(' - ')}</td>
-                        <td style={{ padding: 10, verticalAlign: 'top' }}>{row.assessmentCriteriaNumber}</td>
+                        <td style={{ padding: 10, verticalAlign: 'top' }}>{row.lessonPlanLabel || 'Lesson content row'}</td>
                         <td style={{ padding: 10, verticalAlign: 'top', minWidth: 300, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{row.prompt}</td>
                         <td style={{ padding: 10, verticalAlign: 'top', minWidth: 260 }}>
                           <ol style={{ margin: 0, paddingLeft: 20 }}>

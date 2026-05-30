@@ -4,10 +4,12 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using ETD.Api.Controllers;
 using ETD.Api.Data;
 using ETD.Api.Utils;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ETD.Api.Services
@@ -72,7 +74,8 @@ namespace ETD.Api.Services
                 return existingJob;
             }
 
-            var safeQualificationFolder = MakeSafeFolderName(qualification.QualificationNumber, $"Qualification_{qualificationId}");
+            var safeQualificationFolder = string.IsNullOrWhiteSpace(qualification.QualificationNumber) ? $"Qualification_{qualificationId}" : qualification.QualificationNumber.Trim();
+            safeQualificationFolder = Regex.Replace(safeQualificationFolder, @"[^\w\- ]+", "").Trim().Replace(" ", "_");
             var qualificationFolder = Path.Combine(EtdpPaths.GetImportsRoot(), safeQualificationFolder);
             var jobsFolder = Path.Combine(qualificationFolder, "CognitiveScan", "PipelineJobs");
             Directory.CreateDirectory(jobsFolder);
@@ -147,7 +150,8 @@ namespace ETD.Api.Services
                 return null;
             }
 
-            var safeQualificationFolder = MakeSafeFolderName(qualification.QualificationNumber, $"Qualification_{qualificationId}");
+            var safeQualificationFolder = string.IsNullOrWhiteSpace(qualification.QualificationNumber) ? $"Qualification_{qualificationId}" : qualification.QualificationNumber.Trim();
+            safeQualificationFolder = Regex.Replace(safeQualificationFolder, @"[^\w\- ]+", "").Trim().Replace(" ", "_");
             var jobsFolder = Path.Combine(EtdpPaths.GetImportsRoot(), safeQualificationFolder, "CognitiveScan", "PipelineJobs");
             if (!Directory.Exists(jobsFolder))
             {
@@ -278,9 +282,25 @@ namespace ETD.Api.Services
                 };
                 job.Warnings = job.Artifacts.Warnings.ToList();
 
-                await MarkStageAsync(job, "generate-artifacts", "completed", 82, $"Artifacts ready in {outputDir}");
+                await MarkStageAsync(job, "generate-artifacts", "completed", 84, $"Artifacts ready in {outputDir}");
 
-                await MarkStageAsync(job, "resource-import", "running", 88, "Importing qualification-linked source material.");
+                await MarkStageAsync(job, "curriculum-build", "running", 90, "Importing curriculum phases, subjects, topics, and criteria.");
+                var structureImport = ImportCurriculumStructure(db, qualification.Id, job.Artifacts);
+                job.Artifacts.CurriculumBuild = structureImport;
+                job.Warnings = job.Warnings
+                    .Concat(BuildCurriculumImportWarnings(structureImport))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                await MarkStageAsync(
+                    job,
+                    "curriculum-build",
+                    "completed",
+                    94,
+                    $"Curriculum build ready: {structureImport.QualificationPhaseCount} phases, {structureImport.SubjectCount} subjects, {structureImport.TopicCount} topics, {structureImport.AssessmentCriteriaCount} criteria.");
+
+                var promotedKnowledgeArtifacts = PromoteCognitiveScanKnowledgeArtifacts(job);
+
+                await MarkStageAsync(job, "resource-import", "running", 96, "Importing qualification-linked source material.");
                 var deliveryPilot = await _curriculumDeliveryPilotService.ExecuteQualificationPilotAsync(
                     new CurriculumDeliveryPilotService.DeliveryPilotRequest
                     {
@@ -318,14 +338,14 @@ namespace ETD.Api.Services
                     job,
                     "resource-import",
                     "completed",
-                    90,
-                    $"Resources: {deliveryPilot.SourceMaterialCount} indexed | inbox copied {deliveryPilot.Import.CopiedToInboxCount}.");
+                    97,
+                    $"Resources: {deliveryPilot.SourceMaterialCount} indexed | inbox copied {deliveryPilot.Import.CopiedToInboxCount} | promoted {promotedKnowledgeArtifacts} curriculum artifact(s).");
 
                 await MarkStageAsync(
                     job,
                     "topic-source-map",
                     deliveryPilot.SourceMaterialCount > 0 ? "completed" : "skipped",
-                    96,
+                    99,
                     deliveryPilot.SourceMaterialCount > 0
                         ? $"Mapped {deliveryPilot.TopicsMappedCount}/{deliveryPilot.TopicCount} topics and {deliveryPilot.CriteriaMappedCount}/{deliveryPilot.CriteriaCount} criteria."
                         : "No qualification-linked source material was available for mapping.");
@@ -353,16 +373,155 @@ namespace ETD.Api.Services
             }
             catch (Exception ex)
             {
+                var failedStageKey = job.CurrentStage;
                 job.Status = "failed";
-                job.CurrentStage = "failed";
                 job.Error = ex.Message;
                 job.ProgressPercent = Math.Max(job.ProgressPercent, 1);
                 job.CompletedAtUtc = DateTime.UtcNow;
                 job.UpdatedAtUtc = DateTime.UtcNow;
-                MarkCurrentStageFailed(job, ex.Message);
+                MarkCurrentStageFailed(job, failedStageKey, ex.Message);
+                job.CurrentStage = "failed";
                 await SaveJobAsync(job);
                 _logger.LogError(ex, "Curriculum pipeline job {JobId} failed for qualification {QualificationId}", job.Id, job.QualificationId);
             }
+        }
+
+        private CurriculumStructureImportSummary ImportCurriculumStructure(
+            ApplicationDbContext db,
+            int qualificationId,
+            CurriculumPipelineArtifactSummary artifacts)
+        {
+            var phaseSummary = ParseImportSummary(
+                "phases",
+                new CurriculumPhaseController(db).ImportCsv(qualificationId, artifacts.PhasesCsvPath));
+            EnsureImportSucceeded(phaseSummary);
+
+            var subjectSummary = ParseImportSummary(
+                "subjects",
+                new SubjectController(db).ImportCsv(qualificationId, artifacts.SubjectCsvPath));
+            EnsureImportSucceeded(subjectSummary);
+
+            var topicSummary = ParseImportSummary(
+                "topics",
+                new TopicController(db).ImportCsv(qualificationId, artifacts.TopicCsvPath));
+            EnsureImportSucceeded(topicSummary);
+
+            return new CurriculumStructureImportSummary
+            {
+                Phases = phaseSummary,
+                Subjects = subjectSummary,
+                Topics = topicSummary,
+                QualificationPhaseCount = db.QualificationPhases.Count(qp => qp.QualificationId == qualificationId),
+                SubjectCount = db.Subjects.Count(s => s.QualificationId == qualificationId),
+                TopicCount = db.Topics.Count(t => t.Subject != null && t.Subject.QualificationId == qualificationId),
+                AssessmentCriteriaCount = db.AssessmentCriteria.Count(c => c.Topic != null && c.Topic.Subject != null && c.Topic.Subject.QualificationId == qualificationId)
+            };
+        }
+
+        private static CurriculumImportResultSummary ParseImportSummary(string entityType, IActionResult action)
+        {
+            var summary = new CurriculumImportResultSummary
+            {
+                EntityType = entityType
+            };
+
+            object? payload = null;
+            switch (action)
+            {
+                case OkObjectResult ok:
+                    summary.StatusCode = 200;
+                    payload = ok.Value;
+                    break;
+                case ObjectResult objectResult:
+                    summary.StatusCode = objectResult.StatusCode ?? 500;
+                    payload = objectResult.Value;
+                    break;
+                case StatusCodeResult statusCodeResult:
+                    summary.StatusCode = statusCodeResult.StatusCode;
+                    break;
+                default:
+                    summary.StatusCode = 200;
+                    break;
+            }
+
+            summary.Succeeded = summary.StatusCode >= 200 && summary.StatusCode < 300;
+
+            if (payload != null)
+            {
+                var json = JsonSerializer.SerializeToElement(payload, JsonOptions);
+                summary.Created = ReadIntProperty(json, "created");
+                summary.Updated = ReadIntProperty(json, "updated");
+                summary.Linked = ReadIntProperty(json, "linked");
+                summary.Failed = ReadIntProperty(json, "failed");
+                summary.Message = ReadStringProperty(json, "message");
+                if (string.IsNullOrWhiteSpace(summary.Message))
+                {
+                    summary.Message = ReadStringProperty(json, "error");
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(summary.Message))
+            {
+                summary.Message = $"{summary.Created} created, {summary.Updated} updated, {summary.Linked} linked, {summary.Failed} failed.";
+            }
+
+            return summary;
+        }
+
+        private static void EnsureImportSucceeded(CurriculumImportResultSummary summary)
+        {
+            if (summary.Succeeded)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"Automatic {summary.EntityType} import failed (HTTP {summary.StatusCode}): {summary.Message}");
+        }
+
+        private static IEnumerable<string> BuildCurriculumImportWarnings(CurriculumStructureImportSummary summary)
+        {
+            if (summary.Phases.Failed > 0)
+            {
+                yield return $"Automatic phase import reported {summary.Phases.Failed} failed row(s).";
+            }
+
+            if (summary.Subjects.Failed > 0)
+            {
+                yield return $"Automatic subject import reported {summary.Subjects.Failed} failed row(s).";
+            }
+
+            if (summary.Topics.Failed > 0)
+            {
+                yield return $"Automatic topic import reported {summary.Topics.Failed} failed row(s).";
+            }
+        }
+
+        private static int ReadIntProperty(JsonElement json, string propertyName)
+        {
+            if (json.ValueKind != JsonValueKind.Object || !json.TryGetProperty(propertyName, out var value))
+            {
+                return 0;
+            }
+
+            return value.ValueKind switch
+            {
+                JsonValueKind.Number when value.TryGetInt32(out var number) => number,
+                JsonValueKind.String when int.TryParse(value.GetString(), out var parsed) => parsed,
+                _ => 0
+            };
+        }
+
+        private static string ReadStringProperty(JsonElement json, string propertyName)
+        {
+            if (json.ValueKind != JsonValueKind.Object || !json.TryGetProperty(propertyName, out var value))
+            {
+                return string.Empty;
+            }
+
+            return value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? string.Empty
+                : string.Empty;
         }
 
         private async Task<string> CreateNormalizedWorkingCopyAsync(CurriculumPipelineJob job, string sourcePath, string ext)
@@ -371,9 +530,14 @@ namespace ETD.Api.Services
             Directory.CreateDirectory(normalizedDir);
 
             var targetPath = Path.Combine(normalizedDir, $"normalized{ext}");
-            await using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            await using var target = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-            await source.CopyToAsync(target);
+            var resolvedPointer = await GitLfsPointerResolver.CopyResolvedContentAsync(sourcePath, targetPath);
+            if (resolvedPointer)
+            {
+                _logger.LogInformation(
+                    "Resolved Git LFS pointer for curriculum pipeline source {SourcePath} into {TargetPath}.",
+                    sourcePath,
+                    targetPath);
+            }
 
             return targetPath;
         }
@@ -388,6 +552,7 @@ namespace ETD.Api.Services
                 new() { Key = "ocr-enrichment", Label = "OCR enrich", Status = "pending" },
                 new() { Key = "template-detect", Label = "Template detect", Status = "pending" },
                 new() { Key = "generate-artifacts", Label = "Generate artifacts", Status = "pending" },
+                new() { Key = "curriculum-build", Label = "Build curriculum", Status = "pending" },
                 new() { Key = "resource-import", Label = "Import resources", Status = "pending" },
                 new() { Key = "topic-source-map", Label = "Map subject matter", Status = "pending" },
                 new() { Key = "lesson-plan-drafts", Label = "Seed lesson drafts", Status = "pending" }
@@ -423,10 +588,12 @@ namespace ETD.Api.Services
             await SaveJobAsync(job);
         }
 
-        private static void MarkCurrentStageFailed(CurriculumPipelineJob job, string error)
+        private static void MarkCurrentStageFailed(CurriculumPipelineJob job, string? failedStageKey, string error)
         {
             var stage = job.Stages
-                .FirstOrDefault(s => string.Equals(s.Key, job.CurrentStage, StringComparison.OrdinalIgnoreCase) && !string.Equals(s.Status, "completed", StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault(s => string.Equals(s.Key, failedStageKey, StringComparison.OrdinalIgnoreCase))
+                ?? job.Stages.FirstOrDefault(s => string.Equals(s.Status, "running", StringComparison.OrdinalIgnoreCase))
+                ?? job.Stages.LastOrDefault(s => !string.Equals(s.Status, "completed", StringComparison.OrdinalIgnoreCase))
                 ?? job.Stages.LastOrDefault();
             if (stage == null) return;
 
@@ -474,7 +641,7 @@ namespace ETD.Api.Services
 
         private static string ResolveCurriculumSourcePath(string qualificationFolder)
         {
-            if (!Directory.Exists(qualificationFolder)) return string.Empty;
+            if (string.IsNullOrWhiteSpace(qualificationFolder) || !Directory.Exists(qualificationFolder)) return string.Empty;
             return Directory.GetFiles(qualificationFolder, "QC_*.*")
                 .Where(path => AllowedExt.Contains(Path.GetExtension(path)))
                 .FirstOrDefault(path =>
@@ -492,6 +659,59 @@ namespace ETD.Api.Services
         {
             var path = Path.Combine(job.JobFolder, fileName);
             await File.WriteAllTextAsync(path, text ?? string.Empty);
+        }
+
+        private static int PromoteCognitiveScanKnowledgeArtifacts(CurriculumPipelineJob job)
+        {
+            if (job == null || string.IsNullOrWhiteSpace(job.QualificationFolder))
+            {
+                return 0;
+            }
+
+            var qualificationFolder = job.QualificationFolder;
+            if (!Directory.Exists(qualificationFolder))
+            {
+                return 0;
+            }
+
+            var safeJobId = Regex.Replace(job.Id ?? "job", @"[^\w\-]+", "_").Trim('_');
+            if (string.IsNullOrWhiteSpace(safeJobId))
+            {
+                safeJobId = "job";
+            }
+
+            var subjectMatterFolder = Path.Combine(qualificationFolder, "subject_matter", "from_cognitive_scan");
+            var developerKnowledgeFolder = Path.Combine(qualificationFolder, "developer_knowledge_base", "from_cognitive_scan");
+            Directory.CreateDirectory(subjectMatterFolder);
+            Directory.CreateDirectory(developerKnowledgeFolder);
+
+            var promoted = 0;
+            promoted += CopyPromotedArtifact(Path.Combine(job.JobFolder, "baseline_extract.txt"), subjectMatterFolder, $"curriculum_baseline_{safeJobId}.txt");
+            promoted += CopyPromotedArtifact(Path.Combine(job.JobFolder, "ocr_enriched_extract.txt"), subjectMatterFolder, $"curriculum_ocr_enriched_{safeJobId}.txt");
+            promoted += CopyPromotedArtifact(job.Artifacts?.ExtractTextPath, subjectMatterFolder, $"curriculum_knowledge_extract_{safeJobId}.txt");
+            promoted += CopyPromotedArtifact(job.Artifacts?.PhasesCsvPath, developerKnowledgeFolder, $"curriculum_phases_{safeJobId}.csv");
+            promoted += CopyPromotedArtifact(job.Artifacts?.SubjectCsvPath, developerKnowledgeFolder, $"curriculum_subjects_{safeJobId}.csv");
+            promoted += CopyPromotedArtifact(job.Artifacts?.TopicCsvPath, developerKnowledgeFolder, $"curriculum_topics_{safeJobId}.csv");
+            promoted += CopyPromotedArtifact(job.TemplateDetectionPath, developerKnowledgeFolder, $"curriculum_template_detection_{safeJobId}.json");
+            return promoted;
+        }
+
+        private static int CopyPromotedArtifact(string? sourcePath, string destinationFolder, string destinationFileName)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath) || string.IsNullOrWhiteSpace(destinationFolder) || string.IsNullOrWhiteSpace(destinationFileName))
+            {
+                return 0;
+            }
+
+            if (!File.Exists(sourcePath))
+            {
+                return 0;
+            }
+
+            Directory.CreateDirectory(destinationFolder);
+            var destinationPath = Path.Combine(destinationFolder, destinationFileName);
+            File.Copy(sourcePath, destinationPath, overwrite: true);
+            return 1;
         }
 
         private static CurriculumTemplateDetection DetectTemplate(string text)
@@ -768,7 +988,31 @@ namespace ETD.Api.Services
             public int KnowledgeSubjectCount { get; set; }
             public int TopicCount { get; set; }
             public List<string> Warnings { get; set; } = new();
+            public CurriculumStructureImportSummary? CurriculumBuild { get; set; }
             public CurriculumDeliveryPilotArtifactSummary? DeliveryPilot { get; set; }
+        }
+
+        public sealed class CurriculumStructureImportSummary
+        {
+            public CurriculumImportResultSummary Phases { get; set; } = new();
+            public CurriculumImportResultSummary Subjects { get; set; } = new();
+            public CurriculumImportResultSummary Topics { get; set; } = new();
+            public int QualificationPhaseCount { get; set; }
+            public int SubjectCount { get; set; }
+            public int TopicCount { get; set; }
+            public int AssessmentCriteriaCount { get; set; }
+        }
+
+        public sealed class CurriculumImportResultSummary
+        {
+            public string EntityType { get; set; } = string.Empty;
+            public int StatusCode { get; set; }
+            public bool Succeeded { get; set; }
+            public int Created { get; set; }
+            public int Updated { get; set; }
+            public int Linked { get; set; }
+            public int Failed { get; set; }
+            public string Message { get; set; } = string.Empty;
         }
 
         public sealed class CurriculumDeliveryPilotArtifactSummary
@@ -807,3 +1051,4 @@ namespace ETD.Api.Services
         }
     }
 }
+

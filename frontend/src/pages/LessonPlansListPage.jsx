@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQualification } from '../context/QualificationContext';
 
 const apiUrl = '/api/LessonPlan';
@@ -9,12 +8,22 @@ const LessonPlansListPage = () => {
   const [lessonPlans, setLessonPlans] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ content: '', bibliography: '' });
+  const { qualificationId } = useQualification() || { qualificationId: null };
+  const activeQualificationId = Number(qualificationId || localStorage.getItem('qualificationId') || 0);
+
+  const loadLessonPlans = async () => {
+    if (activeQualificationId <= 0) {
+      setLessonPlans([]);
+      return;
+    }
+    const res = await fetch(`${apiUrl}/byQualification?qualificationId=${activeQualificationId}`);
+    const body = res.ok ? await res.json().catch(() => []) : [];
+    setLessonPlans(Array.isArray(body) ? body : []);
+  };
 
   useEffect(() => {
-    fetch(apiUrl)
-      .then(res => res.json())
-      .then(setLessonPlans);
-  }, []);
+    loadLessonPlans();
+  }, [activeQualificationId]);
 
   const handleEdit = lp => {
     setForm(lp);
@@ -23,7 +32,7 @@ const LessonPlansListPage = () => {
 
   const handleDelete = async id => {
     await fetch(`${apiUrl}/${id}`, { method: 'DELETE' });
-    fetch(apiUrl).then(res => res.json()).then(setLessonPlans);
+    loadLessonPlans();
   };
 
   const handleChange = e => {
@@ -40,12 +49,17 @@ const LessonPlansListPage = () => {
     });
     setEditingId(null);
     setForm({ content: '', bibliography: '' });
-    fetch(apiUrl).then(res => res.json()).then(setLessonPlans);
+    loadLessonPlans();
   };
 
   return (
     <div>
       <h2>Lesson Plans List</h2>
+      {activeQualificationId <= 0 && (
+        <div style={{ background: '#fff6d8', border: '1px solid #e5c966', borderRadius: 8, padding: 12, color: '#694b00', marginBottom: 16 }}>
+          Select a qualification first. This list now stays qualification-scoped to prevent another qualification&apos;s lesson plans from appearing here.
+        </div>
+      )}
       <table style={{ width: '100%', marginTop: 16 }}>
         <thead>
           <tr>

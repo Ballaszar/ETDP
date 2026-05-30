@@ -1,0 +1,20 @@
+{
+  "computeCacheExists": true,
+  "computeCacheLength": 121127414,
+  "timings": [
+    {
+      "label": "force-cold",
+      "elapsedMs": 367276,
+      "topicCount": 2086,
+      "sourceMaterialCount": 678,
+      "coveragePercent": 85
+    },
+    {
+      "label": "force-reuse",
+      "elapsedMs": 6115,
+      "topicCount": 2086,
+      "sourceMaterialCount": 678,
+      "coveragePercent": 85
+    }
+  ]
+}

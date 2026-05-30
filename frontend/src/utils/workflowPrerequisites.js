@@ -4,7 +4,7 @@ export const WORKFLOW_STEP_META = {
   subjects: { label: 'Subjects', path: '/subjects' },
   topics: { label: 'Topics', path: '/topics' },
   criteria: { label: 'Assessment Criteria', path: '/topics' },
-  toolkit: { label: 'Learning Schedule', path: '/lecturer-toolkit' },
+  toolkit: { label: 'Lesson Plan Content (LPN source)', path: '/lecturer-toolkit' },
   'lesson-plan-review': { label: 'Lesson Plan Review', path: '/lesson-plan-review' }
 };
 

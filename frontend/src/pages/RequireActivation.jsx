@@ -5,24 +5,28 @@ const RequireActivation = ({ children }) => {
   const location = useLocation();
   const [checked, setChecked] = useState(false);
   const [allowed, setAllowed] = useState(false);
+  const [statusError, setStatusError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     const check = async () => {
       try {
         const token = localStorage.getItem('activationToken') || '';
+        const appApiKey = localStorage.getItem('appApiKey') || import.meta.env.VITE_APP_API_KEY || '';
         const res = await fetch('/api/Activation/status', {
           headers: token ? { 'X-Activation-Token': token } : undefined
         });
         const data = res.ok ? await res.json() : null;
         if (cancelled) return;
         const openMode = data && !data.apiKeyRequired && !data.activationRequired;
-        const ok = Boolean(data?.bypassed || data?.activated || openMode);
+        const hasApiKey = !data?.apiKeyRequired || String(appApiKey || '').trim().length > 0;
+        const ok = Boolean((data?.bypassed || data?.activated || openMode) && hasApiKey);
         setAllowed(ok);
-      } catch {
+        setStatusError('');
+      } catch (e) {
         if (cancelled) return;
-        // Do not hard-block app access if activation status endpoint is unavailable.
-        setAllowed(true);
+        setAllowed(false);
+        setStatusError(String(e?.message || e || 'Activation status check failed.'));
       } finally {
         if (!cancelled) setChecked(true);
       }
@@ -31,8 +35,8 @@ const RequireActivation = ({ children }) => {
     return () => { cancelled = true; };
   }, []);
 
-  if (!checked) return <div style={{ padding: 24 }}>Checking activation...</div>;
-  if (!allowed) return <Navigate to="/activation" state={{ from: location }} replace />;
+  if (!checked) return <div style={{ padding: 24 }}>Checking manual logon...</div>;
+  if (!allowed) return <Navigate to="/activation" state={{ from: location, error: statusError }} replace />;
   return children;
 };
 

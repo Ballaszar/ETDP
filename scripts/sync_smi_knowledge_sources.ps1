@@ -1,6 +1,6 @@
 param(
-    [string]$RootPath = "E:\ETDP\ETDP\Imports\SMIKnowledge",
-    [string]$ManifestPath = "E:\ETDP\ETDP\Imports\SMIKnowledge\manifests\smi-knowledge-sources.json",
+    [string]$RootPath = "$(Split-Path $PSScriptRoot -Parent)\Imports\SMIKnowledge",
+    [string]$ManifestPath = "$(Split-Path $PSScriptRoot -Parent)\Imports\SMIKnowledge\manifests\smi-knowledge-sources.json",
     [string]$ApiBase = "http://localhost:5299/api",
     [string]$QualificationDescription = "SMI External Knowledge",
     [int]$MaxFiles = 10000,

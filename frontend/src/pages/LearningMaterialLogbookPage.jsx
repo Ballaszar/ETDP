@@ -1,20 +1,23 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import WorkExperienceLogbookPage from './WorkExperienceLogbookPage';
 import LearningMaterialFooterNav from '../components/LearningMaterialFooterNav';
 
 export default function LearningMaterialLogbookPage() {
+  const logbookRef = useRef(null);
+
   return (
     <>
-      <WorkExperienceLogbookPage />
+      <WorkExperienceLogbookPage ref={logbookRef} />
       <LearningMaterialFooterNav
         stepKey="logbook"
         onSave={async () => {
-          window.print();
-          return 'Logbook sent to print/save.';
+          if (!logbookRef.current?.saveLogbook) {
+            throw new Error('Logbook save handler is not available.');
+          }
+          return await logbookRef.current.saveLogbook();
         }}
         saveLabel="Save"
       />
     </>
   );
 }
-

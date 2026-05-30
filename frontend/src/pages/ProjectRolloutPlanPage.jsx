@@ -133,7 +133,7 @@ export default function ProjectRolloutPlanPage() {
   useEffect(() => {
     runPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedQualificationId]);
 
   return (
       <div className="page-container">

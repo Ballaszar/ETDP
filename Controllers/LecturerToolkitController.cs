@@ -510,6 +510,22 @@ namespace ETD.Api.Controllers
                     && subjectCodeMatches.Count > 0)
                 {
                     matchedSubject = subjectCodeMatches[0];
+                    var matchedSubjectDescriptionKey = NormalizeLooseText(matchedSubject.SubjectDescription);
+                    if (!string.IsNullOrWhiteSpace(subjectDescriptionKey) &&
+                        !string.IsNullOrWhiteSpace(matchedSubjectDescriptionKey) &&
+                        !string.Equals(subjectDescriptionKey, matchedSubjectDescriptionKey, StringComparison.Ordinal))
+                    {
+                        failed++;
+                        details.Add(new
+                        {
+                            row = i,
+                            reason = $"Subject code {entry.SubjectCode} belongs to '{matchedSubject.SubjectDescription}' for qualification {entry.QualificationsId}, but the uploaded row says '{entry.SubjectDescription}'.",
+                            subjectCode = entry.SubjectCode,
+                            subjectDescription = entry.SubjectDescription,
+                            expectedSubjectDescription = matchedSubject.SubjectDescription
+                        });
+                        continue;
+                    }
                 }
                 else if (!string.IsNullOrWhiteSpace(subjectDescriptionKey)
                     && subjectsByQualificationAndDescription.TryGetValue((entry.QualificationsId, subjectDescriptionKey), out var subjectDescriptionMatches)

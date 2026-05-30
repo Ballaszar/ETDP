@@ -1,15 +1,20 @@
+using System.Collections.Concurrent;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using ETD.Api.Data;
 using ETD.Api.Models;
 using ETD.Api.Utils;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace ETD.Api.Services
 {
     public sealed class CurriculumDeliveryPilotService
     {
+        private const string EvidenceMappingVersion = "2026-05-04-vocational-source-bridge-v1";
         private const string AutoDraftMarker = "[AUTO_CURRICULUM_EVIDENCE_DRAFT]";
         private const string AutoDraftCoverageGapMarker = "[AUTO_CURRICULUM_INSUFFICIENT_COVERAGE]";
 
@@ -40,6 +45,10 @@ namespace ETD.Api.Services
             "programme", "program", "qualification", "code", "description", "level", "credits", "nqf", "learner",
             "learners", "lecturer", "lecturers", "content", "guide", "chapter", "section"
         };
+
+        private static readonly ConcurrentDictionary<int, TopicEvidenceCacheEntry> TopicEvidenceCache = new();
+        private static readonly ConcurrentDictionary<int, SemaphoreSlim> TopicEvidenceCacheLocks = new();
+        private static readonly HttpClient OpenAiHttpClient = new();
 
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<CurriculumDeliveryPilotService> _logger;
@@ -159,6 +168,7 @@ namespace ETD.Api.Services
 
         public async Task<TopicEvidenceSummary> BuildTopicEvidenceSummaryAsync(
             int qualificationId,
+            bool forceRefresh = false,
             CancellationToken cancellationToken = default)
         {
             using var scope = _scopeFactory.CreateScope();
@@ -175,55 +185,791 @@ namespace ETD.Api.Services
 
             var qualificationCode = (qualification.QualificationNumber ?? string.Empty).Trim();
             var qualificationDescription = (qualification.QualificationDescription ?? string.Empty).Trim();
+            var cacheContext = await BuildTopicEvidenceCacheContextAsync(db, qualification, cancellationToken);
+
+            if (!forceRefresh)
+            {
+                var cached = await TryLoadCachedTopicEvidenceSummaryAsync(qualification.Id, cacheContext.CacheKey, cancellationToken);
+                if (cached != null)
+                {
+                    _logger.LogInformation(
+                        "Topic evidence cache hit for qualification {QualificationId} ({TopicCount} topics).",
+                        qualification.Id,
+                        cached.TopicCount);
+                    return cached;
+                }
+            }
+
+            var cacheLock = TopicEvidenceCacheLocks.GetOrAdd(qualification.Id, _ => new SemaphoreSlim(1, 1));
+            await cacheLock.WaitAsync(cancellationToken);
+            try
+            {
+                if (!forceRefresh)
+                {
+                    var cached = await TryLoadCachedTopicEvidenceSummaryAsync(qualification.Id, cacheContext.CacheKey, cancellationToken);
+                    if (cached != null)
+                    {
+                        _logger.LogInformation(
+                            "Topic evidence cache hit after wait for qualification {QualificationId} ({TopicCount} topics).",
+                            qualification.Id,
+                            cached.TopicCount);
+                        return cached;
+                    }
+                }
+
+                var startedAtUtc = DateTime.UtcNow;
+                var summary = new TopicEvidenceSummary
+                {
+                    QualificationId = qualification.Id,
+                    QualificationNumber = qualificationCode,
+                    QualificationDescription = qualificationDescription,
+                    TopicCount = cacheContext.Topics.Count,
+                    DuplicateCriteriaGroups = cacheContext.DuplicateCriteriaGroups.ToList()
+                };
+
+                if (cacheContext.DuplicateCriteriaGroups.Count > 0)
+                {
+                    summary.Warnings.Add(
+                        $"Detected {cacheContext.DuplicateCriteriaGroups.Count} duplicated assessment-criteria cluster(s) across topics, so ETDP is showing topic evidence coverage as the primary measure.");
+                }
+
+                summary.SourceMaterialCount = cacheContext.SourceFingerprintRows.Count;
+                if (summary.SourceMaterialCount == 0)
+                {
+                    summary.Warnings.Add("No qualification-linked subject matter has been uploaded yet for this qualification.");
+                    summary.Topics = cacheContext.Topics.Select(BuildEmptyTopicEvidenceItem).ToList();
+                    FinalizeTopicEvidenceSummary(summary);
+                    await SaveCachedTopicEvidenceSummaryAsync(qualification.Id, cacheContext.CacheKey, summary, cancellationToken);
+                    return CloneTopicEvidenceSummary(summary);
+                }
+
+                var artifacts = await BuildTopicEvidenceArtifactsAsync(
+                    db,
+                    qualification.Id,
+                    qualificationCode,
+                    qualificationDescription,
+                    cacheContext,
+                    cancellationToken);
+
+                summary.SourceChunkCount = artifacts.Chunks.Count;
+                if (artifacts.Chunks.Count == 0)
+                {
+                    summary.Warnings.Add("Subject matter exists, but no clean content chunks survived sanitation and table-of-contents filtering.");
+                    summary.Topics = cacheContext.Topics.Select(BuildEmptyTopicEvidenceItem).ToList();
+                    FinalizeTopicEvidenceSummary(summary);
+                    await SaveCachedTopicEvidenceSummaryAsync(qualification.Id, cacheContext.CacheKey, summary, cancellationToken);
+                    return CloneTopicEvidenceSummary(summary);
+                }
+
+                summary.Topics = artifacts.TopicMaps
+                    .Select(BuildTopicEvidenceItem)
+                    .OrderBy(item => item.SubjectCode, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(item => item.TopicCode, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(item => item.TopicDescription, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                FinalizeTopicEvidenceSummary(summary);
+                await SaveCachedTopicEvidenceSummaryAsync(qualification.Id, cacheContext.CacheKey, summary, cancellationToken);
+
+                var elapsed = DateTime.UtcNow - startedAtUtc;
+                _logger.LogInformation(
+                    "Topic evidence rebuilt for qualification {QualificationId} in {ElapsedMs} ms ({TopicCount} topics, {MaterialCount} source materials, {ChunkCount} chunks, reused materials {ReusedMaterialCount}, rebuilt materials {RebuiltMaterialCount}, reused topics {ReusedTopicCount}, recomputed topics {RecomputedTopicCount}).",
+                    qualification.Id,
+                    (int)elapsed.TotalMilliseconds,
+                    summary.TopicCount,
+                    summary.SourceMaterialCount,
+                    summary.SourceChunkCount,
+                    artifacts.ReusedMaterialCount,
+                    artifacts.RebuiltMaterialCount,
+                    artifacts.ReusedTopicCount,
+                    artifacts.RecomputedTopicCount);
+
+                return CloneTopicEvidenceSummary(summary);
+            }
+            finally
+            {
+                cacheLock.Release();
+            }
+        }
+
+        private async Task<TopicEvidenceCacheContext> BuildTopicEvidenceCacheContextAsync(
+            ApplicationDbContext db,
+            Qualification qualification,
+            CancellationToken cancellationToken)
+        {
+            var qualificationCode = (qualification.QualificationNumber ?? string.Empty).Trim();
+            var qualificationDescription = (qualification.QualificationDescription ?? string.Empty).Trim();
             var topics = await LoadTopicTargetsAsync(db, qualification.Id, cancellationToken);
             var duplicateCriteriaGroups = await LoadDuplicateCriteriaGroupsAsync(db, qualification.Id, cancellationToken);
+            var sourceFingerprintRows = await LoadSourceMaterialFingerprintRowsAsync(
+                db,
+                qualificationCode,
+                qualificationDescription,
+                cancellationToken);
 
-            var summary = new TopicEvidenceSummary
+            return new TopicEvidenceCacheContext
             {
                 QualificationId = qualification.Id,
-                QualificationNumber = qualificationCode,
+                QualificationCode = qualificationCode,
                 QualificationDescription = qualificationDescription,
-                TopicCount = topics.Count,
-                DuplicateCriteriaGroups = duplicateCriteriaGroups
+                Topics = topics,
+                DuplicateCriteriaGroups = duplicateCriteriaGroups,
+                SourceFingerprintRows = sourceFingerprintRows,
+                TopicStructureKey = ComputeTopicEvidenceTopicStructureKey(
+                    qualification.Id,
+                    qualificationCode,
+                    qualificationDescription,
+                    topics,
+                    duplicateCriteriaGroups),
+                CacheKey = ComputeTopicEvidenceCacheKey(
+                    qualification.Id,
+                    qualificationCode,
+                    qualificationDescription,
+                    topics,
+                    duplicateCriteriaGroups,
+                    sourceFingerprintRows)
+            };
+        }
+
+        private async Task<TopicEvidenceSummary?> TryLoadCachedTopicEvidenceSummaryAsync(
+            int qualificationId,
+            string cacheKey,
+            CancellationToken cancellationToken)
+        {
+            if (TopicEvidenceCache.TryGetValue(qualificationId, out var cachedEntry) &&
+                string.Equals(cachedEntry.CacheKey, cacheKey, StringComparison.Ordinal) &&
+                cachedEntry.Summary != null)
+            {
+                return CloneTopicEvidenceSummary(cachedEntry.Summary);
+            }
+
+            var cachePath = GetTopicEvidenceCachePath(qualificationId);
+            if (!File.Exists(cachePath))
+            {
+                return null;
+            }
+
+            try
+            {
+                var json = await File.ReadAllTextAsync(cachePath, cancellationToken);
+                var envelope = JsonSerializer.Deserialize<TopicEvidenceCacheEnvelope>(json, JsonOptions);
+                if (envelope?.Summary == null ||
+                    !string.Equals(envelope.CacheKey, cacheKey, StringComparison.Ordinal))
+                {
+                    return null;
+                }
+
+                TopicEvidenceCache[qualificationId] = new TopicEvidenceCacheEntry
+                {
+                    CacheKey = envelope.CacheKey,
+                    SavedAtUtc = envelope.SavedAtUtc,
+                    Summary = CloneTopicEvidenceSummary(envelope.Summary)
+                };
+
+                return CloneTopicEvidenceSummary(envelope.Summary);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to read topic evidence cache file for qualification {QualificationId}.", qualificationId);
+                return null;
+            }
+        }
+
+        private async Task SaveCachedTopicEvidenceSummaryAsync(
+            int qualificationId,
+            string cacheKey,
+            TopicEvidenceSummary summary,
+            CancellationToken cancellationToken)
+        {
+            var cloned = CloneTopicEvidenceSummary(summary);
+            TopicEvidenceCache[qualificationId] = new TopicEvidenceCacheEntry
+            {
+                CacheKey = cacheKey,
+                SavedAtUtc = DateTime.UtcNow,
+                Summary = cloned
             };
 
-            if (duplicateCriteriaGroups.Count > 0)
+            var cachePath = GetTopicEvidenceCachePath(qualificationId);
+            Directory.CreateDirectory(Path.GetDirectoryName(cachePath) ?? EtdpPaths.CombineProject("artifacts"));
+
+            try
             {
-                summary.Warnings.Add(
-                    $"Detected {duplicateCriteriaGroups.Count} duplicated assessment-criteria cluster(s) across topics, so ETDP is showing topic evidence coverage as the primary measure.");
+                var envelope = new TopicEvidenceCacheEnvelope
+                {
+                    CacheKey = cacheKey,
+                    SavedAtUtc = DateTime.UtcNow,
+                    Summary = cloned
+                };
+                var json = JsonSerializer.Serialize(envelope, JsonOptions);
+                await File.WriteAllTextAsync(cachePath, json, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to persist topic evidence cache file for qualification {QualificationId}.", qualificationId);
+            }
+        }
+
+        private static string GetTopicEvidenceCachePath(int qualificationId)
+        {
+            return Path.Combine(EtdpPaths.CombineProject("artifacts", "topic-evidence-cache"), $"qualification-{qualificationId}.json");
+        }
+
+        private static string GetTopicEvidenceComputationCachePath(int qualificationId)
+        {
+            return Path.Combine(EtdpPaths.CombineProject("artifacts", "topic-evidence-cache"), $"qualification-{qualificationId}.compute.json");
+        }
+
+        private static string ComputeTopicEvidenceTopicStructureKey(
+            int qualificationId,
+            string qualificationCode,
+            string qualificationDescription,
+            IReadOnlyList<CurriculumTopicTarget> topics,
+            IReadOnlyList<DuplicateCriteriaGroup> duplicateCriteriaGroups)
+        {
+            var sb = new StringBuilder();
+            sb.Append("mapping-version|").Append(EvidenceMappingVersion).AppendLine();
+            sb.Append("qualification|").Append(qualificationId).Append('|').Append(qualificationCode).Append('|').Append(qualificationDescription).AppendLine();
+
+            foreach (var topic in topics
+                .OrderBy(item => item.TopicId)
+                .ThenBy(item => item.SubjectCode, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => item.TopicCode, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.Append("topic|")
+                    .Append(topic.TopicId).Append('|')
+                    .Append(topic.SubjectCode).Append('|')
+                    .Append(topic.SubjectDescription).Append('|')
+                    .Append(topic.SubjectPurpose).Append('|')
+                    .Append(topic.TopicCode).Append('|')
+                    .Append(topic.TopicDescription).Append('|')
+                    .Append(topic.TopicPurpose)
+                    .AppendLine();
             }
 
-            var sourceMaterials = await LoadSourceMaterialsAsync(db, qualificationCode, qualificationDescription, cancellationToken);
-            summary.SourceMaterialCount = sourceMaterials.Count;
-            if (sourceMaterials.Count == 0)
+            foreach (var group in duplicateCriteriaGroups
+                .OrderBy(item => item.CriteriaDescription, StringComparer.OrdinalIgnoreCase))
             {
-                summary.Warnings.Add("No qualification-linked subject matter has been uploaded yet for this qualification.");
-                summary.Topics = topics.Select(BuildEmptyTopicEvidenceItem).ToList();
-                FinalizeTopicEvidenceSummary(summary);
-                return summary;
+                sb.Append("duplicate|")
+                    .Append(group.CriteriaDescription).Append('|')
+                    .Append(group.TopicCount).Append('|')
+                    .Append(string.Join("|", (group.Topics ?? new List<string>()).OrderBy(item => item, StringComparer.OrdinalIgnoreCase)))
+                    .AppendLine();
             }
 
-            var chunks = BuildSourceMaterialChunks(sourceMaterials);
-            summary.SourceChunkCount = chunks.Count;
-            if (chunks.Count == 0)
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
+        }
+
+        private static string ComputeTopicEvidenceCacheKey(
+            int qualificationId,
+            string qualificationCode,
+            string qualificationDescription,
+            IReadOnlyList<CurriculumTopicTarget> topics,
+            IReadOnlyList<DuplicateCriteriaGroup> duplicateCriteriaGroups,
+            IReadOnlyList<SourceMaterialFingerprintRow> sourceFingerprintRows)
+        {
+            var sb = new StringBuilder();
+            sb.Append("mapping-version|").Append(EvidenceMappingVersion).AppendLine();
+            sb.Append("qualification|").Append(qualificationId).Append('|').Append(qualificationCode).Append('|').Append(qualificationDescription).AppendLine();
+
+            foreach (var topic in topics
+                .OrderBy(item => item.TopicId)
+                .ThenBy(item => item.SubjectCode, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => item.TopicCode, StringComparer.OrdinalIgnoreCase))
             {
-                summary.Warnings.Add("Subject matter exists, but no clean content chunks survived sanitation and table-of-contents filtering.");
-                summary.Topics = topics.Select(BuildEmptyTopicEvidenceItem).ToList();
-                FinalizeTopicEvidenceSummary(summary);
-                return summary;
+                sb.Append("topic|")
+                    .Append(topic.TopicId).Append('|')
+                    .Append(topic.SubjectCode).Append('|')
+                    .Append(topic.SubjectDescription).Append('|')
+                    .Append(topic.SubjectPurpose).Append('|')
+                    .Append(topic.TopicCode).Append('|')
+                    .Append(topic.TopicDescription).Append('|')
+                    .Append(topic.TopicPurpose)
+                    .AppendLine();
+            }
+
+            foreach (var group in duplicateCriteriaGroups
+                .OrderBy(item => item.CriteriaDescription, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.Append("duplicate|")
+                    .Append(group.CriteriaDescription).Append('|')
+                    .Append(group.TopicCount).Append('|')
+                    .Append(string.Join("|", (group.Topics ?? new List<string>()).OrderBy(item => item, StringComparer.OrdinalIgnoreCase)))
+                    .AppendLine();
+            }
+
+            foreach (var row in sourceFingerprintRows
+                .OrderBy(item => item.Id))
+            {
+                sb.Append("source|")
+                    .Append(row.Id).Append('|')
+                    .Append(row.FileName).Append('|')
+                    .Append(row.Title).Append('|')
+                    .Append(row.KnowledgeSourceType).Append('|')
+                    .Append(row.KnowledgeNumber).Append('|')
+                    .Append(row.UploadedAtUtc.Ticks).Append('|')
+                    .Append(row.ExtractedTextLength)
+                    .AppendLine();
+            }
+
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
+        }
+
+        private async Task<List<SourceMaterialFingerprintRow>> LoadSourceMaterialFingerprintRowsAsync(
+            ApplicationDbContext db,
+            string qualificationCode,
+            string qualificationDescription,
+            CancellationToken cancellationToken)
+        {
+            var rawRows = await db.SourceMaterials
+                .AsNoTracking()
+                .Where(s => ((s.QualificationCode ?? string.Empty) == qualificationCode ||
+                             (string.IsNullOrWhiteSpace(qualificationCode) &&
+                              (s.QualificationDescription ?? string.Empty) == qualificationDescription)) &&
+                            ((s.KnowledgeSourceType ?? string.Empty) == "developer_knowledge_base" ||
+                             (s.KnowledgeSourceType ?? string.Empty) == "local_source_upload"))
+                .OrderBy(s => s.Id)
+                .Select(s => new
+                {
+                    s.Id,
+                    s.Title,
+                    s.FileName,
+                    s.KnowledgeSourceType,
+                    s.KnowledgeNumber,
+                    UploadedAtUtc = s.KnowledgeUploadedAtUtc ?? s.CreatedAt,
+                    ExtractedTextLength = (s.ExtractedText ?? string.Empty).Length
+                })
+                .ToListAsync(cancellationToken);
+
+            var sourceRows = rawRows
+                .Where(x => !IsCurriculumSpecificationOrGeneratedScanMaterial(x.Title, x.FileName, null))
+                .Select(x => new SourceMaterialFingerprintRow
+                {
+                    Id = x.Id,
+                    Title = x.Title ?? string.Empty,
+                    FileName = x.FileName ?? string.Empty,
+                    KnowledgeSourceType = x.KnowledgeSourceType ?? string.Empty,
+                    KnowledgeNumber = x.KnowledgeNumber ?? 0,
+                    UploadedAtUtc = x.UploadedAtUtc,
+                    ExtractedTextLength = x.ExtractedTextLength
+                })
+                .ToList();
+
+            sourceRows.AddRange(LoadVocationalSourceMaterialFingerprintRows(qualificationCode, qualificationDescription));
+            return sourceRows;
+        }
+
+        private static TopicEvidenceSummary CloneTopicEvidenceSummary(TopicEvidenceSummary summary)
+        {
+            var json = JsonSerializer.Serialize(summary, JsonOptions);
+            return JsonSerializer.Deserialize<TopicEvidenceSummary>(json, JsonOptions) ?? summary;
+        }
+
+        private async Task<TopicEvidenceBuildArtifacts> BuildTopicEvidenceArtifactsAsync(
+            ApplicationDbContext db,
+            int qualificationId,
+            string qualificationCode,
+            string qualificationDescription,
+            TopicEvidenceCacheContext cacheContext,
+            CancellationToken cancellationToken)
+        {
+            var orderedSourceRows = cacheContext.SourceFingerprintRows
+                .OrderByDescending(row => row.UploadedAtUtc)
+                .ThenBy(row => row.Id)
+                .ToList();
+
+            var computationCache = await TryLoadTopicEvidenceComputationCacheAsync(qualificationId, cancellationToken);
+            var cachedMaterials = (computationCache?.MaterialChunks ?? new List<TopicEvidenceMaterialChunkCacheItem>())
+                .Where(item => item.MaterialId != 0)
+                .GroupBy(item => item.MaterialId)
+                .ToDictionary(group => group.Key, group => group.First());
+
+            var currentMaterialIds = orderedSourceRows
+                .Select(row => row.Id)
+                .Where(id => id != 0)
+                .ToHashSet();
+
+            var removedMaterialIds = cachedMaterials.Keys
+                .Where(id => !currentMaterialIds.Contains(id))
+                .ToHashSet();
+
+            var rebuiltMaterialIds = new HashSet<int>();
+            foreach (var row in orderedSourceRows)
+            {
+                var fingerprint = ComputeSourceMaterialFingerprint(row);
+                if (!cachedMaterials.TryGetValue(row.Id, out var cachedMaterial) ||
+                    !string.Equals(cachedMaterial.Fingerprint, fingerprint, StringComparison.Ordinal))
+                {
+                    rebuiltMaterialIds.Add(row.Id);
+                }
+            }
+
+            var changedMaterialsById = rebuiltMaterialIds.Count == 0
+                ? new Dictionary<int, SourceMaterialRow>()
+                : (await LoadSourceMaterialsByIdsAsync(
+                        db,
+                        qualificationCode,
+                        qualificationDescription,
+                        rebuiltMaterialIds,
+                        cancellationToken))
+                    .ToDictionary(material => material.Id);
+
+            var chunks = new List<SourceMaterialChunk>();
+            var changedChunks = new List<SourceMaterialChunk>();
+            var savedMaterialChunks = new List<TopicEvidenceMaterialChunkCacheItem>(orderedSourceRows.Count);
+            var reusedMaterialCount = 0;
+            var rebuiltMaterialCount = 0;
+
+            foreach (var row in orderedSourceRows)
+            {
+                var fingerprint = ComputeSourceMaterialFingerprint(row);
+                if (cachedMaterials.TryGetValue(row.Id, out var cachedMaterial) &&
+                    !rebuiltMaterialIds.Contains(row.Id))
+                {
+                    var runtimeChunks = (cachedMaterial.Chunks ?? new List<CachedSourceMaterialChunk>())
+                        .Select(BuildSourceMaterialChunk)
+                        .ToList();
+                    chunks.AddRange(runtimeChunks);
+                    savedMaterialChunks.Add(CloneTopicEvidenceMaterialChunkCacheItem(cachedMaterial));
+                    reusedMaterialCount++;
+                    continue;
+                }
+
+                if (!changedMaterialsById.TryGetValue(row.Id, out var material))
+                {
+                    continue;
+                }
+
+                var rebuiltChunks = BuildSourceMaterialChunks(material);
+                chunks.AddRange(rebuiltChunks);
+                changedChunks.AddRange(rebuiltChunks);
+                savedMaterialChunks.Add(new TopicEvidenceMaterialChunkCacheItem
+                {
+                    MaterialId = row.Id,
+                    Fingerprint = fingerprint,
+                    Chunks = rebuiltChunks.Select(BuildCachedSourceMaterialChunk).ToList()
+                });
+                rebuiltMaterialCount++;
             }
 
             var tokenIndex = BuildChunkTokenIndex(chunks);
-            var topicMaps = BuildTopicSourceMap(topics, chunks, tokenIndex);
-            summary.Topics = topicMaps
-                .Select(BuildTopicEvidenceItem)
-                .OrderBy(item => item.SubjectCode, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(item => item.TopicCode, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(item => item.TopicDescription, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var previousTopicMaps = string.Equals(computationCache?.TopicStructureKey, cacheContext.TopicStructureKey, StringComparison.Ordinal)
+                ? (computationCache?.TopicMaps ?? new List<TopicSourceMapItem>())
+                    .Where(item => item.TopicId > 0)
+                    .GroupBy(item => item.TopicId)
+                    .ToDictionary(group => group.Key, group => CloneTopicSourceMapItem(group.First()))
+                : new Dictionary<int, TopicSourceMapItem>();
 
-            FinalizeTopicEvidenceSummary(summary);
-            return summary;
+            List<TopicSourceMapItem> topicMaps;
+            var reusedTopicCount = 0;
+            var recomputedTopicCount = 0;
+
+            if (chunks.Count == 0)
+            {
+                topicMaps = new List<TopicSourceMapItem>();
+            }
+            else if (previousTopicMaps.Count == 0)
+            {
+                topicMaps = BuildTopicSourceMap(cacheContext.Topics, chunks, tokenIndex);
+                recomputedTopicCount = topicMaps.Count;
+            }
+            else
+            {
+                var impactedTopicIds = DetermineImpactedTopicIds(
+                    cacheContext.Topics,
+                    changedChunks,
+                    chunks.Count,
+                    rebuiltMaterialIds,
+                    removedMaterialIds,
+                    previousTopicMaps);
+
+                var mapsByTopicId = new Dictionary<int, TopicSourceMapItem>();
+                foreach (var topic in cacheContext.Topics)
+                {
+                    if (impactedTopicIds.Contains(topic.TopicId) ||
+                        !previousTopicMaps.TryGetValue(topic.TopicId, out var previousMap))
+                    {
+                        mapsByTopicId[topic.TopicId] = BuildTopicSourceMapItem(topic, chunks, tokenIndex);
+                        recomputedTopicCount++;
+                    }
+                    else
+                    {
+                        mapsByTopicId[topic.TopicId] = CloneTopicSourceMapItem(previousMap);
+                        reusedTopicCount++;
+                    }
+                }
+
+                topicMaps = cacheContext.Topics
+                    .Select(topic => mapsByTopicId[topic.TopicId])
+                    .ToList();
+            }
+
+            await SaveTopicEvidenceComputationCacheAsync(
+                qualificationId,
+                new TopicEvidenceComputationEnvelope
+                {
+                    QualificationId = qualificationId,
+                    QualificationCode = qualificationCode,
+                    QualificationDescription = qualificationDescription,
+                    TopicStructureKey = cacheContext.TopicStructureKey,
+                    SavedAtUtc = DateTime.UtcNow,
+                    MaterialChunks = savedMaterialChunks,
+                    TopicMaps = topicMaps.Select(CloneTopicSourceMapItem).ToList()
+                },
+                cancellationToken);
+
+            return new TopicEvidenceBuildArtifacts
+            {
+                Chunks = chunks,
+                TopicMaps = topicMaps,
+                ReusedMaterialCount = reusedMaterialCount,
+                RebuiltMaterialCount = rebuiltMaterialCount,
+                RemovedMaterialCount = removedMaterialIds.Count,
+                ReusedTopicCount = reusedTopicCount,
+                RecomputedTopicCount = recomputedTopicCount
+            };
+        }
+
+        private async Task<TopicEvidenceComputationEnvelope?> TryLoadTopicEvidenceComputationCacheAsync(
+            int qualificationId,
+            CancellationToken cancellationToken)
+        {
+            var cachePath = GetTopicEvidenceComputationCachePath(qualificationId);
+            if (!File.Exists(cachePath))
+            {
+                return null;
+            }
+
+            try
+            {
+                var json = await File.ReadAllTextAsync(cachePath, cancellationToken);
+                return JsonSerializer.Deserialize<TopicEvidenceComputationEnvelope>(json, JsonOptions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to read topic evidence computation cache for qualification {QualificationId}.", qualificationId);
+                return null;
+            }
+        }
+
+        private async Task SaveTopicEvidenceComputationCacheAsync(
+            int qualificationId,
+            TopicEvidenceComputationEnvelope envelope,
+            CancellationToken cancellationToken)
+        {
+            var cachePath = GetTopicEvidenceComputationCachePath(qualificationId);
+            Directory.CreateDirectory(Path.GetDirectoryName(cachePath) ?? EtdpPaths.CombineProject("artifacts"));
+
+            try
+            {
+                var json = JsonSerializer.Serialize(envelope, JsonOptions);
+                await File.WriteAllTextAsync(cachePath, json, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to persist topic evidence computation cache for qualification {QualificationId}.", qualificationId);
+            }
+        }
+
+        private static string ComputeSourceMaterialFingerprint(SourceMaterialFingerprintRow row)
+        {
+            var sb = new StringBuilder();
+            sb.Append(row.Id).Append('|')
+                .Append(row.Title).Append('|')
+                .Append(row.FileName).Append('|')
+                .Append(row.KnowledgeSourceType).Append('|')
+                .Append(row.KnowledgeNumber).Append('|')
+                .Append(row.UploadedAtUtc.Ticks).Append('|')
+                .Append(row.ExtractedTextLength);
+
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
+        }
+
+        private static CachedSourceMaterialChunk BuildCachedSourceMaterialChunk(SourceMaterialChunk chunk)
+        {
+            return new CachedSourceMaterialChunk
+            {
+                Id = chunk.Id,
+                MaterialId = chunk.MaterialId,
+                MaterialTitle = chunk.MaterialTitle,
+                FileName = chunk.FileName,
+                FileType = chunk.FileType,
+                KnowledgeNumber = chunk.KnowledgeNumber,
+                KnowledgeSourceType = chunk.KnowledgeSourceType,
+                Url = chunk.Url,
+                PageNumber = chunk.PageNumber,
+                ChapterTitle = chunk.ChapterTitle,
+                Citation = chunk.Citation,
+                Excerpt = chunk.Excerpt,
+                SearchText = chunk.SearchText,
+                SourcePriority = chunk.SourcePriority,
+                IndexTokens = chunk.IndexTokens
+                    .OrderBy(token => token, StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+            };
+        }
+
+        private static SourceMaterialChunk BuildSourceMaterialChunk(CachedSourceMaterialChunk chunk)
+        {
+            return new SourceMaterialChunk
+            {
+                Id = chunk.Id,
+                MaterialId = chunk.MaterialId,
+                MaterialTitle = chunk.MaterialTitle,
+                FileName = chunk.FileName,
+                FileType = chunk.FileType,
+                KnowledgeNumber = chunk.KnowledgeNumber,
+                KnowledgeSourceType = chunk.KnowledgeSourceType,
+                Url = chunk.Url,
+                PageNumber = chunk.PageNumber,
+                ChapterTitle = chunk.ChapterTitle,
+                Citation = chunk.Citation,
+                Excerpt = chunk.Excerpt,
+                SearchText = chunk.SearchText,
+                Text = string.Empty,
+                IndexTokens = new HashSet<string>(chunk.IndexTokens ?? new List<string>(), StringComparer.OrdinalIgnoreCase),
+                SourcePriority = chunk.SourcePriority
+            };
+        }
+
+        private static TopicEvidenceMaterialChunkCacheItem CloneTopicEvidenceMaterialChunkCacheItem(TopicEvidenceMaterialChunkCacheItem item)
+        {
+            return new TopicEvidenceMaterialChunkCacheItem
+            {
+                MaterialId = item.MaterialId,
+                Fingerprint = item.Fingerprint,
+                Chunks = (item.Chunks ?? new List<CachedSourceMaterialChunk>())
+                    .Select(chunk => new CachedSourceMaterialChunk
+                    {
+                        Id = chunk.Id,
+                        MaterialId = chunk.MaterialId,
+                        MaterialTitle = chunk.MaterialTitle,
+                        FileName = chunk.FileName,
+                        FileType = chunk.FileType,
+                        KnowledgeNumber = chunk.KnowledgeNumber,
+                        KnowledgeSourceType = chunk.KnowledgeSourceType,
+                        Url = chunk.Url,
+                        PageNumber = chunk.PageNumber,
+                        ChapterTitle = chunk.ChapterTitle,
+                        Citation = chunk.Citation,
+                        Excerpt = chunk.Excerpt,
+                        SearchText = chunk.SearchText,
+                        SourcePriority = chunk.SourcePriority,
+                        IndexTokens = (chunk.IndexTokens ?? new List<string>()).ToList()
+                    })
+                    .ToList()
+            };
+        }
+
+        private static TopicSourceMapItem CloneTopicSourceMapItem(TopicSourceMapItem item)
+        {
+            return new TopicSourceMapItem
+            {
+                TopicId = item.TopicId,
+                TopicCode = item.TopicCode,
+                TopicDescription = item.TopicDescription,
+                SubjectCode = item.SubjectCode,
+                SubjectDescription = item.SubjectDescription,
+                Matches = (item.Matches ?? new List<ChunkMatch>())
+                    .Select(match => new ChunkMatch
+                    {
+                        MaterialId = match.MaterialId,
+                        ChunkId = match.ChunkId,
+                        MaterialTitle = match.MaterialTitle,
+                        FileName = match.FileName,
+                        KnowledgeNumber = match.KnowledgeNumber,
+                        KnowledgeSourceType = match.KnowledgeSourceType,
+                        Url = match.Url,
+                        Citation = match.Citation,
+                        ChapterTitle = match.ChapterTitle,
+                        PageNumber = match.PageNumber,
+                        Score = match.Score,
+                        Confidence = match.Confidence,
+                        TopicTokenMatches = match.TopicTokenMatches,
+                        SubjectTokenMatches = match.SubjectTokenMatches,
+                        CriteriaTokenMatches = match.CriteriaTokenMatches,
+                        Excerpt = match.Excerpt
+                    })
+                    .ToList()
+            };
+        }
+
+        private static HashSet<int> DetermineImpactedTopicIds(
+            IReadOnlyList<CurriculumTopicTarget> topics,
+            IReadOnlyList<SourceMaterialChunk> changedChunks,
+            int totalChunkCount,
+            IReadOnlySet<int> rebuiltMaterialIds,
+            IReadOnlySet<int> removedMaterialIds,
+            IReadOnlyDictionary<int, TopicSourceMapItem> previousTopicMaps)
+        {
+            if (previousTopicMaps.Count == 0)
+            {
+                return topics.Select(topic => topic.TopicId).ToHashSet();
+            }
+
+            if (rebuiltMaterialIds.Count == 0 && removedMaterialIds.Count == 0)
+            {
+                return new HashSet<int>();
+            }
+
+            if (totalChunkCount <= 180)
+            {
+                return topics.Select(topic => topic.TopicId).ToHashSet();
+            }
+
+            var impacted = new HashSet<int>();
+            var changedMaterialIds = rebuiltMaterialIds
+                .Concat(removedMaterialIds)
+                .ToHashSet();
+
+            foreach (var entry in previousTopicMaps)
+            {
+                if ((entry.Value.Matches ?? new List<ChunkMatch>()).Any(match => changedMaterialIds.Contains(match.MaterialId)))
+                {
+                    impacted.Add(entry.Key);
+                }
+            }
+
+            var topicTokenIndex = BuildTopicTokenIndex(topics);
+            foreach (var chunk in changedChunks)
+            {
+                foreach (var token in chunk.IndexTokens)
+                {
+                    if (!topicTokenIndex.TryGetValue(token, out var topicIds))
+                    {
+                        continue;
+                    }
+
+                    foreach (var topicId in topicIds)
+                    {
+                        impacted.Add(topicId);
+                    }
+                }
+            }
+
+            return impacted;
+        }
+
+        private static Dictionary<string, List<int>> BuildTopicTokenIndex(IReadOnlyList<CurriculumTopicTarget> topics)
+        {
+            var index = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var topic in topics)
+            {
+                foreach (var token in topic.TopicTokens
+                    .Concat(topic.SubjectTokens)
+                    .Where(token => !string.IsNullOrWhiteSpace(token))
+                    .Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (!index.TryGetValue(token, out var ids))
+                    {
+                        ids = new List<int>();
+                        index[token] = ids;
+                    }
+
+                    ids.Add(topic.TopicId);
+                }
+            }
+
+            return index;
         }
 
         private async Task<ImportResult> ImportExternalResourcesAsync(
@@ -440,7 +1186,8 @@ namespace ETD.Api.Services
                 })
                 .ToListAsync(cancellationToken);
 
-            return rawRows
+            var sourceRows = rawRows
+                .Where(x => !IsCurriculumSpecificationOrGeneratedScanMaterial(x.Title, x.FileName, x.AssessmentCriteriaDescription))
                 .Select(x => new SourceMaterialRow
                 {
                     Id = x.Id,
@@ -458,6 +1205,240 @@ namespace ETD.Api.Services
                     OriginalSourceName = ResolveOriginalSourceName(x.Title, x.FileName, x.AssessmentCriteriaDescription)
                 })
                 .ToList();
+
+            sourceRows.AddRange(LoadVocationalSourceMaterials(qualificationCode, qualificationDescription, null));
+            return sourceRows;
+        }
+
+        private async Task<List<SourceMaterialRow>> LoadSourceMaterialsByIdsAsync(
+            ApplicationDbContext db,
+            string qualificationCode,
+            string qualificationDescription,
+            IReadOnlyCollection<int> materialIds,
+            CancellationToken cancellationToken)
+        {
+            var ids = (materialIds ?? Array.Empty<int>())
+                .Where(id => id != 0)
+                .Distinct()
+                .ToList();
+            if (ids.Count == 0)
+            {
+                return new List<SourceMaterialRow>();
+            }
+
+            var etdpIds = ids.Where(id => id > 0).ToList();
+            var vocationalIds = ids.Where(id => id < 0).Select(id => -id).ToList();
+            var sourceRows = new List<SourceMaterialRow>();
+            if (etdpIds.Count == 0)
+            {
+                sourceRows.AddRange(LoadVocationalSourceMaterials(qualificationCode, qualificationDescription, vocationalIds));
+                return sourceRows;
+            }
+
+            var rawRows = await db.SourceMaterials
+                .AsNoTracking()
+                .Where(s => etdpIds.Contains(s.Id) &&
+                            (((s.QualificationCode ?? string.Empty) == qualificationCode) ||
+                             (string.IsNullOrWhiteSpace(qualificationCode) &&
+                              (s.QualificationDescription ?? string.Empty) == qualificationDescription)) &&
+                            ((s.KnowledgeSourceType ?? string.Empty) == "developer_knowledge_base" ||
+                             (s.KnowledgeSourceType ?? string.Empty) == "local_source_upload"))
+                .Select(s => new
+                {
+                    s.Id,
+                    s.Title,
+                    s.FileName,
+                    s.FilePath,
+                    s.FileType,
+                    s.Url,
+                    s.KnowledgeSourceType,
+                    s.KnowledgeNumber,
+                    UploadedAtUtc = s.KnowledgeUploadedAtUtc ?? s.CreatedAt,
+                    s.AssessmentCriteriaDescription,
+                    s.KnowledgeLabel,
+                    s.ExtractedText
+                })
+                .ToListAsync(cancellationToken);
+
+            sourceRows.AddRange(rawRows
+                .Where(x => !IsCurriculumSpecificationOrGeneratedScanMaterial(x.Title, x.FileName, x.AssessmentCriteriaDescription))
+                .Select(x => new SourceMaterialRow
+                {
+                    Id = x.Id,
+                    Title = x.Title ?? string.Empty,
+                    FileName = x.FileName ?? string.Empty,
+                    FilePath = x.FilePath ?? string.Empty,
+                    FileType = x.FileType ?? string.Empty,
+                    Url = x.Url ?? string.Empty,
+                    KnowledgeSourceType = x.KnowledgeSourceType ?? string.Empty,
+                    KnowledgeNumber = x.KnowledgeNumber ?? 0,
+                    UploadedAtUtc = x.UploadedAtUtc,
+                    AssessmentCriteriaDescription = x.AssessmentCriteriaDescription ?? string.Empty,
+                    KnowledgeLabel = x.KnowledgeLabel ?? string.Empty,
+                    ExtractedText = x.ExtractedText ?? string.Empty,
+                    OriginalSourceName = ResolveOriginalSourceName(x.Title, x.FileName, x.AssessmentCriteriaDescription)
+                }));
+
+            sourceRows.AddRange(LoadVocationalSourceMaterials(qualificationCode, qualificationDescription, vocationalIds));
+            return sourceRows;
+        }
+
+        private static List<SourceMaterialFingerprintRow> LoadVocationalSourceMaterialFingerprintRows(
+            string qualificationCode,
+            string qualificationDescription)
+        {
+            return LoadVocationalDocumentRows(qualificationCode, qualificationDescription, null)
+                .Select(row => new SourceMaterialFingerprintRow
+                {
+                    Id = -row.DocumentId,
+                    Title = row.Title,
+                    FileName = row.FileName,
+                    KnowledgeSourceType = "local_source_upload",
+                    KnowledgeNumber = 100000 + row.DocumentId,
+                    UploadedAtUtc = row.CreatedAtUtc,
+                    ExtractedTextLength = row.RawCharCount
+                })
+                .ToList();
+        }
+
+        private static List<SourceMaterialRow> LoadVocationalSourceMaterials(
+            string qualificationCode,
+            string qualificationDescription,
+            IReadOnlyCollection<int>? documentIds)
+        {
+            return LoadVocationalDocumentRows(qualificationCode, qualificationDescription, documentIds)
+                .Select(row => new SourceMaterialRow
+                {
+                    Id = -row.DocumentId,
+                    Title = row.Title,
+                    FileName = row.FileName,
+                    FilePath = row.SourcePath,
+                    FileType = Path.GetExtension(row.SourcePath),
+                    Url = string.Empty,
+                    KnowledgeSourceType = "local_source_upload",
+                    KnowledgeNumber = 100000 + row.DocumentId,
+                    UploadedAtUtc = row.CreatedAtUtc,
+                    AssessmentCriteriaDescription = string.Empty,
+                    KnowledgeLabel = row.Title,
+                    ExtractedText = row.ExtractedText,
+                    OriginalSourceName = string.IsNullOrWhiteSpace(row.FileName) ? row.Title : row.FileName
+                })
+                .Where(row => !string.IsNullOrWhiteSpace(row.ExtractedText))
+                .ToList();
+        }
+
+        private static List<VocationalDocumentRow> LoadVocationalDocumentRows(
+            string qualificationCode,
+            string qualificationDescription,
+            IReadOnlyCollection<int>? documentIds)
+        {
+            var discipline = ResolveVocationalDiscipline(qualificationCode, qualificationDescription);
+            if (string.IsNullOrWhiteSpace(discipline))
+            {
+                return new List<VocationalDocumentRow>();
+            }
+
+            var dbPath = ResolveVocationalLlmDatabasePath();
+            if (string.IsNullOrWhiteSpace(dbPath) || !File.Exists(dbPath))
+            {
+                return new List<VocationalDocumentRow>();
+            }
+
+            try
+            {
+                var ids = (documentIds ?? Array.Empty<int>())
+                    .Where(id => id > 0)
+                    .Distinct()
+                    .ToList();
+                using var connection = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
+                connection.Open();
+                using var command = connection.CreateCommand();
+                var sql = new StringBuilder();
+                sql.AppendLine("select d.id, d.title, d.source_path, d.source_type, d.raw_char_count, d.created_at,");
+                sql.AppendLine("       (select group_concat(content, char(10) || char(10))");
+                sql.AppendLine("          from (select content from chunks where document_id = d.id order by chunk_index)) as extracted_text");
+                sql.AppendLine("from documents d");
+                sql.AppendLine("where (coalesce(d.vocational_discipline, '') = @discipline");
+                sql.AppendLine("       or coalesce(d.source_path, '') like @disciplinePath)");
+                if (ids.Count > 0)
+                {
+                    var idParameters = new List<string>();
+                    for (var i = 0; i < ids.Count; i++)
+                    {
+                        var parameterName = $"@id{i}";
+                        idParameters.Add(parameterName);
+                        command.Parameters.AddWithValue(parameterName, ids[i]);
+                    }
+                    sql.AppendLine($"and d.id in ({string.Join(",", idParameters)})");
+                }
+                sql.AppendLine("order by d.created_at desc, d.id desc");
+                command.CommandText = sql.ToString();
+                command.Parameters.AddWithValue("@discipline", discipline);
+                command.Parameters.AddWithValue("@disciplinePath", $"%vocational_disciplines%{discipline}%");
+
+                using var reader = command.ExecuteReader();
+                var rows = new List<VocationalDocumentRow>();
+                while (reader.Read())
+                {
+                    var sourcePath = ReadSqliteString(reader, "source_path");
+                    var title = ReadSqliteString(reader, "title");
+                    rows.Add(new VocationalDocumentRow
+                    {
+                        DocumentId = ReadSqliteInt(reader, "id"),
+                        Title = string.IsNullOrWhiteSpace(title) ? Path.GetFileNameWithoutExtension(sourcePath) : title,
+                        SourcePath = sourcePath,
+                        FileName = Path.GetFileName(sourcePath),
+                        RawCharCount = ReadSqliteInt(reader, "raw_char_count"),
+                        CreatedAtUtc = ReadSqliteDateTime(reader, "created_at"),
+                        ExtractedText = ReadSqliteString(reader, "extracted_text")
+                    });
+                }
+
+                return rows;
+            }
+            catch
+            {
+                return new List<VocationalDocumentRow>();
+            }
+        }
+
+        private static string ResolveVocationalDiscipline(string qualificationCode, string qualificationDescription)
+        {
+            var text = NormalizeSearchPhrase($"{qualificationCode} {qualificationDescription}");
+            return text.Contains("diesel", StringComparison.Ordinal) ? "Diesel Mechanic" : string.Empty;
+        }
+
+        private static string ResolveVocationalLlmDatabasePath()
+        {
+            var candidates = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "VocationalLLM", "data", "vocational_llm.db"),
+                Path.Combine(Directory.GetCurrentDirectory(), "..", "VocationalLLM", "data", "vocational_llm.db"),
+                @"D:\ETDP\VocationalLLM\data\vocational_llm.db"
+            };
+
+            return candidates
+                .Select(path => Path.GetFullPath(path))
+                .FirstOrDefault(File.Exists) ?? string.Empty;
+        }
+
+        private static string ReadSqliteString(SqliteDataReader reader, string name)
+        {
+            var ordinal = reader.GetOrdinal(name);
+            return reader.IsDBNull(ordinal) ? string.Empty : reader.GetString(ordinal);
+        }
+
+        private static int ReadSqliteInt(SqliteDataReader reader, string name)
+        {
+            var ordinal = reader.GetOrdinal(name);
+            if (reader.IsDBNull(ordinal)) return 0;
+            return Convert.ToInt32(reader.GetValue(ordinal));
+        }
+
+        private static DateTime ReadSqliteDateTime(SqliteDataReader reader, string name)
+        {
+            var value = ReadSqliteString(reader, name);
+            return DateTime.TryParse(value, out var parsed) ? parsed : DateTime.UtcNow;
         }
 
         private async Task<List<DuplicateCriteriaGroup>> LoadDuplicateCriteriaGroupsAsync(
@@ -535,6 +1516,29 @@ namespace ETD.Api.Services
             return (fileName ?? string.Empty).Trim();
         }
 
+        private static bool IsCurriculumSpecificationOrGeneratedScanMaterial(string? title, string? fileName, string? assessmentCriteriaDescription)
+        {
+            var originalName = ResolveOriginalSourceName(title, fileName, assessmentCriteriaDescription);
+            var normalized = NormalizeSearchPhrase($"{originalName} {fileName} {title}");
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            return normalized.Contains("qc curriculumspecification", StringComparison.Ordinal) ||
+                   normalized.Contains("qc assessmentspecification", StringComparison.Ordinal) ||
+                   normalized.Contains("qc curriculum specification", StringComparison.Ordinal) ||
+                   normalized.Contains("qc assessment specification", StringComparison.Ordinal) ||
+                   normalized.Contains("curriculum topics", StringComparison.Ordinal) ||
+                   normalized.Contains("curriculum subjects", StringComparison.Ordinal) ||
+                   normalized.Contains("curriculum phases", StringComparison.Ordinal) ||
+                   normalized.Contains("curriculum baseline", StringComparison.Ordinal) ||
+                   normalized.Contains("curriculum knowledge extract", StringComparison.Ordinal) ||
+                   normalized.Contains("curriculum ocr enriched", StringComparison.Ordinal) ||
+                   normalized.Contains("knowledge scan report", StringComparison.Ordinal) ||
+                   normalized.Contains("template detection", StringComparison.Ordinal);
+        }
+
         private static List<SourceMaterialChunk> BuildSourceMaterialChunks(IReadOnlyList<SourceMaterialRow> materials)
         {
             var chunks = new List<SourceMaterialChunk>();
@@ -606,7 +1610,8 @@ namespace ETD.Api.Services
                     Text = text,
                     Excerpt = excerpt,
                     SearchText = searchText,
-                    IndexTokens = indexTokens
+                    IndexTokens = indexTokens,
+                    SourcePriority = DetermineSourcePriority(material)
                 });
 
                 chunkIndex++;
@@ -833,28 +1838,37 @@ namespace ETD.Api.Services
             var results = new List<TopicSourceMapItem>();
             foreach (var topic in topics)
             {
-                var candidateIds = ResolveCandidateChunkIds(topic.TopicTokens.Concat(topic.SubjectTokens), chunks, chunkIndex);
-                var matches = candidateIds
-                    .Select(id => ScoreTopicMatch(topic, chunks[id]))
-                    .Where(match => match.Score >= 6)
-                    .OrderByDescending(match => match.Score)
-                    .ThenByDescending(match => match.Confidence)
-                    .ThenBy(match => match.Citation, StringComparer.OrdinalIgnoreCase)
-                    .Take(5)
-                    .ToList();
-
-                results.Add(new TopicSourceMapItem
-                {
-                    TopicId = topic.TopicId,
-                    TopicCode = topic.TopicCode,
-                    TopicDescription = topic.TopicDescription,
-                    SubjectCode = topic.SubjectCode,
-                    SubjectDescription = topic.SubjectDescription,
-                    Matches = matches
-                });
+                results.Add(BuildTopicSourceMapItem(topic, chunks, chunkIndex));
             }
 
             return results;
+        }
+
+        private static TopicSourceMapItem BuildTopicSourceMapItem(
+            CurriculumTopicTarget topic,
+            IReadOnlyList<SourceMaterialChunk> chunks,
+            IReadOnlyDictionary<string, List<int>> chunkIndex)
+        {
+            var candidateIds = ResolveCandidateChunkIds(topic.TopicTokens.Concat(topic.SubjectTokens), chunks, chunkIndex);
+            var matches = candidateIds
+                .Select(id => ScoreTopicMatch(topic, chunks[id]))
+                .Where(match => match.Score >= 6)
+                .OrderByDescending(match => match.Score)
+                .ThenByDescending(match => match.SourcePriority)
+                .ThenByDescending(match => match.Confidence)
+                .ThenBy(match => match.Citation, StringComparer.OrdinalIgnoreCase)
+                .Take(5)
+                .ToList();
+
+            return new TopicSourceMapItem
+            {
+                TopicId = topic.TopicId,
+                TopicCode = topic.TopicCode,
+                TopicDescription = topic.TopicDescription,
+                SubjectCode = topic.SubjectCode,
+                SubjectDescription = topic.SubjectDescription,
+                Matches = matches
+            };
         }
 
         private static TopicEvidenceItem BuildTopicEvidenceItem(TopicSourceMapItem map)
@@ -936,6 +1950,7 @@ namespace ETD.Api.Services
                     .Select(id => ScoreCriteriaMatch(criteria, chunks[id]))
                     .Where(match => match.Score >= 8)
                     .OrderByDescending(match => match.Score)
+                    .ThenByDescending(match => match.SourcePriority)
                     .ThenByDescending(match => match.Confidence)
                     .ThenBy(match => match.Citation, StringComparer.OrdinalIgnoreCase)
                     .Take(4)
@@ -1019,6 +2034,7 @@ namespace ETD.Api.Services
             var subjectOverlap = CountOverlap(target.SubjectTokens, tokenSet);
             score += Math.Min(12, topicOverlap * 2);
             score += Math.Min(6, subjectOverlap);
+            score = ApplySourcePriorityBoost(score, chunk.SourcePriority, topicOverlap + subjectOverlap);
 
             return BuildChunkMatch(chunk, score, topicOverlap, subjectOverlap, 0);
         }
@@ -1050,6 +2066,7 @@ namespace ETD.Api.Services
             score += Math.Min(14, criteriaOverlap * 2);
             score += Math.Min(8, topicOverlap * 2);
             score += Math.Min(5, subjectOverlap);
+            score = ApplySourcePriorityBoost(score, chunk.SourcePriority, criteriaOverlap + topicOverlap + subjectOverlap);
 
             return BuildChunkMatch(chunk, score, topicOverlap, subjectOverlap, criteriaOverlap);
         }
@@ -1075,6 +2092,7 @@ namespace ETD.Api.Services
                 PageNumber = chunk.PageNumber,
                 Score = score,
                 Confidence = ScoreToConfidence(score),
+                SourcePriority = chunk.SourcePriority,
                 TopicTokenMatches = topicOverlap,
                 SubjectTokenMatches = subjectOverlap,
                 CriteriaTokenMatches = criteriaOverlap,
@@ -1142,7 +2160,7 @@ namespace ETD.Api.Services
                 var generatedRow = existingRows
                     .FirstOrDefault(x => x.AssessmentCriteriaId == map.CriteriaId && ContainsAutoDraftMarker(x.LearningAids));
 
-                var lessonContent = BuildLessonPlanContent(map, matches, authoringRules);
+                var lessonContent = await BuildLessonPlanContentAsync(map, matches, authoringRules, cancellationToken);
                 var hasGroundedLessonContent = HasGroundedLessonPlanContent(lessonContent);
                 var learningAids = BuildLearningAids(map, matches, hasGroundedLessonContent);
                 if (!hasGroundedLessonContent)
@@ -1258,26 +2276,25 @@ namespace ETD.Api.Services
             return $"AUTO-{topicCode}-{map.CriteriaId:D4}";
         }
 
-        private static string BuildLessonPlanContent(
+        private async Task<string> BuildLessonPlanContentAsync(
             CriteriaSourceMapItem map,
             IReadOnlyList<ChunkMatch> matches,
-            LearningMaterialAuthoringRules authoringRules)
+            LearningMaterialAuthoringRules authoringRules,
+            CancellationToken cancellationToken)
         {
-            _ = authoringRules;
-            var blocks = new List<string>();
-            var evidenceContent = BuildEvidenceBackedNarrative(map, matches, includeLead: false);
-            if (!string.IsNullOrWhiteSpace(evidenceContent))
-            {
-                blocks.Add(evidenceContent);
-            }
-
-            var compiled = CleanGeneratedText(string.Join("\n\n", blocks.Where(x => !string.IsNullOrWhiteSpace(x))));
-            if (HasGroundedLessonPlanContent(compiled))
+            var compiled = NormalizeGeneratedLessonDraftContent(BuildSourceBackedLearnerGuideContent(map, matches, authoringRules));
+            if (HasComprehensiveLearnerGuideContent(compiled))
             {
                 return compiled;
             }
 
-            return BuildInsufficientCoverageLessonContent(map, matches);
+            var webContent = await TryBuildOpenAiSearchLessonContentAsync(map, compiled, cancellationToken);
+            if (HasComprehensiveLearnerGuideContent(webContent))
+            {
+                return NormalizeGeneratedLessonDraftContent(webContent);
+            }
+
+            return BuildScopedLearnerGuideFallbackContent(map, compiled);
         }
 
         private static string BuildKeyConceptSummary(CriteriaSourceMapItem map, IReadOnlyList<ChunkMatch> matches)
@@ -1292,6 +2309,161 @@ namespace ETD.Api.Services
             }
 
             return $"{BuildTopicLabel(map)} covers {JoinAsPhrase(keywords)}.";
+        }
+
+        private static string BuildSourceBackedLearnerGuideContent(
+            CriteriaSourceMapItem map,
+            IReadOnlyList<ChunkMatch> matches,
+            LearningMaterialAuthoringRules authoringRules)
+        {
+            _ = authoringRules;
+            var sourceSentences = SelectLearnerGuideSourceSentences(map, matches, maxSentences: 12);
+            if (sourceSentences.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var processSentences = sourceSentences
+                .Where(LooksLikeProcedureOrPracticeSentence)
+                .Take(6)
+                .ToList();
+
+            var sb = new StringBuilder();
+            foreach (var paragraph in BuildParagraphs(sourceSentences.Take(10), maxSentencesPerParagraph: 3)
+                         .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                sb.AppendLine(paragraph);
+                sb.AppendLine();
+            }
+
+            if (processSentences.Count > 0)
+            {
+                var step = 1;
+                foreach (var sentence in processSentences)
+                {
+                    sb.AppendLine($"{step}. {NormalizeSentence(sentence)}");
+                    step++;
+                }
+                sb.AppendLine();
+            }
+
+            return CleanGeneratedText(sb.ToString());
+        }
+
+        private async Task<string> TryBuildOpenAiSearchLessonContentAsync(
+            CriteriaSourceMapItem map,
+            string localDraft,
+            CancellationToken cancellationToken)
+        {
+            if (!AiRuntime.AllowOpenAi())
+            {
+                return string.Empty;
+            }
+
+            var key = (Secrets.GetOpenAIKey() ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return string.Empty;
+            }
+
+            var payload = new
+            {
+                model = AiRuntime.GetOpenAiModel("gpt-5-mini"),
+                tools = new[]
+                {
+                    new { type = "web_search" }
+                },
+                tool_choice = "auto",
+                input = BuildOpenAiSearchLessonPrompt(map, localDraft)
+            };
+
+            using var msg = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
+            msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+            msg.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            try
+            {
+                using var response = await OpenAiHttpClient.SendAsync(msg, cancellationToken);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("OpenAI learner-guide web-search fallback failed for criteria {CriteriaId}: HTTP {StatusCode}.", map.CriteriaId, (int)response.StatusCode);
+                    return string.Empty;
+                }
+
+                return ExtractResponsesOutputText(body);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "OpenAI learner-guide web-search fallback failed for criteria {CriteriaId}.", map.CriteriaId);
+                return string.Empty;
+            }
+        }
+
+        private static string BuildOpenAiSearchLessonPrompt(CriteriaSourceMapItem map, string localDraft)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Write learner-facing vocational textbook content for a South African occupational learner guide.");
+            sb.AppendLine("Use the curriculum topic and assessment wording only as scope anchors and paragraph-heading guidance.");
+            sb.AppendLine("Do not write curriculum mapping, evidence requirements, source suggestions, source labels, citations, or statements that more material must be learned elsewhere.");
+            sb.AppendLine("Write the actual lesson content as natural learner-guide prose. Do not force fixed headings or repeated templates.");
+            sb.AppendLine("Prefer uploaded subject-matter wording and sequence where it already contains the explanation. If the topic is procedural, explain how the task is performed step by step.");
+            sb.AppendLine();
+            sb.AppendLine($"Subject: {NormalizeSentence(map.SubjectDescription)}");
+            sb.AppendLine($"Topic: {NormalizeSentence(map.TopicDescription)}");
+            sb.AppendLine($"Assessment scope: {NormalizeSentence(map.CriteriaDescription)}");
+            if (!string.IsNullOrWhiteSpace(localDraft))
+            {
+                sb.AppendLine();
+                sb.AppendLine("Locally mapped uploaded material summary to preserve where useful:");
+                sb.AppendLine(localDraft.Length <= 1800 ? localDraft : localDraft[..1800]);
+            }
+
+            return sb.ToString();
+        }
+
+        private static string ExtractResponsesOutputText(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("output_text", out var outputText) &&
+                    outputText.ValueKind == JsonValueKind.String)
+                {
+                    return outputText.GetString() ?? string.Empty;
+                }
+
+                var pieces = new List<string>();
+                if (doc.RootElement.TryGetProperty("output", out var output) && output.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in output.EnumerateArray())
+                    {
+                        if (!item.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array)
+                        {
+                            continue;
+                        }
+
+                        foreach (var part in content.EnumerateArray())
+                        {
+                            if (part.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String)
+                            {
+                                pieces.Add(text.GetString() ?? string.Empty);
+                            }
+                        }
+                    }
+                }
+
+                return string.Join("\n\n", pieces.Where(x => !string.IsNullOrWhiteSpace(x)));
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private static string BuildEvidenceBackedNarrative(
@@ -1380,6 +2552,139 @@ namespace ETD.Api.Services
                 .ToList();
         }
 
+        private static List<string> SelectLearnerGuideSourceSentences(
+            CriteriaSourceMapItem map,
+            IReadOnlyList<ChunkMatch> matches,
+            int maxSentences)
+        {
+            var selected = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var targetTokens = BuildTargetTokens($"{map.SubjectDescription} {map.TopicDescription} {map.CriteriaDescription}");
+            foreach (var match in matches.OrderByDescending(x => x.Confidence))
+            {
+                foreach (var sentence in SelectEvidenceSentences(match.Excerpt))
+                {
+                    var normalized = NormalizeSearchPhrase(sentence);
+                    if (string.IsNullOrWhiteSpace(normalized) || !seen.Add(normalized))
+                    {
+                        continue;
+                    }
+
+                    var overlap = BuildTargetTokens(sentence)
+                        .Count(token => targetTokens.Contains(token, StringComparer.OrdinalIgnoreCase));
+                    if (overlap < 1 && selected.Count > 0)
+                    {
+                        continue;
+                    }
+
+                    if (LooksLikeGenericEvidenceInstruction(sentence) || LooksLikeAssessmentCriteriaRestatement(sentence))
+                    {
+                        continue;
+                    }
+
+                    selected.Add(sentence);
+                    if (selected.Count >= maxSentences)
+                    {
+                        return selected;
+                    }
+                }
+            }
+
+            return selected;
+        }
+
+        private static string BuildParagraphs(IEnumerable<string> sentences, int maxSentencesPerParagraph)
+        {
+            var parts = sentences
+                .Select(NormalizeSentence)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToList();
+            if (parts.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var paragraphs = new List<string>();
+            for (var i = 0; i < parts.Count; i += Math.Max(1, maxSentencesPerParagraph))
+            {
+                paragraphs.Add(string.Join(" ", parts.Skip(i).Take(maxSentencesPerParagraph)));
+            }
+
+            return string.Join("\n\n", paragraphs);
+        }
+
+        private static List<string> BuildSourceBackedKeyTerms(CriteriaSourceMapItem map, IReadOnlyList<string> sourceSentences)
+        {
+            var terms = ExtractWeightedKeywords(map, Array.Empty<ChunkMatch>())
+                .Where(IsUsableEvidenceKeyword)
+                .Take(5)
+                .ToList();
+            var lines = new List<string>();
+            foreach (var term in terms)
+            {
+                var sentence = sourceSentences.FirstOrDefault(x =>
+                    NormalizeSearchPhrase(x).Contains($" {NormalizeSearchPhrase(term)} ", StringComparison.Ordinal));
+                if (string.IsNullOrWhiteSpace(sentence))
+                {
+                    continue;
+                }
+
+                lines.Add($"{ToTitleCase(term)}: {NormalizeSentence(sentence)}");
+            }
+
+            return lines
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(4)
+                .ToList();
+        }
+
+        private static bool LooksLikeProcedureOrPracticeSentence(string? value)
+        {
+            var normalized = NormalizeSearchPhrase(value ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            return normalized.Contains(" step ", StringComparison.Ordinal)
+                || normalized.Contains(" inspect", StringComparison.Ordinal)
+                || normalized.Contains(" check", StringComparison.Ordinal)
+                || normalized.Contains(" test", StringComparison.Ordinal)
+                || normalized.Contains(" remove", StringComparison.Ordinal)
+                || normalized.Contains(" install", StringComparison.Ordinal)
+                || normalized.Contains(" adjust", StringComparison.Ordinal)
+                || normalized.Contains(" maintain", StringComparison.Ordinal)
+                || normalized.Contains(" repair", StringComparison.Ordinal)
+                || normalized.Contains(" service", StringComparison.Ordinal)
+                || normalized.Contains(" ensure", StringComparison.Ordinal)
+                || normalized.Contains(" record", StringComparison.Ordinal)
+                || normalized.Contains(" safety", StringComparison.Ordinal);
+        }
+
+        private static string BuildWorkplaceExample(CriteriaSourceMapItem map, IReadOnlyList<string> sourceSentences)
+        {
+            var practicalSentence = sourceSentences.FirstOrDefault(LooksLikeProcedureOrPracticeSentence)
+                ?? sourceSentences.FirstOrDefault()
+                ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(practicalSentence))
+            {
+                return $"In a workplace task about {NormalizeSentence(map.TopicDescription)}, you would first identify the condition or fault, then apply the correct checks and actions. {NormalizeSentence(practicalSentence)} The final decision must be based on whether the equipment, process, or result is safe, functional, and within the required standard.";
+            }
+
+            return $"In a workplace task about {NormalizeSentence(map.TopicDescription)}, you would identify the job requirement, prepare the tools and safety controls, carry out the correct sequence, check the result, and record any fault or follow-up action.";
+        }
+
+        private static string ToTitleCase(string value)
+        {
+            var cleaned = NormalizeLine(value);
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                return string.Empty;
+            }
+
+            return char.ToUpperInvariant(cleaned[0]) + cleaned[1..];
+        }
+
         private static string BuildCriteriaFocus(CriteriaSourceMapItem map)
         {
             _ = map;
@@ -1408,8 +2713,7 @@ namespace ETD.Api.Services
             _ = matches;
             if (authoringRules.DisableRigidLessonTemplate)
             {
-                return CleanGeneratedText(
-                    $"Use the grounded explanation for {BuildTopicLabel(map)} and be ready to {NormalizeSentence(map.CriteriaDescription)}.");
+                return string.Empty;
             }
 
             return CleanGeneratedText(
@@ -1418,20 +2722,13 @@ namespace ETD.Api.Services
 
         private static string BuildLearningAids(CriteriaSourceMapItem map, IReadOnlyList<ChunkMatch> matches, bool hasGroundedLessonContent)
         {
+            _ = map;
+            _ = matches;
             var sb = new StringBuilder();
             sb.AppendLine(AutoDraftMarker);
             if (!hasGroundedLessonContent)
             {
                 sb.AppendLine(AutoDraftCoverageGapMarker);
-                sb.AppendLine("Coverage status: insufficient_grounded_content");
-            }
-            sb.AppendLine($"Topic: {BuildTopicLabel(map)}");
-            sb.AppendLine($"Confidence: {Math.Round(matches[0].Confidence * 100d)}%");
-            sb.AppendLine("Rule: table-of-contents text is reference-only and must not be imported as lesson content.");
-            sb.AppendLine("Mapped sources:");
-            foreach (var match in matches.Select((value, index) => $"[{index + 1}] {value.Citation}"))
-            {
-                sb.AppendLine(match);
             }
 
             return CleanGeneratedText(sb.ToString());
@@ -1449,35 +2746,41 @@ namespace ETD.Api.Services
 
         private static bool HasGroundedLessonPlanContent(string? value)
         {
-            var cleaned = CleanGeneratedText(value ?? string.Empty)
+            var cleaned = NormalizeGeneratedLessonDraftContent(value ?? string.Empty)
                 .Replace(AutoDraftMarker, string.Empty, StringComparison.OrdinalIgnoreCase)
                 .Replace(AutoDraftCoverageGapMarker, string.Empty, StringComparison.OrdinalIgnoreCase)
                 .Trim();
             return !string.IsNullOrWhiteSpace(cleaned);
         }
 
-        private static string BuildInsufficientCoverageLessonContent(CriteriaSourceMapItem map, IReadOnlyList<ChunkMatch> matches)
+        private static bool HasComprehensiveLearnerGuideContent(string? value)
         {
-            var sb = new StringBuilder();
-            sb.AppendLine(AutoDraftMarker);
-            sb.AppendLine(AutoDraftCoverageGapMarker);
-            sb.Append($"Insufficient grounded subject-matter coverage is available to answer {NormalizeSentence(map.CriteriaDescription)} directly for {BuildTopicLabel(map)}.");
-
-            var citations = matches
-                .Select(x => x.Citation)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(3)
-                .ToList();
-            if (citations.Count > 0)
+            var cleaned = NormalizeGeneratedLessonDraftContent(value ?? string.Empty)
+                .Replace(AutoDraftMarker, string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace(AutoDraftCoverageGapMarker, string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Trim();
+            if (string.IsNullOrWhiteSpace(cleaned))
             {
-                sb.Append(' ');
-                sb.Append("Closest mapped sources: ");
-                sb.Append(string.Join("; ", citations));
-                sb.Append('.');
+                return false;
             }
 
-            return CleanGeneratedText(sb.ToString());
+            var wordCount = DocumentTextCleaner.WordCount(cleaned);
+            if (wordCount < 95)
+            {
+                return false;
+            }
+
+            return wordCount >= 95;
+        }
+
+        private static string BuildScopedLearnerGuideFallbackContent(CriteriaSourceMapItem map, string localDraft)
+        {
+            if (!string.IsNullOrWhiteSpace(localDraft))
+            {
+                return CleanGeneratedText(localDraft);
+            }
+
+            return string.Empty;
         }
 
         private static bool IsUsableEvidenceKeyword(string? value)
@@ -1507,12 +2810,73 @@ namespace ETD.Api.Services
             return normalized.StartsWith("focus your study of", StringComparison.Ordinal)
                 || normalized.StartsWith("build your understanding of", StringComparison.Ordinal)
                 || normalized.StartsWith("learn what each term means", StringComparison.Ordinal)
+                || normalized.StartsWith("where it appears in practice", StringComparison.Ordinal)
                 || normalized.StartsWith("you must understand", StringComparison.Ordinal)
                 || normalized.StartsWith("study the explanation below", StringComparison.Ordinal)
+                || normalized.StartsWith("follow the sequence step by step", StringComparison.Ordinal)
                 || normalized.StartsWith("work through the topic", StringComparison.Ordinal)
                 || normalized.StartsWith("study the mapped source content", StringComparison.Ordinal)
                 || normalized.StartsWith("study the lesson material", StringComparison.Ordinal)
                 || normalized.StartsWith("this lesson develops the learner s ability to", StringComparison.Ordinal);
+        }
+
+        private static string NormalizeGeneratedLessonDraftContent(string? value)
+        {
+            var raw = CleanGeneratedText(value ?? string.Empty)
+                .Replace(AutoDraftMarker, string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace(AutoDraftCoverageGapMarker, string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Trim();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return string.Empty;
+            }
+
+            var kept = new List<string>();
+            foreach (var line in raw
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n')
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var cleanedLine = CleanGeneratedText(line);
+                if (string.IsNullOrWhiteSpace(cleanedLine))
+                {
+                    continue;
+                }
+
+                var sentences = Regex.Split(cleanedLine, @"(?<=[\.\!\?])\s+")
+                    .Select(CleanGeneratedText)
+                    .Where(sentence => !string.IsNullOrWhiteSpace(sentence))
+                    .Where(sentence => !LooksLikeGenericEvidenceInstruction(sentence))
+                    .Where(sentence => !LooksLikeAssessmentCriteriaRestatement(sentence))
+                    .ToList();
+                if (sentences.Count == 0)
+                {
+                    continue;
+                }
+
+                kept.Add(string.Join(" ", sentences));
+            }
+
+            return CleanGeneratedText(string.Join("\n", kept));
+        }
+
+        private static bool LooksLikeAssessmentCriteriaRestatement(string? value)
+        {
+            var normalized = NormalizeLine(value);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            if (normalized.Count(ch => ch == '|') >= 2)
+            {
+                return true;
+            }
+
+            var compact = NormalizeSearchPhrase(normalized);
+            return compact.StartsWith("define and describe ", StringComparison.Ordinal)
+                || compact.StartsWith("discuss the impact ", StringComparison.Ordinal)
+                || compact.StartsWith("describe the processes ", StringComparison.Ordinal);
         }
 
         private static ChunkArtifact BuildChunkArtifact(SourceMaterialChunk chunk)
@@ -1615,8 +2979,74 @@ namespace ETD.Api.Services
                 .Where(token => token.Length >= 4 || token.Any(char.IsDigit))
                 .Where(token => !StopWords.Contains(token))
                 .Where(token => !IsAdministrativeToken(token))
-                .Take(48)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(160)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static int DetermineSourcePriority(SourceMaterialRow material)
+        {
+            var sourceType = material.KnowledgeSourceType ?? string.Empty;
+            var name = NormalizeSearchPhrase($"{material.OriginalSourceName} {material.FileName} {material.Title}");
+            var ext = (Path.GetExtension(material.OriginalSourceName) ??
+                       Path.GetExtension(material.FileName) ??
+                       string.Empty).ToLowerInvariant();
+
+            var priority = 0;
+            if (string.Equals(sourceType, "local_source_upload", StringComparison.OrdinalIgnoreCase))
+            {
+                priority += 6;
+            }
+
+            if (ext is ".pdf" or ".docx" or ".pptx")
+            {
+                priority += 3;
+            }
+
+            if (name.Contains("learning material", StringComparison.Ordinal) ||
+                name.Contains("learner guide", StringComparison.Ordinal) ||
+                name.Contains("textbook", StringComparison.Ordinal) ||
+                name.Contains("manual", StringComparison.Ordinal))
+            {
+                priority += 2;
+            }
+
+            if (name.Contains("curriculum topics", StringComparison.Ordinal) ||
+                name.Contains("curriculum subjects", StringComparison.Ordinal) ||
+                name.Contains("curriculum phases", StringComparison.Ordinal) ||
+                name.Contains("curriculum baseline", StringComparison.Ordinal) ||
+                name.Contains("knowledge extract", StringComparison.Ordinal) ||
+                name.Contains("knowledge scan report", StringComparison.Ordinal))
+            {
+                priority -= 8;
+            }
+
+            if (ext is ".csv" or ".json" or ".jsonl")
+            {
+                priority -= 2;
+            }
+
+            return priority;
+        }
+
+        private static int ApplySourcePriorityBoost(int score, int sourcePriority, int overlapCount)
+        {
+            if (score <= 0 || overlapCount <= 0)
+            {
+                return score;
+            }
+
+            if (sourcePriority > 0)
+            {
+                return score + Math.Min(8, sourcePriority);
+            }
+
+            if (sourcePriority < 0)
+            {
+                return Math.Max(0, score + Math.Max(-8, sourcePriority));
+            }
+
+            return score;
         }
 
         private static List<string> BuildTargetTokens(string value)
@@ -1968,6 +3398,28 @@ namespace ETD.Api.Services
             public string OriginalSourceName { get; set; } = string.Empty;
         }
 
+        private sealed class VocationalDocumentRow
+        {
+            public int DocumentId { get; set; }
+            public string Title { get; set; } = string.Empty;
+            public string SourcePath { get; set; } = string.Empty;
+            public string FileName { get; set; } = string.Empty;
+            public int RawCharCount { get; set; }
+            public DateTime CreatedAtUtc { get; set; }
+            public string ExtractedText { get; set; } = string.Empty;
+        }
+
+        private sealed class SourceMaterialFingerprintRow
+        {
+            public int Id { get; set; }
+            public string Title { get; set; } = string.Empty;
+            public string FileName { get; set; } = string.Empty;
+            public string KnowledgeSourceType { get; set; } = string.Empty;
+            public int KnowledgeNumber { get; set; }
+            public DateTime UploadedAtUtc { get; set; }
+            public int ExtractedTextLength { get; set; }
+        }
+
         private sealed class SourceMaterialChunk
         {
             public string Id { get; set; } = string.Empty;
@@ -1985,6 +3437,7 @@ namespace ETD.Api.Services
             public string Excerpt { get; set; } = string.Empty;
             public string SearchText { get; set; } = string.Empty;
             public HashSet<string> IndexTokens { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+            public int SourcePriority { get; set; }
         }
 
         private sealed class ChunkArtifact
@@ -2071,6 +3524,7 @@ namespace ETD.Api.Services
             public int PageNumber { get; set; }
             public int Score { get; set; }
             public double Confidence { get; set; }
+            public int SourcePriority { get; set; }
             public int TopicTokenMatches { get; set; }
             public int SubjectTokenMatches { get; set; }
             public int CriteriaTokenMatches { get; set; }
@@ -2084,6 +3538,80 @@ namespace ETD.Api.Services
             public int Skipped { get; set; }
             public List<LessonPlanDraftArtifact> Entries { get; set; } = new();
             public List<string> Warnings { get; set; } = new();
+        }
+
+        private sealed class TopicEvidenceCacheContext
+        {
+            public int QualificationId { get; set; }
+            public string QualificationCode { get; set; } = string.Empty;
+            public string QualificationDescription { get; set; } = string.Empty;
+            public IReadOnlyList<CurriculumTopicTarget> Topics { get; set; } = Array.Empty<CurriculumTopicTarget>();
+            public IReadOnlyList<DuplicateCriteriaGroup> DuplicateCriteriaGroups { get; set; } = Array.Empty<DuplicateCriteriaGroup>();
+            public IReadOnlyList<SourceMaterialFingerprintRow> SourceFingerprintRows { get; set; } = Array.Empty<SourceMaterialFingerprintRow>();
+            public string TopicStructureKey { get; set; } = string.Empty;
+            public string CacheKey { get; set; } = string.Empty;
+        }
+
+        private sealed class TopicEvidenceCacheEntry
+        {
+            public string CacheKey { get; set; } = string.Empty;
+            public DateTime SavedAtUtc { get; set; }
+            public TopicEvidenceSummary? Summary { get; set; }
+        }
+
+        private sealed class TopicEvidenceCacheEnvelope
+        {
+            public string CacheKey { get; set; } = string.Empty;
+            public DateTime SavedAtUtc { get; set; }
+            public TopicEvidenceSummary? Summary { get; set; }
+        }
+
+        private sealed class TopicEvidenceBuildArtifacts
+        {
+            public List<SourceMaterialChunk> Chunks { get; set; } = new();
+            public List<TopicSourceMapItem> TopicMaps { get; set; } = new();
+            public int ReusedMaterialCount { get; set; }
+            public int RebuiltMaterialCount { get; set; }
+            public int RemovedMaterialCount { get; set; }
+            public int ReusedTopicCount { get; set; }
+            public int RecomputedTopicCount { get; set; }
+        }
+
+        private sealed class TopicEvidenceComputationEnvelope
+        {
+            public int QualificationId { get; set; }
+            public string QualificationCode { get; set; } = string.Empty;
+            public string QualificationDescription { get; set; } = string.Empty;
+            public string TopicStructureKey { get; set; } = string.Empty;
+            public DateTime SavedAtUtc { get; set; }
+            public List<TopicEvidenceMaterialChunkCacheItem> MaterialChunks { get; set; } = new();
+            public List<TopicSourceMapItem> TopicMaps { get; set; } = new();
+        }
+
+        private sealed class TopicEvidenceMaterialChunkCacheItem
+        {
+            public int MaterialId { get; set; }
+            public string Fingerprint { get; set; } = string.Empty;
+            public List<CachedSourceMaterialChunk> Chunks { get; set; } = new();
+        }
+
+        private sealed class CachedSourceMaterialChunk
+        {
+            public string Id { get; set; } = string.Empty;
+            public int MaterialId { get; set; }
+            public string MaterialTitle { get; set; } = string.Empty;
+            public string FileName { get; set; } = string.Empty;
+            public string FileType { get; set; } = string.Empty;
+            public int KnowledgeNumber { get; set; }
+            public string KnowledgeSourceType { get; set; } = string.Empty;
+            public string Url { get; set; } = string.Empty;
+            public int PageNumber { get; set; }
+            public string ChapterTitle { get; set; } = string.Empty;
+            public string Citation { get; set; } = string.Empty;
+            public string Excerpt { get; set; } = string.Empty;
+            public string SearchText { get; set; } = string.Empty;
+            public List<string> IndexTokens { get; set; } = new();
+            public int SourcePriority { get; set; }
         }
 
         public sealed class LessonPlanDraftArtifact

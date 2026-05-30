@@ -141,7 +141,7 @@ const AssessmentCriteriaPage = () => {
       body: JSON.stringify(payload),
     });
     // Automatically advance to Lesson Plan page after save
-    navigate('/lesson-plan');
+    navigate('/lecturer-toolkit');
     setForm(initialState);
     setEditingId(null);
     fetch(apiUrl).then(res => res.json()).then(setCriteria);
@@ -202,7 +202,7 @@ const AssessmentCriteriaPage = () => {
       // Auto-advance: Preview, then Lesson Plan
       navigate("/assessment-criteria-review");
       setTimeout(() => {
-        navigate("/lesson-plan");
+    navigate("/lecturer-toolkit");
       }, 1200);
     } catch (err) {
       setUploadError(err.message);
@@ -271,7 +271,7 @@ const AssessmentCriteriaPage = () => {
           <button type="submit">Save</button>
           <button type="button" onClick={() => setForm(initialState)}>Clear</button>
           {editingId && <button type="button" onClick={() => setEditingId(null)}>Cancel Edit</button>}
-          <button className="next-step-button" type="button" style={{ marginLeft: 16 }} onClick={() => navigate('/lesson-plan')}>Goto Lesson Plan</button>
+            <button className="next-step-button" type="button" style={{ marginLeft: 16 }} onClick={() => navigate('/lecturer-toolkit')}>Goto Lesson Plan Content</button>
         </div>
       </form>
       <h3 style={{marginTop:'2rem'}}>Assessment Criteria List</h3>

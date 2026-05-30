@@ -111,8 +111,8 @@ export default function AssessmentCriteriaReview() {
 
       <div className="button-row">
         <button onClick={() => navigate("/topics-review")}>Back</button>
-        <button onClick={() => navigate("/lesson-plan")}>Save</button>
-        <button className="next-step-button" onClick={() => navigate("/lesson-plan")}>Goto Lesson Plan</button>
+            <button onClick={() => navigate("/lecturer-toolkit")}>Save</button>
+            <button className="next-step-button" onClick={() => navigate("/lecturer-toolkit")}>Goto Lesson Plan Content</button>
       </div>
     </div>
   );

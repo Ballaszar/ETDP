@@ -1,12 +1,21 @@
 # ETDP Development Knowledge Base
 
-Last verified: March 14, 2026.
+Last verified: March 21, 2026.
 
 This file is the primary knowledge base for the in-app AI support stack:
 - `GET /api/Knowledge/development-readme` (sidebar AI knowledge source)
 - `POST /api/Knowledge/chat` (full AI Agent)
 
 The guidance below is authoritative for workflow support, troubleshooting, and route/API references.
+
+Architecture companion:
+- `ARCHITECTURE_BLUEPRINT.md` is the human-maintained system blueprint and should be read together with this file.
+- `codex-startup.md` is the short engineer startup map.
+- the generated runtime inventory lives in `SystemData/CodexContinuity` for source runs and `artifacts/native/backend-win-x64/SystemData/CodexContinuity` for packaged runtime runs.
+
+Machine-specific path note:
+- some historical notes below still refer to `E:\ETDP`
+- the active workspace on this machine is currently `F:\ETDP`
 
 ---
 
@@ -222,6 +231,11 @@ Each export workflow is split into its own page:
 
 13. Flow Diagrams
 - `/learning-material/flow-diagrams`
+- `/graphs` remains the direct route and uses the same shared filter state
+- Reads shared Learning Material qualification and subject start/end parameters
+- Default graph view is `Topics Flow`
+- Supports main sub-category filters for `Basic Engineering`, `Fitting Theory`, and `Machine Theory` (also matching existing `Machining Theory` / `KM-03` data)
+- Setting `From Subject` and `To Subject` to the same subject enables per-subject PNG or DOCX flow exports from the graph page
 
 Standard footer navigation on Learning Material workflow pages:
 - `Goto Learning Material Dashboard`
@@ -299,6 +313,24 @@ Curriculum PDF handling:
 - Quality Council scrape (`/api/QualityCouncilCurricula/run-scrape`) now OCR-enriches extracted text.
 - OCR is intended to improve recognition of scanned curriculum pages and structured layouts.
 - Always verify extracted output quality before running fully automated downstream generation.
+- A new layered curriculum pipeline foundation is available through:
+  - `POST /api/CurriculumPipeline/jobs`
+  - `GET /api/CurriculumPipeline/jobs/{jobId}`
+  - `GET /api/CurriculumPipeline/jobs/latest?qualificationId=<id>`
+- Pipeline job output is written under the qualification import folder:
+  - `.../CognitiveScan/PipelineJobs/<jobId>/`
+- Current pipeline stages:
+  1. locate source
+  2. normalize source
+  3. baseline extract
+  4. OCR enrich
+  5. template detect
+  6. generate artifacts
+  7. import resources
+  8. map subject matter
+  9. seed lesson drafts
+- This is the foundation for future OCRmyPDF / Docling / MinerU / Surya integration. Current implementation uses ETDP-native extraction + OCR enrichment while preserving job progress and artifacts.
+- The delivery pilot reads qualification-linked source material in detail, strips table-of-contents lines from lesson-content chunks, uses TOC headings only as navigation hints, maps chunks to curriculum topics/criteria, and seeds evidence-backed lecturer-toolkit drafts when no manual row already exists.
 
 Image-heavy developer knowledge:
 - Best practice is still:
@@ -462,6 +494,9 @@ Hierarchy behavior:
 - Canonical root per qualification code is enforced.
 - Legacy folder name variants are auto-consolidated to prevent duplicate roots.
 - Indexed files move from `inbox` to `archive`; duplicates move to `duplicates`.
+- Standard local resource uploads now stage into the qualification-scoped `local_source_upload\\inbox` and are sanitized/indexed through the same hierarchy sync path used for structured knowledge ingestion.
+- Developer knowledge uploads continue to stage into `developer_knowledge_base\\inbox`, but now share the same qualification root model as local uploads.
+- Every qualification root now includes `curriculum_library`; Quality Council curriculum/assessment uploads mirror their canonical `QC_*` files there, and curriculum benchmark uploads can be grouped under the same qualification library for manual curation.
 
 ---
 
@@ -716,33 +751,28 @@ Phase workflow sequence:
 2. Frontend loads `GET /api/KnowledgeQuestionnaire/v1-phase-draft?qualificationId=<id>&phaseId=<id>`.
 3. Backend calls `KnowledgeQuestionnaireV1Service.BuildPhaseDraft(...)` to produce a consolidated phase draft.
 4. Frontend splits the phase draft into main-category plans by subject code and keeps local overrides in browser storage per qualification/phase.
-5. Lecturer reviews routed criteria, question counts, pass mark, created/reviewed by fields, and can override metadata or reroute weak rows out of KQ.
-6. Frontend sends the selected main-category scope to `POST /api/KnowledgeQuestionnaire/v1-phase-smi-draft`.
+5. Lecturer reviews the lesson-plan scope map, question counts, pass mark, created/reviewed by fields, and can still adjust metadata or assessment-criteria labels locally.
+6. Frontend sends the selected main-category scope to `POST /api/KnowledgeQuestionnaire/v1-phase-smi-draft` with `PersistToDatabase=true`.
 7. Generated question rows can then be previewed or exported through `POST /api/KnowledgeQuestionnaire/v1-phase-export-docx`.
+8. The matching answer-key document is exported through `POST /api/KnowledgeQuestionnaire/v1-phase-export-memorandum-docx`.
 
 Draft logic currently implemented:
 - Topic-only draft endpoint: `GET /api/KnowledgeQuestionnaire/v1-draft`
 - Phase-wide draft endpoint: `GET /api/KnowledgeQuestionnaire/v1-phase-draft`
-- Topic draft and phase draft both decompose assessment criteria into intent rows using Bloom-style verb matching.
-- `BuildCriterionIntents(...)` stamps:
-  - detected verb
-  - canonical verb
-  - Bloom domain and level
-  - qualifier
-  - coverage type (`direct` or `proxy`)
-  - routing status (`KQ` or `Other Assessment`)
-- Empty or verb-free criteria still become a fallback KQ intent so they remain visible for lecturer review.
+- Topic draft and phase draft now keep one direct KQ row per assessment criterion.
+- Verb detection, Bloom classification, qualifier routing, coverage routing, and `KQ` vs `Other Assessment` gating are no longer active in the KQ draft path.
+- The frontend no longer excludes `KG*` topics from main-category planning.
 
 Phase draft normalization rules:
 - Duplicate subject rows are collapsed inside the selected phase.
 - Duplicate topics are collapsed by subject code, topic code, and topic description.
 - Duplicate assessment criteria are collapsed by subject code, topic code, and criterion text.
 - If a Knowledge Learning phase has no directly linked subjects, recovery logic can repopulate the scope from subject codes starting with `KM-`.
-- Draft warnings are returned so the UI can show data-recovery or routing issues before generation.
+- Draft warnings are returned so the UI can show data-recovery issues before generation.
 
 Question-count policy:
-- Service baseline remains `2` minimum questions per KQ-routed criterion.
-- Topic and raw phase draft metadata still compute a floor of `Math.Max(100, kqCriteriaCount * 2)` for total questions.
+- Service baseline remains `2` minimum questions per assessment criterion.
+- Topic and raw phase draft metadata still compute a floor of `Math.Max(100, criteriaCount * 2)` for total questions.
 - The current phase UI then recalculates each main-category exam separately and defaults each category to `criterionCount * 2`.
 - Default split is half True/False and the remainder Multiple Choice.
 - Frontend text explicitly warns that changing the ratio can destabilize the standing exam weighting.
@@ -750,14 +780,18 @@ Question-count policy:
 SMI generation path:
 - Subject-level SMI endpoint: `POST /api/KnowledgeQuestionnaire/smi-draft`
 - Phase-wide SMI endpoint: `POST /api/KnowledgeQuestionnaire/v1-phase-smi-draft`
+- Phase memorandum endpoint: `POST /api/KnowledgeQuestionnaire/v1-phase-export-memorandum-docx`
 - The phase endpoint filters the consolidated draft by selected subject ids and assessment-criteria ids before generation.
-- `BuildPhaseCriterionSeeds(...)` resolves lesson evidence per subject and keeps the strongest row per criterion bundle.
+- `BuildPhaseCriterionSeeds(...)` resolves lesson evidence per subject from non-empty `LessonPlanContent` rows only and keeps the first lesson-plan row per criterion bundle.
+- SMI prompts now use lesson-plan content only and explicitly ignore assessment verbs, Bloom taxonomy labels, and instruction words such as `explain` or `discuss`.
 - `TryBuildPhaseQuestionsWithSmiAsync(...)` is SMI-first but falls back deterministically if the SMI service is disabled, unresponsive, or returns unparseable JSON.
+- When `PersistToDatabase=true`, the controller upserts subject-scoped JSON payloads into the `KnowledgeQuestionnaires` SQLite table.
 - The returned payload carries:
   - generated question rows
   - per-row subject/topic/criterion context
   - `questionSource`
   - learning resource suggestions
+  - persisted questionnaire ids/count when DB merge is enabled
 
 Legacy/parallel questionnaire exports still available:
 - `GET /api/KnowledgeQuestionnaire/download`
@@ -779,6 +813,7 @@ Knowledge Questionnaire DOCX composition:
   - question body
   - closing summary
 - The phase DOCX export groups rows by subject and topic, then renders one response table per question.
+- Phase true/false rows now use single binary statements (`True` / `False`) so the generator, CSV rows, DOCX questionnaire, and memorandum all share the same answer shape.
 - The subject questionnaire export currently renders true/false-only tables in the final paper, even though the phase SMI workflow supports both True/False and Multiple Choice rows.
 
 Knowledge Questionnaire DOCX Word styling:
@@ -808,13 +843,13 @@ Frontend orchestration:
 - Frontend flow text is explicit: `Phase Sequence -> Subject Code -> Topic Order -> Assessment Criteria -> LPN`
 
 Learner Guide operator flow:
-1. Select the target subject.
+1. Default to full qualification scope, or select a single subject when you need a chapter-only export.
 2. Optionally run the paraphrase workflow.
 3. Optionally review and manually save paraphrase edits.
-4. Run export readiness (`GET /api/LearnerGuide/export-readiness`).
+4. For single-subject checks, run export readiness (`GET /api/LearnerGuide/export-readiness`).
 5. Preview the DOCX on-screen.
 6. Download the `.docx`.
-7. Optionally download learner-guide audio (`GET /api/LearnerGuide/download-audio`).
+7. Optionally download learner-guide audio (`GET /api/LearnerGuide/download-audio`) for a single subject.
 
 Current export endpoints:
 - `GET /api/LearnerGuide/export-readiness`
@@ -829,6 +864,7 @@ Current export endpoints:
 
 Readiness logic:
 - If a qualification has multiple subjects and no `subjectId` is provided, readiness returns `requiresSubjectSelection=true`.
+- DOCX export itself does not require `subjectId`; omitting it exports all subjects in qualification order.
 - Readiness deduplicates topics and criteria before evaluating coverage.
 - Primary content source is `LecturerToolkitEntries` that match the selected subject/criteria.
 - Fallback content source is `LessonPlans`.

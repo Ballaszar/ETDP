@@ -92,6 +92,7 @@ namespace ETD.Api.Controllers
         {
             var localLibraryPath = AiRuntime.GetLocalLibraryPath();
             var localLlmEndpoint = AiRuntime.GetLocalLlmEndpoint();
+            var persistedSettings = AiRuntime.LoadRuntimeSettings();
             return Ok(new
             {
                 aiMode = AiRuntime.GetMode(),
@@ -104,7 +105,67 @@ namespace ETD.Api.Controllers
                 localLibraryExists = Directory.Exists(localLibraryPath),
                 localLlmConfigured = !string.IsNullOrWhiteSpace(localLlmEndpoint),
                 localLlmEndpoint,
-                localLlmModel = AiRuntime.GetLocalLlmModel()
+                localLlmModel = AiRuntime.GetLocalLlmModel(),
+                openAiConfigured = AiRuntime.AllowOpenAi() && !string.IsNullOrWhiteSpace(Secrets.GetOpenAIKey()),
+                openAiModel = AiRuntime.GetOpenAiModel(),
+                runtimeSettingsPath = AiRuntime.GetRuntimeSettingsPath(),
+                persisted = new
+                {
+                    aiMode = persistedSettings.AiMode,
+                    localLlmEndpoint = persistedSettings.LocalLlmEndpoint,
+                    localLlmModel = persistedSettings.LocalLlmModel,
+                    openAiModel = persistedSettings.OpenAiModel,
+                    updatedAtUtc = persistedSettings.UpdatedAtUtc
+                }
+            });
+        }
+
+        public class RuntimeConfigRequest
+        {
+            public string? AiMode { get; set; }
+            public string? OpenAiApiKey { get; set; }
+            public string? OpenAiModel { get; set; }
+            public string? LocalLlmEndpoint { get; set; }
+            public string? LocalLlmModel { get; set; }
+            public string? LocalLlmApiKey { get; set; }
+            public bool? ProtectOpenAiKey { get; set; }
+        }
+
+        [HttpPut("runtime-config")]
+        public IActionResult SaveRuntimeConfig([FromBody] RuntimeConfigRequest req)
+        {
+            req ??= new RuntimeConfigRequest();
+            var mode = (req.AiMode ?? string.Empty).Trim().ToLowerInvariant();
+            if (mode is not ("offline" or "hybrid" or "cloud"))
+            {
+                return BadRequest(new { error = "AI mode must be offline, hybrid, or cloud." });
+            }
+
+            var saved = AiRuntime.SaveRuntimeSettings(new AiRuntime.RuntimeSettings
+            {
+                AiMode = mode,
+                OpenAiModel = req.OpenAiModel ?? string.Empty,
+                LocalLlmEndpoint = req.LocalLlmEndpoint ?? string.Empty,
+                LocalLlmModel = req.LocalLlmModel ?? string.Empty,
+                LocalLlmApiKey = req.LocalLlmApiKey ?? string.Empty
+            });
+
+            if (!string.IsNullOrWhiteSpace(req.OpenAiApiKey))
+            {
+                StoreOpenAiKey(req.OpenAiApiKey.Trim(), req.ProtectOpenAiKey ?? true);
+            }
+
+            return Ok(new
+            {
+                saved = true,
+                aiMode = AiRuntime.GetMode(),
+                openAiEnabled = AiRuntime.AllowOpenAi(),
+                openAiConfigured = AiRuntime.AllowOpenAi() && !string.IsNullOrWhiteSpace(Secrets.GetOpenAIKey()),
+                openAiModel = AiRuntime.GetOpenAiModel(),
+                localLlmEndpoint = AiRuntime.GetLocalLlmEndpoint(),
+                localLlmModel = AiRuntime.GetLocalLlmModel(),
+                runtimeSettingsPath = AiRuntime.GetRuntimeSettingsPath(),
+                updatedAtUtc = saved.UpdatedAtUtc
             });
         }
 
@@ -241,11 +302,16 @@ namespace ETD.Api.Controllers
         public IActionResult StoreKey([FromBody] StoreKeyRequest req)
         {
             if (string.IsNullOrWhiteSpace(req.Key)) return BadRequest("Key required");
+            StoreOpenAiKey(req.Key.Trim(), req.Protect);
+            return Ok(new { saved = true });
+        }
+
+        private static void StoreOpenAiKey(string key, bool protect)
+        {
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             var dir = Path.Combine(appData, "ETDP");
             Directory.CreateDirectory(dir);
-            var key = req.Key.Trim();
-            if (req.Protect)
+            if (protect)
             {
                 var bytes = System.Text.Encoding.UTF8.GetBytes(key);
                 if (OperatingSystem.IsWindows())
@@ -262,7 +328,6 @@ namespace ETD.Api.Controllers
             {
                 System.IO.File.WriteAllText(Path.Combine(dir, "openai.key"), key);
             }
-            return Ok(new { saved = true });
         }
 
         public class SearchRequest
@@ -2574,6 +2639,7 @@ namespace ETD.Api.Controllers
             public string? AssessmentCriteriaDescription { get; set; }
             public string? LessonPlanDescription { get; set; }
             public bool Cite { get; set; }
+            public bool Holistic { get; set; }
             public int CandidateLimit { get; set; } = 8;
             public int SnippetLength { get; set; } = 1800;
             public bool DryRun { get; set; }
@@ -2614,7 +2680,7 @@ namespace ETD.Api.Controllers
             if (string.IsNullOrWhiteSpace(query)) return BadRequest("Query is empty");
 
             var limit = req.CandidateLimit <= 0 ? 8 : Math.Min(req.CandidateLimit, 12);
-            var snippetLength = req.SnippetLength <= 0 ? 1800 : Math.Min(Math.Max(req.SnippetLength, 500), 3000);
+            var snippetLength = req.SnippetLength <= 0 ? (req.Holistic ? 12000 : 1800) : Math.Min(Math.Max(req.SnippetLength, 500), req.Holistic ? 24000 : 3000);
             var terms = TokenizeQuery(query);
             if (terms.Count == 0) terms.Add(query.ToLowerInvariant());
 
@@ -2724,7 +2790,13 @@ namespace ETD.Api.Controllers
             }
 
             var chosen = ranked[selectedIndex];
-            var incoming = BuildSnippet(chosen.FullText, query, terms, snippetLength).Trim();
+            string incoming;
+            if (req.Holistic) {
+                incoming = await ExtractHolisticContentWithLocalLlmAsync(chosen.FullText, query, terms, snippetLength);
+            } else {
+                incoming = BuildSnippet(chosen.FullText, query, terms, snippetLength).Trim();
+            }
+            
             if (string.IsNullOrWhiteSpace(incoming)) incoming = chosen.Snippet.Trim();
             if (string.IsNullOrWhiteSpace(incoming))
                 return BadRequest("Selected context is empty.");
@@ -7248,6 +7320,195 @@ namespace ETD.Api.Controllers
             return CleanExtractedText(sb.ToString());
         }
 
+        public class RescanMaterialImagesRequest
+        {
+            public int? QualificationId { get; set; }
+            public string? QualificationCode { get; set; }
+            public string? QualificationDescription { get; set; }
+            public int LimitDocuments { get; set; } = 200;
+            public bool DryRun { get; set; }
+        }
+
+        [HttpGet("topic-images")]
+        public IActionResult TopicImages([FromQuery] int topicId, [FromQuery] int max = 8)
+        {
+            if (topicId <= 0) return BadRequest("TopicId is required.");
+            var topic = _context.Topics.Find(topicId);
+            if (topic == null) return NotFound("Topic not found.");
+
+            var images = ResolveSlideVisualResourcesForTopic(topic, Math.Clamp(max <= 0 ? 8 : max, 1, 8))
+                .Select(image => new
+                {
+                    materialId = image.MaterialId,
+                    fileName = image.FileName,
+                    caption = image.Caption,
+                    score = image.Score,
+                    source = image.Source
+                })
+                .ToList();
+
+            return Ok(new
+            {
+                topicId,
+                scanned = true,
+                matchedImageCount = images.Count,
+                images
+            });
+        }
+
+        [HttpPost("rescan-material-images")]
+        public IActionResult RescanMaterialImages([FromBody] RescanMaterialImagesRequest? req)
+        {
+            req ??= new RescanMaterialImagesRequest();
+            var resolvedQualificationCode = (req.QualificationCode ?? string.Empty).Trim();
+            var resolvedQualificationDescription = (req.QualificationDescription ?? string.Empty).Trim();
+
+            Qualification? qualification = null;
+            if (req.QualificationId.HasValue && req.QualificationId.Value > 0)
+            {
+                qualification = _context.Qualifications.Find(req.QualificationId.Value);
+            }
+            if (qualification == null && !string.IsNullOrWhiteSpace(resolvedQualificationCode))
+            {
+                qualification = _context.Qualifications.FirstOrDefault(q => q.QualificationNumber == resolvedQualificationCode);
+            }
+            if (qualification == null && !string.IsNullOrWhiteSpace(resolvedQualificationDescription))
+            {
+                qualification = _context.Qualifications.FirstOrDefault(q => q.QualificationDescription == resolvedQualificationDescription);
+            }
+
+            if (qualification != null)
+            {
+                if (string.IsNullOrWhiteSpace(resolvedQualificationCode))
+                    resolvedQualificationCode = (qualification.QualificationNumber ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(resolvedQualificationDescription))
+                    resolvedQualificationDescription = (qualification.QualificationDescription ?? string.Empty).Trim();
+            }
+
+            var query = _context.SourceMaterials.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(resolvedQualificationCode))
+            {
+                query = query.Where(s => (s.QualificationCode ?? string.Empty) == resolvedQualificationCode);
+            }
+            else if (!string.IsNullOrWhiteSpace(resolvedQualificationDescription))
+            {
+                query = query.Where(s => (s.QualificationDescription ?? string.Empty) == resolvedQualificationDescription);
+            }
+
+            var limitDocuments = Math.Clamp(req.LimitDocuments <= 0 ? 200 : req.LimitDocuments, 1, 1000);
+            var sourcePdfs = query
+                .Where(s => (s.FileType ?? string.Empty).ToLower() == "pdf" && !string.IsNullOrWhiteSpace(s.FilePath))
+                .OrderByDescending(s => s.KnowledgeUploadedAtUtc ?? s.CreatedAt)
+                .Take(limitDocuments)
+                .ToList()
+                .Where(s => System.IO.File.Exists(s.FilePath) && !IsDerivedVisualMaterial(s))
+                .ToList();
+
+            var existingVisualKeys = _context.SourceMaterials
+                .Where(s => !string.IsNullOrWhiteSpace(s.AssessmentCriteriaDescription))
+                .Select(s => s.AssessmentCriteriaDescription ?? string.Empty)
+                .ToList()
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var existingNumbers = _context.SourceMaterials
+                .Where(s => (s.QualificationCode ?? string.Empty) == resolvedQualificationCode && s.KnowledgeNumber.HasValue)
+                .Select(s => s.KnowledgeNumber!.Value)
+                .ToList();
+            var nextKnowledgeNumber = existingNumbers.Count > 0 ? existingNumbers.Max() + 1 : 1;
+
+            var scannedDocuments = 0;
+            var createdImages = 0;
+            var skippedImages = 0;
+            var failedDocuments = 0;
+            var details = new List<object>();
+
+            foreach (var sourcePdf in sourcePdfs)
+            {
+                scannedDocuments++;
+                try
+                {
+                    var sourceType = string.IsNullOrWhiteSpace(sourcePdf.KnowledgeSourceType)
+                        ? "local_source_upload"
+                        : sourcePdf.KnowledgeSourceType!.Trim();
+                    var sourceRootPath = !string.IsNullOrWhiteSpace(sourcePdf.KnowledgeRootPath)
+                        ? sourcePdf.KnowledgeRootPath!.Trim()
+                        : Path.GetDirectoryName(sourcePdf.FilePath) ?? ".";
+                    var originalName = !string.IsNullOrWhiteSpace(sourcePdf.FileName)
+                        ? sourcePdf.FileName.Trim()
+                        : Path.GetFileName(sourcePdf.FilePath);
+                    var parentKnowledgeUrl = sourcePdf.Url ?? string.Empty;
+
+                    var extracted = ExtractDerivedPdfVisualMaterials(
+                        sourcePdf.FilePath,
+                        originalName,
+                        sourceType,
+                        resolvedQualificationCode,
+                        resolvedQualificationDescription,
+                        sourceRootPath,
+                        parentKnowledgeUrl,
+                        ref nextKnowledgeNumber);
+
+                    var createdForDocument = 0;
+                    foreach (var material in extracted.Materials)
+                    {
+                        var note = material.AssessmentCriteriaDescription ?? string.Empty;
+                        if (!existingVisualKeys.Add(note))
+                        {
+                            skippedImages++;
+                            continue;
+                        }
+
+                        if (!req.DryRun)
+                        {
+                            _context.SourceMaterials.Add(material);
+                        }
+                        createdImages++;
+                        createdForDocument++;
+                    }
+
+                    details.Add(new
+                    {
+                        file = originalName,
+                        status = createdForDocument > 0 ? (req.DryRun ? "would_create_visuals" : "created_visuals") : "no_new_visuals",
+                        createdImages = createdForDocument,
+                        extractedImages = extracted.Materials.Count
+                    });
+                }
+                catch (Exception ex)
+                {
+                    failedDocuments++;
+                    details.Add(new { file = sourcePdf.FileName, status = "failed", reason = ex.Message });
+                }
+            }
+
+            if (!req.DryRun)
+            {
+                _context.SaveChanges();
+            }
+
+            return Ok(new
+            {
+                qualificationId = qualification?.Id,
+                qualificationCode = resolvedQualificationCode,
+                qualificationDescription = resolvedQualificationDescription,
+                dryRun = req.DryRun,
+                scannedDocuments,
+                createdImages,
+                skippedImages,
+                failedDocuments,
+                successful = failedDocuments == 0,
+                details = details.Take(200).ToList()
+            });
+        }
+
+        private static bool IsDerivedVisualMaterial(SourceMaterial material)
+        {
+            var note = material.AssessmentCriteriaDescription ?? string.Empty;
+            var path = material.FilePath ?? string.Empty;
+            return note.Contains("DerivedFromPath:", StringComparison.OrdinalIgnoreCase) ||
+                   path.Contains($"{Path.DirectorySeparatorChar}visual_archive{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase);
+        }
+
         [HttpGet("materials")]
         public IActionResult Materials(
             [FromQuery] int? qualificationId = null,
@@ -10735,7 +10996,7 @@ namespace ETD.Api.Controllers
             var key = Secrets.GetOpenAIKey();
             if (string.IsNullOrWhiteSpace(key)) return null;
 
-            var model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4o-mini";
+            var model = AiRuntime.GetOpenAiModel("gpt-5-mini");
             var payload = new
             {
                 model,
@@ -10856,6 +11117,10 @@ namespace ETD.Api.Controllers
             }
 
             return null;
+        }
+        private async Task<string> ExtractHolisticContentWithLocalLlmAsync(string fullText, string query, List<string> terms, int snippetLength)
+        {
+            return BuildSnippet(fullText, query, terms, snippetLength).Trim();
         }
     }
 }

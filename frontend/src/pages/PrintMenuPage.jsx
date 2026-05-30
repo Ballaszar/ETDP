@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQualification } from '../context/QualificationContext';
+import { normalizeLearningMaterialParams, writeLearningMaterialParams } from '../utils/learningMaterialParams';
 
 const API = '/api';
 
@@ -213,6 +214,7 @@ export default function PrintMenuPage() {
     p.set('subjectFromId', range.fromId);
     p.set('subjectToId', range.toId);
     p.set('maxActivities', String(Number(form.maxActivities || 30)));
+    p.set('activityScope', 'all');
     openUrl(`${API}/Workbook/download-range?${p.toString()}`);
   };
 
@@ -237,6 +239,7 @@ export default function PrintMenuPage() {
     p.set('subjectFromId', range.fromId);
     p.set('subjectToId', range.toId);
     p.set('maxActivities', String(Number(form.maxActivities || 30)));
+    p.set('activityScope', 'all');
     openUrl(`${API}/Workbook/download-report-range?${p.toString()}`);
   };
 
@@ -285,17 +288,17 @@ export default function PrintMenuPage() {
 
   const exportPowerPoint = async () => {
     if (!ensureQualification()) return;
-    setStatus('Generating PowerPoint slides...');
+    setStatus('Saving PowerPoint slides...');
     setError('');
     try {
-      const res = await fetch('/api/Content/export-slides-batch-download', {
+      const res = await fetch('/api/Content/export-slides-batch-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ QualificationId: qid })
       });
       if (!res.ok) throw new Error(await res.text());
-      await downloadBlobResponse(res, 'PowerPoint_Slides.zip');
-      setStatus('PowerPoint slides downloaded.');
+      const data = await res.json();
+      setStatus(`Saved ${data?.fileName || 'PowerPoint slides'} to ${data?.savedPath || data?.folderPath || 'the qualification SlideShows folder'}.`);
     } catch (e) {
       setError(`PowerPoint export failed: ${e?.message || e}`);
       setStatus('');
@@ -324,6 +327,30 @@ export default function PrintMenuPage() {
         dateTo: form.dateTo || null,
         subjectId: form.subjectFromId || null,
         topicId: form.topicId || null
+      }
+    });
+  };
+
+  const openFlowDiagrams = () => {
+    if (!ensureQualification()) return;
+    const payload = normalizeLearningMaterialParams({
+      qualificationId: String(form.qualificationId || ''),
+      qualificationLabel,
+      dateFrom: form.dateFrom,
+      dateTo: form.dateTo,
+      subjectFromId: String(form.subjectFromId || ''),
+      subjectToId: String(form.subjectToId || ''),
+      subjectFromCode: selectedSubjectFrom ? subjectCodeOf(selectedSubjectFrom) : '',
+      subjectToCode: selectedSubjectTo ? subjectCodeOf(selectedSubjectTo) : '',
+      topicId: String(form.topicId || ''),
+      topicCode: selectedTopic ? topicCodeOf(selectedTopic) : '',
+      maxActivities: Number(form.maxActivities || 30)
+    });
+    writeLearningMaterialParams(payload);
+    navigate('/learning-material/flow-diagrams', {
+      state: {
+        qualificationId: qid,
+        learningMaterialParams: payload
       }
     });
   };
@@ -531,10 +558,10 @@ export default function PrintMenuPage() {
 
       <div className="form-section">
         <h3 style={{ marginTop: 0 }}>Flow Diagram</h3>
-        <p>Use graph visualization page to view and export complete flow diagrams.</p>
+        <p>Use graph visualization page to view and export filtered flow diagrams by subject range and main sub category.</p>
         <div className="button-row">
-          <button type="button" onClick={() => navigate('/graphs')}>Open Flow Diagram</button>
-          <button type="button" onClick={() => navigate('/graphs')}>Print Complete Flow Diagram</button>
+          <button type="button" onClick={openFlowDiagrams}>Open Flow Diagram</button>
+          <button type="button" onClick={openFlowDiagrams}>Print Complete Flow Diagram</button>
         </div>
       </div>
 

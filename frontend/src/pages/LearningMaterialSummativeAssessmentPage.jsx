@@ -10,7 +10,7 @@ export default function LearningMaterialSummativeAssessmentPage() {
     if (Number(qualificationId || 0) <= 0) {
       throw new Error('Select a qualification in Learning Material Dashboard first.');
     }
-    return 'Use the Knowledge Questionnaire page to review the phase draft, generate consolidated rows with SMI, and export the metadata/question CSV files.';
+    return 'Use the Summative Assessment page to review the phase draft, generate selected-category rows with Gemma, and download the assessment or memorandum DOCX files.';
   };
 
   return (

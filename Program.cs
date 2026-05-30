@@ -36,6 +36,8 @@ builder.Services.Configure<AppAuthorizationOptions>(builder.Configuration.GetSec
 builder.Services.AddHostedService<AutomationJobWorker>();
 builder.Services.AddScoped<KnowledgeHierarchyService>();
 builder.Services.AddScoped<KnowledgeQuestionnaireV1Service>();
+builder.Services.AddScoped<FineTuningService>();
+builder.Services.AddScoped<LlmCompetenceAssessmentService>();
 builder.Services.AddSingleton<SemanticStateContinuityService>();
 builder.Services.AddSingleton<SemanticKernelQuestionService>();
 builder.Services.AddSingleton<OcrExtractionService>();
@@ -44,10 +46,15 @@ builder.Services.AddSingleton<CurriculumKnowledgeScanService>();
 builder.Services.AddSingleton<CurriculumDeliveryPilotService>();
 builder.Services.AddSingleton<CurriculumPipelineService>();
 builder.Services.AddSingleton<SansMetadataService>();
+builder.Services.AddSingleton<ContinuousLearningIngestionWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ContinuousLearningIngestionWorker>());
 builder.Services.AddSingleton<CodexContinuityService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CodexContinuityService>());
 builder.Services.AddSingleton<WorkspaceBackupService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WorkspaceBackupService>());
+// Visual backfill services
+builder.Services.AddScoped<ETD.Api.Data.SourceMaterialsRepository>();
+builder.Services.AddSingleton<ETD.Api.Services.VisualStorageService>();
 var contentRoot = builder.Environment.ContentRootPath;
 var baseDirectory = AppContext.BaseDirectory;
 var projectRoot = FindProjectRoot(contentRoot, baseDirectory, Environment.GetEnvironmentVariable("ETDP_WORKSPACE_ROOT"));

@@ -8,6 +8,7 @@ using PIC = DocumentFormat.OpenXml.Drawing.Pictures;
 using ETD.Api.Data;
 using ETD.Api.Models;
 using ETD.Api.Utils;
+using ETD.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.IO.Compression;
@@ -24,16 +25,20 @@ namespace ETD.Api.Controllers
     public class LearnerGuideController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly CurriculumDeliveryPilotService _pilotService;
         private static readonly HttpClient _http = new();
+        private static readonly object LocalParaphraseBackoffLock = new();
+        private static DateTime _localParaphraseUnavailableUntilUtc = DateTime.MinValue;
         private const string DefaultModeratorResponsesEndpoint = "";
         private const string AutoCurriculumDraftMarker = "[AUTO_CURRICULUM_EVIDENCE_DRAFT]";
         private const string AutoCurriculumCoverageGapMarker = "[AUTO_CURRICULUM_INSUFFICIENT_COVERAGE]";
         private const string AssessmentCriteriaLeadLine = "Assessment criteria for this subject:";
         private const string ChapterSummaryLeadLine = "This chapter covers the following assessment criteria in full:";
 
-        public LearnerGuideController(ApplicationDbContext context)
+        public LearnerGuideController(ApplicationDbContext context, CurriculumDeliveryPilotService pilotService)
         {
             _context = context;
+            _pilotService = pilotService;
         }
 
         [HttpGet]
@@ -192,7 +197,8 @@ namespace ETD.Api.Controllers
             foreach (var subject in subjects)
             {
                 var purpose = (subject.SubjectPurpose ?? string.Empty).Trim();
-                if (!string.IsNullOrWhiteSpace(purpose) && purpose.Length >= 32) uniqueTexts.Add(purpose);
+                // Allow shorter purpose blocks to be considered for paraphrase (lowered from 32 -> 16)
+                if (!string.IsNullOrWhiteSpace(purpose) && purpose.Length >= 16) uniqueTexts.Add(purpose);
 
                 var subjectTopics = topicsBySubject.TryGetValue(subject.Id, out var st) ? st : new List<Topic>();
                 foreach (var topic in subjectTopics)
@@ -209,7 +215,8 @@ namespace ETD.Api.Controllers
                                 var desc = string.IsNullOrWhiteSpace(tk.LessonPlanDescription) ? "Lesson Plan" : tk.LessonPlanDescription.Trim();
                                 var content = NormalizeToolkitLessonContentForGuide(tk);
                                 var block = string.IsNullOrWhiteSpace(content) ? $"{label}: {desc}" : $"{label}: {desc}\n{content}";
-                                if (!string.IsNullOrWhiteSpace(block) && block.Length >= 32) uniqueTexts.Add(block.Trim());
+                                // Accept shorter blocks for paraphrase workflow (lowered from 32 -> 16)
+                                if (!string.IsNullOrWhiteSpace(block) && block.Length >= 16) uniqueTexts.Add(block.Trim());
                             }
                         }
                         else if (lessonByCriteria.TryGetValue(criterion.Id, out var lpList) && lpList.Count > 0)
@@ -359,7 +366,7 @@ namespace ETD.Api.Controllers
         }
 
         [HttpGet("export-readiness")]
-        public IActionResult ExportReadiness(
+        public async Task<IActionResult> ExportReadiness(
             [FromQuery] int? qualificationId = null,
             [FromQuery] int? subjectId = null,
             [FromQuery] bool details = false)
@@ -458,6 +465,16 @@ namespace ETD.Api.Controllers
                 .Where(HasGuideSourceContent)
                 .ToList();
 
+            CurriculumDeliveryPilotService.TopicEvidenceSummary? pilotSummary = null;
+            try
+            {
+                pilotSummary = await _pilotService.BuildTopicEvidenceSummaryAsync(qualification.Id, forceRefresh: false, HttpContext.RequestAborted);
+            }
+            catch
+            {
+                // Readiness must still respond if the pilot evidence cache is temporarily unavailable.
+            }
+
             var criteriaById = criteria
                 .GroupBy(c => c.Id)
                 .ToDictionary(g => g.Key, g => g.First());
@@ -477,6 +494,15 @@ namespace ETD.Api.Controllers
                 var fallbackPlans = ResolveLessonPlansForCriteria(lessonByCriteria, group);
                 var fallbackPlansWithContent = fallbackPlans
                     .Count(HasGuideSourceContent);
+                var topic = topicById.TryGetValue(c.TopicId, out var criterionTopic)
+                    ? criterionTopic
+                    : null;
+                var pilotTopic = pilotSummary?.Topics?.FirstOrDefault(t => t.TopicId == c.TopicId);
+                var evidenceFallbackBlocks = BuildEvidenceBackedLessonBlocks(
+                    pilotTopic,
+                    topic?.TopicCode,
+                    topic?.TopicDescription,
+                    c.Description);
 
                 criteriaDiagnostics.Add(new CriteriaReadinessDiagnostic
                 {
@@ -486,7 +512,8 @@ namespace ETD.Api.Controllers
                     MatchedRowsWithContent = matchedRowsWithContent,
                     FallbackPlans = fallbackPlans.Count,
                     FallbackPlansWithContent = fallbackPlansWithContent,
-                    HasAnyContent = matchedRowsWithContent > 0 || fallbackPlansWithContent > 0
+                    EvidenceFallbackBlocks = evidenceFallbackBlocks.Count,
+                    HasAnyContent = matchedRowsWithContent > 0 || fallbackPlansWithContent > 0 || evidenceFallbackBlocks.Count > 0
                 });
             }
 
@@ -504,6 +531,8 @@ namespace ETD.Api.Controllers
                 .Sum(row =>
                     (row.LessonPlanContent ?? string.Empty).Trim().Length +
                     (row.LessonPlanDescription ?? string.Empty).Trim().Length);
+            var criteriaWithEvidenceFallback = criteriaDiagnostics.Count(x => x.EvidenceFallbackBlocks > 0);
+            var topicsWithEvidence = pilotSummary?.Topics?.Count(t => t.TopEvidence != null && t.TopEvidence.Count > 0) ?? 0;
 
             var ready = criteriaWithAnyContent > 0 || toolkitRowsWithContent.Count > 0;
             var coveragePercent = criteriaTotal > 0
@@ -556,8 +585,10 @@ namespace ETD.Api.Controllers
                 criteriaMatched,
                 criteriaWithLessonContent,
                 criteriaWithAnyContent,
+                criteriaWithEvidenceFallback,
                 missingCriteriaCount = Math.Max(0, criteriaTotal - criteriaWithAnyContent),
                 criteriaCoveragePercent = coveragePercent,
+                topicsWithEvidence,
                 totalLessonContentChars,
                 mappedToolkitRowsWithLessonContent = toolkitRowsWithContent.Count - unmappedToolkitRowsWithContent.Count,
                 unmappedToolkitRowsWithLessonContent = unmappedToolkitRowsWithContent.Count,
@@ -577,6 +608,7 @@ namespace ETD.Api.Controllers
                         matchedRowsWithContent = x.MatchedRowsWithContent,
                         fallbackPlans = x.FallbackPlans,
                         fallbackPlansWithContent = x.FallbackPlansWithContent,
+                        evidenceFallbackBlocks = x.EvidenceFallbackBlocks,
                         hasAnyContent = x.HasAnyContent
                     }).Cast<object>().ToList()
                     : new List<object>(),
@@ -949,6 +981,7 @@ namespace ETD.Api.Controllers
                 AppendTableOfContentsPage(body);
                 body.Append(PageBreak());
 
+                var drawingId = 1U;
                 for (var i = 0; i < chapters.Count; i++)
                 {
                     var chapter = chapters[i];
@@ -962,7 +995,8 @@ namespace ETD.Api.Controllers
                         chapter.IllustrationsByTopic,
                         chapter.SubjectAssessmentCriteria,
                         chapter.WorkbookActivities,
-                        chapterNumber: i + 1);
+                        chapterNumber: i + 1,
+                        drawingId: ref drawingId);
 
                     if (i < chapters.Count - 1)
                     {
@@ -1049,6 +1083,16 @@ namespace ETD.Api.Controllers
                 .ToList();
             var uploadedLessonPlanRows = LoadUploadedLessonPlanRowsForSubject(qualification, subject);
 
+            CurriculumDeliveryPilotService.TopicEvidenceSummary? pilotSummary = null;
+            try
+            {
+                pilotSummary = await _pilotService.BuildTopicEvidenceSummaryAsync(qualification.Id, forceRefresh: false, cancellationToken);
+            }
+            catch
+            {
+                // Pilot evidence is a fallback; do not fail the export if it's unavailable.
+            }
+
             var criteriaByTopic = criteriaGroups
                 .GroupBy(g => g.TopicKey)
                 .ToDictionary(g => g.Key, g => g.ToList());
@@ -1060,6 +1104,8 @@ namespace ETD.Api.Controllers
                 var topicCriteria = criteriaByTopic.TryGetValue(topicKey, out var list)
                     ? list
                     : new List<GuideCriteriaGroup>();
+
+                var pilotTopic = pilotSummary?.Topics?.FirstOrDefault(t => t.TopicId == topic.Id);
 
                 var criteriaSections = new List<CriteriaGuideSection>();
                 foreach (var criterionGroup in topicCriteria)
@@ -1187,6 +1233,14 @@ namespace ETD.Api.Controllers
                         }
                     }
 
+                    lessonBlocks = await ApplyEvidenceFallbackToLessonBlocksAsync(
+                        lessonBlocks,
+                        pilotTopic,
+                        topic.TopicCode,
+                        topic.TopicDescription,
+                        criterion.Description,
+                        cache);
+
                     lessonBlocks = DeduplicateLessonBlocks(lessonBlocks);
 
                     criteriaSections.Add(new CriteriaGuideSection
@@ -1194,6 +1248,40 @@ namespace ETD.Api.Controllers
                         CriteriaId = criterion.Id,
                         CriteriaDescription = (criterion.Description ?? string.Empty).Trim(),
                         Lessons = lessonBlocks.OrderBy(x => ParseLpnSort(x.Lpn)).ToList()
+                    });
+                }
+
+                if (!TopicHasMeaningfulLessonContent(criteriaSections))
+                {
+                    var topicEvidenceBlocks = await ApplyEvidenceFallbackToLessonBlocksAsync(
+                        new List<GuideLessonBlock>(),
+                        pilotTopic,
+                        topic.TopicCode,
+                        topic.TopicDescription,
+                        topic.TopicPurpose,
+                        cache);
+                    topicEvidenceBlocks = DeduplicateLessonBlocks(topicEvidenceBlocks)
+                        .Where(block => HasMeaningfulLessonContent(block.LessonContent))
+                        .ToList();
+                    if (topicEvidenceBlocks.Count > 0)
+                    {
+                        criteriaSections.Add(new CriteriaGuideSection
+                        {
+                            CriteriaId = 0,
+                            CriteriaDescription = (topic.TopicDescription ?? string.Empty).Trim(),
+                            Lessons = topicEvidenceBlocks
+                        });
+                    }
+                }
+
+                if (!TopicHasMeaningfulLessonContent(criteriaSections))
+                {
+                    var topicFallback = BuildTopicAsLessonFallbackBlock(topic);
+                    criteriaSections.Add(new CriteriaGuideSection
+                    {
+                        CriteriaId = 0,
+                        CriteriaDescription = (topic.TopicDescription ?? topic.TopicPurpose ?? string.Empty).Trim(),
+                        Lessons = new List<GuideLessonBlock> { topicFallback }
                     });
                 }
 
@@ -1385,6 +1473,16 @@ namespace ETD.Api.Controllers
                 .ToList();
             var uploadedLessonPlanRows = LoadUploadedLessonPlanRowsForSubject(qualification, subject);
 
+            CurriculumDeliveryPilotService.TopicEvidenceSummary? pilotSummary = null;
+            try
+            {
+                pilotSummary = await _pilotService.BuildTopicEvidenceSummaryAsync(qualification.Id, forceRefresh: false, HttpContext.RequestAborted);
+            }
+            catch
+            {
+                // Audio export can still fall back to any uploaded lesson-plan rows already present.
+            }
+
             var cache = new Dictionary<string, string>(StringComparer.Ordinal);
             var criteriaByTopic = criteria.GroupBy(c => c.TopicId).ToDictionary(g => g.Key, g => g.ToList());
             var consumedToolkitRowIds = new HashSet<int>();
@@ -1394,6 +1492,7 @@ namespace ETD.Api.Controllers
                 var topicCriteria = criteriaByTopic.TryGetValue(topic.Id, out var list)
                     ? list
                     : new List<AssessmentCriteria>();
+                var pilotTopic = pilotSummary?.Topics?.FirstOrDefault(t => t.TopicId == topic.Id);
 
                 var criteriaSections = new List<CriteriaGuideSection>();
                 foreach (var criterion in topicCriteria)
@@ -1518,6 +1617,14 @@ namespace ETD.Api.Controllers
                         }
                     }
 
+                    lessonBlocks = await ApplyEvidenceFallbackToLessonBlocksAsync(
+                        lessonBlocks,
+                        pilotTopic,
+                        topic.TopicCode,
+                        topic.TopicDescription,
+                        criterion.Description,
+                        cache);
+
                     lessonBlocks = DeduplicateLessonBlocks(lessonBlocks);
 
                     criteriaSections.Add(new CriteriaGuideSection
@@ -1635,10 +1742,21 @@ namespace ETD.Api.Controllers
         private async Task<string> ParaphraseForGuideAsync(string text, bool enabled, Dictionary<string, string> cache)
         {
             var trimmed = (text ?? string.Empty).Trim();
-            if (!enabled || string.IsNullOrWhiteSpace(trimmed) || trimmed.Length < 32) return trimmed;
+            // Paraphrase shorter blocks as well (lowered threshold from 32 -> 16)
+            if (!enabled || string.IsNullOrWhiteSpace(trimmed) || trimmed.Length < 16) return trimmed;
             if (cache.TryGetValue(trimmed, out var cached)) return cached;
-            var (paraphrased, _) = await ParaphraseTextWithBackendAsync(trimmed, "educational", true);
-            var finalText = string.IsNullOrWhiteSpace(paraphrased) ? trimmed : paraphrased.Trim();
+            string finalText;
+            try
+            {
+                var (paraphrased, backend) = await ParaphraseTextWithBackendAsync(trimmed, "educational", true);
+                finalText = string.IsNullOrWhiteSpace(paraphrased) || backend == "unavailable"
+                    ? trimmed
+                    : paraphrased.Trim();
+            }
+            catch
+            {
+                finalText = trimmed;
+            }
             cache[trimmed] = finalText;
             return finalText;
         }
@@ -1668,7 +1786,7 @@ namespace ETD.Api.Controllers
                 if (!string.IsNullOrWhiteSpace(wrapperFallbackText)) return (wrapperFallbackText, "local_wrapper");
             }
 
-            return (HeuristicParaphrase(text), "heuristic");
+            return (text, "unavailable");
         }
 
         private static string BuildLearnerGuideParaphrasePrompt(string style, bool preserveTerminology)
@@ -1731,7 +1849,7 @@ namespace ETD.Api.Controllers
             if (!AiRuntime.AllowOpenAi()) return null;
             var key = Secrets.GetOpenAIKey();
             if (string.IsNullOrWhiteSpace(key)) return null;
-            var model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4o-mini";
+            var model = AiRuntime.GetOpenAiModel("gpt-5-mini");
             var prompt = BuildLearnerGuideParaphrasePrompt(style, preserveTerminology);
             var payload = new
             {
@@ -1750,6 +1868,11 @@ namespace ETD.Api.Controllers
 
         private async Task<string?> TryParaphraseWithLocalWrapperAsync(string text, string style, bool preserveTerminology)
         {
+            if (IsLocalParaphraseBackoffActive())
+            {
+                return null;
+            }
+
             var endpoint = AiRuntime.GetLocalLlmEndpoint();
             if (string.IsNullOrWhiteSpace(endpoint))
             {
@@ -1790,31 +1913,87 @@ namespace ETD.Api.Controllers
             }
 
             msg.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-            var resp = await _http.SendAsync(msg);
-            var body = await resp.Content.ReadAsStringAsync();
-            if (!resp.IsSuccessStatusCode) return null;
-            return TryExtractChatCompletionText(body) ?? TryExtractResponseOutputText(body);
+            var timeoutSeconds = Math.Clamp(
+                ParseInt(Environment.GetEnvironmentVariable("LEARNER_GUIDE_PARAPHRASE_TIMEOUT_SECONDS"), 12),
+                3,
+                100);
+
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+                using var resp = await _http.SendAsync(msg, timeout.Token);
+                var body = await resp.Content.ReadAsStringAsync(timeout.Token);
+                if (!resp.IsSuccessStatusCode) return null;
+                return TryExtractChatCompletionText(body) ?? TryExtractResponseOutputText(body);
+            }
+            catch (TaskCanceledException)
+            {
+                MarkLocalParaphraseBackoff();
+                return null;
+            }
+            catch (HttpRequestException)
+            {
+                MarkLocalParaphraseBackoff();
+                return null;
+            }
+            catch (IOException)
+            {
+                MarkLocalParaphraseBackoff();
+                return null;
+            }
+        }
+
+        private static bool IsLocalParaphraseBackoffActive()
+        {
+            lock (LocalParaphraseBackoffLock)
+            {
+                return DateTime.UtcNow < _localParaphraseUnavailableUntilUtc;
+            }
+        }
+
+        private static void MarkLocalParaphraseBackoff()
+        {
+            var seconds = Math.Clamp(
+                ParseInt(Environment.GetEnvironmentVariable("LEARNER_GUIDE_PARAPHRASE_BACKOFF_SECONDS"), 600),
+                30,
+                3600);
+            lock (LocalParaphraseBackoffLock)
+            {
+                _localParaphraseUnavailableUntilUtc = DateTime.UtcNow.AddSeconds(seconds);
+            }
         }
 
         private static string? TryExtractChatCompletionText(string json)
         {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("message", out var directMessage)
-                && directMessage.ValueKind == JsonValueKind.Object
-                && directMessage.TryGetProperty("content", out var directContent))
+            if (string.IsNullOrWhiteSpace(json))
             {
-                return ReadChatContentText(directContent);
+                return null;
             }
-            if (doc.RootElement.TryGetProperty("response", out var responseText)
-                && responseText.ValueKind == JsonValueKind.String)
+
+            try
             {
-                var response = responseText.GetString();
-                if (!string.IsNullOrWhiteSpace(response)) return response;
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("message", out var directMessage)
+                    && directMessage.ValueKind == JsonValueKind.Object
+                    && directMessage.TryGetProperty("content", out var directContent))
+                {
+                    return ReadChatContentText(directContent);
+                }
+                if (doc.RootElement.TryGetProperty("response", out var responseText)
+                    && responseText.ValueKind == JsonValueKind.String)
+                {
+                    var response = responseText.GetString();
+                    if (!string.IsNullOrWhiteSpace(response)) return response;
+                }
+                if (!doc.RootElement.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0) return null;
+                var m = choices[0].TryGetProperty("message", out var msgObj) ? msgObj : default;
+                if (m.ValueKind != JsonValueKind.Object || !m.TryGetProperty("content", out var c)) return null;
+                return ReadChatContentText(c);
             }
-            if (!doc.RootElement.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0) return null;
-            var m = choices[0].TryGetProperty("message", out var msgObj) ? msgObj : default;
-            if (m.ValueKind != JsonValueKind.Object || !m.TryGetProperty("content", out var c)) return null;
-            return ReadChatContentText(c);
+            catch (JsonException)
+            {
+                return null;
+            }
         }
 
         private static string? ReadChatContentText(JsonElement content)
@@ -1836,21 +2015,34 @@ namespace ETD.Api.Controllers
 
         private static string? TryExtractResponseOutputText(string json)
         {
-            using var doc = JsonDocument.Parse(json);
-            if (!doc.RootElement.TryGetProperty("output", out var output) || output.ValueKind != JsonValueKind.Array) return null;
-            foreach (var item in output.EnumerateArray())
+            if (string.IsNullOrWhiteSpace(json))
             {
-                if (!item.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array) continue;
-                foreach (var part in content.EnumerateArray())
+                return null;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (!doc.RootElement.TryGetProperty("output", out var output) || output.ValueKind != JsonValueKind.Array) return null;
+                foreach (var item in output.EnumerateArray())
                 {
-                    if (part.TryGetProperty("text", out var txt))
+                    if (!item.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array) continue;
+                    foreach (var part in content.EnumerateArray())
                     {
-                        var t = txt.GetString();
-                        if (!string.IsNullOrWhiteSpace(t)) return t;
+                        if (part.TryGetProperty("text", out var txt))
+                        {
+                            var t = txt.GetString();
+                            if (!string.IsNullOrWhiteSpace(t)) return t;
+                        }
                     }
                 }
+
+                return null;
             }
-            return null;
+            catch (JsonException)
+            {
+                return null;
+            }
         }
 
         private static string HeuristicParaphrase(string text)
@@ -2079,8 +2271,8 @@ namespace ETD.Api.Controllers
 
             body.Append(StyledHeading("DISCLAIMER", "Heading1", 18));
             body.Append(BodyPara("ETDP Courseware Release ETDP RSA PATENT 004/026785", disclaimerBodySizeHalfPt, 0));
-            body.Append(BodyPara($"(C) {year} by Dr P.C. Wepener, supported by the professional assistance of OpenAI (CODEX).", disclaimerBodySizeHalfPt));
-            body.Append(BodyPara("Neither Dr P.C. Wepener nor OpenAI is accountable or liable for the correctness, completeness, factual, or academic correctness of this document. This document is generated by the ETDP App. The accredited learning institution should be contacted for content inquiries, sources, references, or citations.", disclaimerBodySizeHalfPt));
+            body.Append(BodyPara($"(C) {year} by Dr P.C. Wepener. This document is generated by the ETDP App under the authority and final approval of the authorised learning-material owner.", disclaimerBodySizeHalfPt));
+            body.Append(BodyPara("Neither Dr P.C. Wepener nor the ETDP App is accountable or liable for the correctness, completeness, factual, or academic correctness of this document. The accredited learning institution should be contacted for content inquiries, sources, references, or citations.", disclaimerBodySizeHalfPt));
 
             body.Append(StyledHeading("NOTICE OF RIGHTS", "Heading2", 14));
             body.Append(BodyPara("No part of this publication may be reproduced, transmitted, transcribed, stored in a retrieval system, or translated into any language or computer language, in any form or by any means, electronic, mechanical, magnetic, optical, chemical, manual, or otherwise, without prior written permission from the branded learning institution that owns the legal and intellectual property rights to the content of this document.", disclaimerBodySizeHalfPt));
@@ -2089,7 +2281,7 @@ namespace ETD.Api.Controllers
             body.Append(BodyPara("Throughout this courseware title, trademark names may be used. Rather than placing a trademark symbol at every occurrence, names are used in an editorial manner for the benefit of the trademark owner, with no intention of infringement.", disclaimerBodySizeHalfPt));
 
             body.Append(StyledHeading("NOTICE OF LIABILITY", "Heading2", 14));
-            body.Append(BodyPara("The information in this courseware title is distributed on an 'as is' basis, without warranty. While every precaution has been taken in preparation of this courseware, neither Dr P.C. Wepener nor OpenAI shall have any liability to any person or entity for any loss or damage caused, or alleged to be caused, directly or indirectly by the instructions in this document or by the learning design and development processes described in it.", disclaimerBodySizeHalfPt));
+            body.Append(BodyPara("The information in this courseware title is distributed on an 'as is' basis, without warranty. While every precaution has been taken in preparation of this courseware, neither Dr P.C. Wepener nor the ETDP App shall have any liability to any person or entity for any loss or damage caused, or alleged to be caused, directly or indirectly by the instructions in this document or by the learning design and development processes described in it.", disclaimerBodySizeHalfPt));
             body.Append(BodyPara("A sincere effort has been made to ensure typology accuracy of the material; however, no warranty, express or implied, is made regarding quality, correctness, reliability, accuracy, or freedom from error of this document or the products it describes. Data used in examples and sample files may be fictional. Any resemblance to real persons or companies is coincidental.", disclaimerBodySizeHalfPt));
 
             body.Append(StyledHeading("TERMS AND CONDITIONS", "Heading2", 14));
@@ -2113,81 +2305,90 @@ namespace ETD.Api.Controllers
             IReadOnlyDictionary<int, List<GuideIllustration>> illustrationsByTopic,
             IReadOnlyList<string> subjectAssessmentCriteria,
             IReadOnlyList<string> workbookActivities,
-            int chapterNumber)
+            int chapterNumber,
+            ref uint drawingId)
         {
             _ = qualification;
             _ = phase;
-            _ = illustrationsByTopic;
-            _ = workbookActivities;
 
             body.Append(BuildChapterHeading($"CHAPTER {chapterNumber}"));
             body.Append(BuildSubjectHeading($"{(subject.SubjectCode ?? string.Empty).Trim()}: {(subject.SubjectDescription ?? string.Empty).Trim()}"));
 
-            if (!string.IsNullOrWhiteSpace(subject.SubjectPurpose))
-            {
-                body.Append(BuildPurposeHeading("Purpose of the Subject"));
-                AppendMultilineBody(body, subject.SubjectPurpose, 22);
-            }
+            var activeTopics = topics
+                .Where(topic => topic != null)
+                .ToList();
 
-            body.Append(BuildAssessmentCriteriaHeading("Assessment Criteria for this Subject"));
-            body.Append(BodyPara("The following assessment criteria are addressed in full in this chapter. Each criterion is written out in full and is used only as a chapter guide for the detailed subject matter that follows.", 22, 0));
-            if (subjectAssessmentCriteria == null || subjectAssessmentCriteria.Count == 0)
+            if (activeTopics.Count > 0)
             {
-                body.Append(BodyPara("No assessment criteria captured for this chapter.", 22, 0));
-            }
-            else
-            {
-                foreach (var criterion in subjectAssessmentCriteria)
+                body.Append(BodyPara("In this Chapter we will discuss the following Topics:", 22, 0, bold: true));
+                foreach (var topic in activeTopics)
                 {
-                    body.Append(BodyPara(criterion, 22, 0));
+                    body.Append(BodyPara($"{topic.TopicCode} {topic.TopicDescription}".Trim(), 22, 360));
                 }
             }
 
-            foreach (var topic in topics)
+            if (subjectAssessmentCriteria != null && subjectAssessmentCriteria.Count > 0)
+            {
+                body.Append(StyledHeading("INTERNAL ASSESSMENT CRITERIA AND WEIGHT", "Heading3", 13));
+                body.Append(BodyPara("By the end of this Chapter the learner will be able to:", 22, 0, bold: true));
+                foreach (var criterion in subjectAssessmentCriteria.Where(x => !string.IsNullOrWhiteSpace(x)))
+                {
+                    body.Append(BodyPara(criterion.Trim(), 22, 360));
+                }
+            }
+
+            foreach (var topic in activeTopics)
             {
                 body.Append(BuildTopicHeading($"TOPIC {topic.TopicCode}: {topic.TopicDescription}"));
 
-                var topicCriteria = topic.Criteria
-                    .Select(criteria => NormalizeDocumentText(criteria.CriteriaDescription))
-                    .Where(text => !string.IsNullOrWhiteSpace(text))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                if (topicCriteria.Count > 0)
-                {
-                    body.Append(BodyPara("Assessment criteria addressed in this topic", 22, 0, bold: true));
-                    foreach (var criterion in topicCriteria)
-                    {
-                        body.Append(BulletBodyPara(criterion, 22));
-                    }
-                }
-
                 var lessonBlocks = BuildTopicLessonBlocks(topic);
-                if (lessonBlocks.Count == 0)
-                {
-                    body.Append(BodyPara("No lesson plan content has been captured for this topic yet.", 22, 0));
-                }
-                else
+                if (lessonBlocks.Count > 0)
                 {
                     foreach (var lesson in lessonBlocks)
                     {
+                        var lessonContent = (lesson.LessonContent ?? string.Empty).Trim();
+                        if (!HasMeaningfulLessonContent(lessonContent))
+                        {
+                            continue;
+                        }
+
                         var lessonHeading = BuildLessonPlanHeadingText(lesson.Lpn, lesson.LessonPlanDescription);
                         if (!string.IsNullOrWhiteSpace(lessonHeading))
                         {
                             body.Append(BodyPara(lessonHeading, 22, 0, bold: true));
                         }
 
-                        var lessonContent = (lesson.LessonContent ?? string.Empty).Trim();
-                        if (HasMeaningfulLessonContent(lessonContent))
-                        {
-                            AppendExactLessonPlanContent(body, lessonContent, 22);
-                        }
-                        else if (!string.IsNullOrWhiteSpace(lesson.LessonPlanDescription))
-                        {
-                            body.Append(BodyPara(lesson.LessonPlanDescription, 22, 0));
-                        }
+                        AppendExactLessonPlanContent(body, lessonContent, 22);
                     }
                 }
+
+                if (illustrationsByTopic != null &&
+                    illustrationsByTopic.TryGetValue(topic.TopicId, out var topicIllustrations) &&
+                    topicIllustrations.Count > 0)
+                {
+                    AppendTopicIllustrations(body, main, topicIllustrations, ref drawingId);
+                }
+            }
+
+            if (activeTopics.Count > 0)
+            {
+                body.Append(StyledHeading("IN SUMMARY", "Heading3", 13));
+                body.Append(BodyPara("In this unit we have focussed on:", 22, 0, bold: true));
+                foreach (var topic in activeTopics)
+                {
+                    body.Append(BodyPara($"{topic.TopicCode} {topic.TopicDescription}".Trim(), 22, 360));
+                }
+            }
+
+            var discussionCount = subjectAssessmentCriteria?.Count(x => !string.IsNullOrWhiteSpace(x)) ?? 0;
+            if (discussionCount == 0)
+            {
+                discussionCount = ResolveWorkbookActivityCount(activeTopics, workbookActivities);
+            }
+
+            if (discussionCount > 0)
+            {
+                body.Append(BodyPara(BuildWorkbookActivitiesSummaryLine(discussionCount), 22, 0));
             }
         }
 
@@ -2613,14 +2814,8 @@ namespace ETD.Api.Controllers
             var preferredLessons = orderedLessons
                 .Where(l => HasMeaningfulLessonContent(l.LessonContent))
                 .ToList();
-            if (preferredLessons.Count == 0)
-            {
-                preferredLessons = orderedLessons
-                    .Where(l => !LooksGenericLessonDescription(l.LessonPlanDescription))
-                    .ToList();
-            }
 
-            foreach (var lesson in (preferredLessons.Count > 0 ? preferredLessons : orderedLessons))
+            foreach (var lesson in preferredLessons)
             {
                 var signature = string.Join("|", new[]
                 {
@@ -2959,12 +3154,6 @@ namespace ETD.Api.Controllers
 
         private static string NormalizeLessonContentForGuide(string? lessonPlanContent, string? learningAids = null)
         {
-            if (ContainsAutoCurriculumCoverageGapMarker(lessonPlanContent) ||
-                ContainsAutoCurriculumCoverageGapMarker(learningAids))
-            {
-                return string.Empty;
-            }
-
             var content = (lessonPlanContent ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(content))
             {
@@ -3034,6 +3223,11 @@ namespace ETD.Api.Controllers
                     continue;
                 }
 
+                if (LooksLikeAssessmentCriteriaRestatement(line))
+                {
+                    continue;
+                }
+
                 line = StripCurriculumCodesFromText(line);
                 if (string.IsNullOrWhiteSpace(line))
                 {
@@ -3057,8 +3251,7 @@ namespace ETD.Api.Controllers
                 || raw.Equals("todo", StringComparison.Ordinal)
                 || raw.Equals("n/a", StringComparison.Ordinal)
                 || raw.Equals("na", StringComparison.Ordinal)
-                || raw.Equals("tbc", StringComparison.Ordinal)
-                || raw.StartsWith("insufficient grounded subject matter coverage", StringComparison.Ordinal);
+                || raw.Equals("tbc", StringComparison.Ordinal);
         }
 
         private static bool LooksGenericLessonDescription(string? value)
@@ -3132,15 +3325,17 @@ namespace ETD.Api.Controllers
         {
             var rowSubjectCode = NormalizeCodeKey(row.SubjectCode);
             var subjectCode = NormalizeCodeKey(subject.SubjectCode);
+            var rowSubjectDescription = NormalizeLooseText(row.SubjectDescription);
+            var subjectDescription = NormalizeLooseText(subject.SubjectDescription);
             if (!string.IsNullOrWhiteSpace(rowSubjectCode) &&
                 !string.IsNullOrWhiteSpace(subjectCode) &&
                 string.Equals(rowSubjectCode, subjectCode, StringComparison.Ordinal))
             {
-                return true;
+                return string.IsNullOrWhiteSpace(rowSubjectDescription) ||
+                       string.IsNullOrWhiteSpace(subjectDescription) ||
+                       string.Equals(rowSubjectDescription, subjectDescription, StringComparison.Ordinal);
             }
 
-            var rowSubjectDescription = NormalizeLooseText(row.SubjectDescription);
-            var subjectDescription = NormalizeLooseText(subject.SubjectDescription);
             if (!string.IsNullOrWhiteSpace(rowSubjectDescription) &&
                 !string.IsNullOrWhiteSpace(subjectDescription) &&
                 string.Equals(rowSubjectDescription, subjectDescription, StringComparison.Ordinal))
@@ -3247,6 +3442,24 @@ namespace ETD.Api.Controllers
                     {
                         if (matches.Any(existing => existing.Id == row.Id)) continue;
                         matches.Add(row);
+                    }
+                }
+                else
+                {
+                    // Try a looser contains-based match when exact normalized description equality fails.
+                    var byContains = allRows
+                        .Where(row =>
+                            !string.IsNullOrWhiteSpace(NormalizeLooseText(row.AssessmentCriteriaDescription)) &&
+                            (NormalizeLooseText(row.AssessmentCriteriaDescription).Contains(criterionDescriptionNorm, StringComparison.Ordinal) ||
+                             criterionDescriptionNorm.Contains(NormalizeLooseText(row.AssessmentCriteriaDescription), StringComparison.Ordinal)))
+                        .ToList();
+                    if (byContains.Count > 0)
+                    {
+                        foreach (var row in byContains)
+                        {
+                            if (matches.Any(existing => existing.Id == row.Id)) continue;
+                            matches.Add(row);
+                        }
                     }
                 }
             }
@@ -3963,6 +4176,678 @@ namespace ETD.Api.Controllers
             });
         }
 
+        private async Task<List<GuideLessonBlock>> ApplyEvidenceFallbackToLessonBlocksAsync(
+            List<GuideLessonBlock> lessonBlocks,
+            CurriculumDeliveryPilotService.TopicEvidenceItem? pilotTopic,
+            string? topicCode,
+            string? topicDescription,
+            string? criteriaDescription,
+            Dictionary<string, string> authoringCache)
+        {
+            var evidenceBlocks = BuildEvidenceBackedLessonBlocks(
+                pilotTopic,
+                topicCode,
+                topicDescription,
+                criteriaDescription);
+            if (evidenceBlocks.Count == 0)
+            {
+                return lessonBlocks;
+            }
+
+            _ = authoringCache;
+
+            if (!HasLearnerReadyLessonBlock(lessonBlocks))
+            {
+                return evidenceBlocks;
+            }
+
+            if (lessonBlocks.All(IsThinLessonBlock))
+            {
+                lessonBlocks.AddRange(evidenceBlocks.Take(2));
+            }
+
+            return lessonBlocks;
+        }
+
+        private async Task<List<GuideLessonBlock>> AuthorEvidenceBackedLessonBlocksAsync(
+            List<GuideLessonBlock> evidenceBlocks,
+            string? topicCode,
+            string? topicDescription,
+            string? criteriaDescription,
+            Dictionary<string, string> authoringCache)
+        {
+            var authoredBlocks = new List<GuideLessonBlock>(evidenceBlocks.Count);
+            foreach (var block in evidenceBlocks)
+            {
+                var sourceText = NormalizeDocumentText(block.LessonContent);
+                var cacheKey = string.Join("|", new[]
+                {
+                    "instructional-author-v2",
+                    NormalizeLooseText(topicCode),
+                    NormalizeLooseText(topicDescription),
+                    NormalizeLooseText(criteriaDescription),
+                    NormalizeLooseText(sourceText)
+                });
+
+                if (!authoringCache.TryGetValue(cacheKey, out var authoredText))
+                {
+                    authoredText = await TryAuthorInstructionalTextbookSectionAsync(
+                        topicCode,
+                        topicDescription,
+                        criteriaDescription,
+                        sourceText);
+                    if (string.IsNullOrWhiteSpace(authoredText) || LooksLikeMetaInstructionOnly(authoredText))
+                    {
+                        authoredText = BuildSourceMatterFallbackSection(sourceText);
+                    }
+
+                    authoringCache[cacheKey] = authoredText;
+                }
+
+                authoredBlocks.Add(new GuideLessonBlock
+                {
+                    Lpn = block.Lpn,
+                    LessonPlanDescription = block.LessonPlanDescription,
+                    LessonContent = authoredText,
+                    LecturerActions = block.LecturerActions,
+                    LearnerActions = block.LearnerActions,
+                    LearningAids = block.LearningAids,
+                    TimeStart = block.TimeStart,
+                    TimeEnd = block.TimeEnd
+                });
+            }
+
+            return authoredBlocks;
+        }
+
+        private static bool HasLearnerReadyLessonBlock(IEnumerable<GuideLessonBlock>? lessonBlocks)
+        {
+            return (lessonBlocks ?? Enumerable.Empty<GuideLessonBlock>())
+                .Any(lesson => HasMeaningfulLessonContent(lesson.LessonContent) && !IsThinLessonBlock(lesson));
+        }
+
+        private static bool TopicHasMeaningfulLessonContent(IEnumerable<CriteriaGuideSection>? criteriaSections)
+        {
+            return (criteriaSections ?? Enumerable.Empty<CriteriaGuideSection>())
+                .SelectMany(section => section.Lessons ?? new List<GuideLessonBlock>())
+                .Any(lesson => HasMeaningfulLessonContent(lesson.LessonContent));
+        }
+
+        private static GuideLessonBlock BuildTopicAsLessonFallbackBlock(Topic topic)
+        {
+            var topicCode = (topic.TopicCode ?? string.Empty).Trim();
+            var topicDescription = (topic.TopicDescription ?? string.Empty).Trim();
+            var topicPurpose = (topic.TopicPurpose ?? string.Empty).Trim();
+            var lessonTitle = !string.IsNullOrWhiteSpace(topicDescription)
+                ? topicDescription
+                : (!string.IsNullOrWhiteSpace(topicPurpose) ? topicPurpose : "Topic learning content");
+            var sourceText = string.Join(". ", new[]
+            {
+                topicDescription,
+                topicPurpose
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+
+            if (string.IsNullOrWhiteSpace(sourceText))
+            {
+                sourceText = lessonTitle;
+            }
+
+            return new GuideLessonBlock
+            {
+                Lpn = !string.IsNullOrWhiteSpace(topicCode) ? topicCode : "Topic",
+                LessonPlanDescription = lessonTitle,
+                LessonContent = BuildSourceMatterFallbackSection(sourceText),
+                LecturerActions = string.Empty,
+                LearnerActions = string.Empty,
+                LearningAids = string.Empty,
+                TimeStart = string.Empty,
+                TimeEnd = string.Empty
+            };
+        }
+
+        private async Task<string?> TryAuthorInstructionalTextbookSectionAsync(
+            string? topicCode,
+            string? topicDescription,
+            string? criteriaDescription,
+            string sourceText)
+        {
+            if (string.IsNullOrWhiteSpace(sourceText))
+            {
+                return null;
+            }
+
+            var systemPrompt = BuildInstructionalAuthorPrompt();
+            var userPrompt = BuildInstructionalAuthorUserPrompt(topicCode, topicDescription, criteriaDescription, sourceText);
+
+            var preferLocalFirst = AiRuntime.PreferLocalFirst();
+            if (preferLocalFirst)
+            {
+                var localFirst = await TryCompleteLearnerGuideAuthoringWithLocalAsync(systemPrompt, userPrompt);
+                if (HasAuthoredInstructionalContent(localFirst)) return NormalizeAuthoredInstructionalText(localFirst);
+            }
+
+            if (AiRuntime.AllowCloudProviders() && AiRuntime.AllowOpenAi())
+            {
+                var openAi = await TryCompleteLearnerGuideAuthoringWithOpenAiAsync(systemPrompt, userPrompt);
+                if (HasAuthoredInstructionalContent(openAi)) return NormalizeAuthoredInstructionalText(openAi);
+            }
+
+            if (!preferLocalFirst)
+            {
+                var localFallback = await TryCompleteLearnerGuideAuthoringWithLocalAsync(systemPrompt, userPrompt);
+                if (HasAuthoredInstructionalContent(localFallback)) return NormalizeAuthoredInstructionalText(localFallback);
+            }
+
+            return null;
+        }
+
+        private static string BuildInstructionalAuthorPrompt()
+        {
+            return string.Join("\n", new[]
+            {
+                "You are an expert Academic Author, Diesel Motor Mechanic technical textbook writer, and instructional designer.",
+                "Your task is to transform curriculum requirements and retrieved subject-matter evidence into a comprehensive learner-guide section.",
+                "Do not act as a curriculum mapper. Do not list what must be learned. Write the actual instructional text that enables the learner to learn from the guide without another source.",
+                "Use the supplied source material as the knowledge base. Prefer the author's wording and sequence where it already reads like learner-guide content. Explain, connect, and expand only from that material and standard technical meaning. Do not invent unsupported specifications, legal requirements, torque values, or procedures.",
+                "Never write meta-instructions such as 'learners must understand', 'explain the concept', 'study this source', or 'the topic covers'. Replace those with the explanation itself.",
+                "Write in a natural learner-guide style. Do not force fixed headings or repeated templates. Let the source material and topic determine the structure, paragraph headings, examples, and sequence.",
+                "If the source already contains authored instructional text, preserve it closely instead of replacing it with a generic explanation. If evidence is thin, still produce the fullest grounded explanation possible and clearly state only the specific remaining gap at the end.",
+                "Return only the learner-guide content. Do not include prompts, notes to the author, markdown fences, or JSON."
+            });
+        }
+
+        private static string BuildInstructionalAuthorUserPrompt(
+            string? topicCode,
+            string? topicDescription,
+            string? criteriaDescription,
+            string sourceText)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"Target Topic: {NormalizeDocumentText($"{topicCode} {topicDescription}")}");
+            sb.AppendLine($"Curriculum Requirement: {CleanCurriculumRequirementText(criteriaDescription)}");
+            sb.AppendLine();
+            sb.AppendLine("Bad output patterns to avoid:");
+            sb.AppendLine("This topic explains the role and importance of engines and maintenance. Learners must describe types of establishments.");
+            sb.AppendLine("Any repeated fixed template that replaces the uploaded author's actual explanation.");
+            sb.AppendLine();
+            sb.AppendLine("Good output pattern to follow:");
+            sb.AppendLine("Use the source material as the starting text. Keep the author's concrete explanations, legal or technical sequence, examples and definitions. Only reorganise enough to align it with the target topic and remove duplication.");
+            sb.AppendLine();
+            sb.AppendLine("Source Material:");
+            sb.AppendLine(TrimEvidenceExcerpt(sourceText, 6000));
+            return sb.ToString().Trim();
+        }
+
+        private async Task<string?> TryCompleteLearnerGuideAuthoringWithLocalAsync(string systemPrompt, string userPrompt)
+        {
+            var apiKey = AiRuntime.GetLocalLlmApiKey();
+            var timeoutSeconds = Math.Clamp(ParseInt(Environment.GetEnvironmentVariable("LEARNER_GUIDE_AUTHOR_TIMEOUT_SECONDS"), 25), 5, 180);
+            foreach (var endpoint in AiRuntime.GetLocalLlmEndpointCandidates())
+            {
+                foreach (var model in AiRuntime.GetLocalLlmModelCandidates())
+                {
+                    var payload = new
+                    {
+                        model,
+                        messages = new[]
+                        {
+                            new { role = "system", content = systemPrompt },
+                            new { role = "user", content = userPrompt }
+                        },
+                        temperature = 0.25,
+                        stream = false
+                    };
+
+                    using var msg = new HttpRequestMessage(HttpMethod.Post, endpoint.Trim());
+                    if (!string.IsNullOrWhiteSpace(apiKey))
+                    {
+                        var token = apiKey.Trim();
+                        if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            token = token.Substring(7).Trim();
+                        }
+                        if (!string.IsNullOrWhiteSpace(token))
+                        {
+                            msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                        }
+                    }
+
+                    msg.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                    try
+                    {
+                        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+                        using var resp = await _http.SendAsync(msg, timeout.Token);
+                        var body = await resp.Content.ReadAsStringAsync(timeout.Token);
+                        if (!resp.IsSuccessStatusCode) continue;
+                        var text = TryExtractChatCompletionText(body) ?? TryExtractResponseOutputText(body);
+                        if (!string.IsNullOrWhiteSpace(text)) return text;
+                    }
+                    catch
+                    {
+                        // Try the next local endpoint/model candidate.
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private async Task<string?> TryCompleteLearnerGuideAuthoringWithOpenAiAsync(string systemPrompt, string userPrompt)
+        {
+            var key = Secrets.GetOpenAIKey();
+            if (string.IsNullOrWhiteSpace(key)) return null;
+
+            var model = AiRuntime.GetOpenAiModel("gpt-5-mini");
+            var payload = new
+            {
+                model,
+                messages = new[]
+                {
+                    new { role = "system", content = systemPrompt },
+                    new { role = "user", content = userPrompt }
+                },
+                temperature = 0.3
+            };
+
+            using var msg = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
+            msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+            msg.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            try
+            {
+                using var resp = await _http.SendAsync(msg);
+                var body = await resp.Content.ReadAsStringAsync();
+                if (!resp.IsSuccessStatusCode) return null;
+                return TryExtractChatCompletionText(body);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool HasAuthoredInstructionalContent(string? value)
+        {
+            var text = NormalizeAuthoredInstructionalText(value);
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            if (LooksLikeMetaInstructionOnly(text)) return false;
+            return DocumentTextCleaner.WordCount(text) >= 80;
+        }
+
+        private static string NormalizeAuthoredInstructionalText(string? value)
+        {
+            var text = NormalizeDocumentText(value);
+            text = Regex.Replace(text, @"```[a-zA-Z]*", string.Empty);
+            text = text.Replace("```", string.Empty).Trim();
+            return text;
+        }
+
+        private static string BuildSourceMatterFallbackSection(string sourceText)
+        {
+            var text = NormalizeDocumentText(sourceText);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return string.Empty;
+            }
+
+            return TrimEvidenceExcerpt(text, 6000);
+        }
+
+        private static bool LooksLikeMetaInstructionOnly(string? value)
+        {
+            var normalized = NormalizeLooseText(value);
+            if (string.IsNullOrWhiteSpace(normalized)) return true;
+
+            var metaSignals = new[]
+            {
+                "learners must understand",
+                "learner must understand",
+                "students must understand",
+                "this topic covers",
+                "this topic explains",
+                "study this source",
+                "using the provided reference material",
+                "write a textbook section",
+                "explain the concept",
+                "should be able to"
+            };
+
+            var signalCount = metaSignals.Count(signal => normalized.Contains(signal, StringComparison.Ordinal));
+            var wordCount = Regex.Matches(normalized, @"\b[\p{L}\p{N}]+\b").Count;
+            return signalCount >= 2 && wordCount < 220;
+        }
+
+        private static string BuildDeterministicInstructionalSection(
+            string? topicCode,
+            string? topicDescription,
+            string? criteriaDescription,
+            string sourceText)
+        {
+            var topicTitle = NormalizeDocumentText($"{topicCode} {topicDescription}");
+            if (string.IsNullOrWhiteSpace(topicTitle))
+            {
+                topicTitle = "This topic";
+            }
+
+            if (IsEngineRoleImportanceTopic(topicDescription, criteriaDescription))
+            {
+                return BuildEngineRoleImportanceInstructionalSection(topicTitle);
+            }
+
+            var focus = CleanCurriculumRequirementText(criteriaDescription);
+            var evidence = ExtractInstructionalSentences(sourceText, 10);
+            var keyTerms = ExtractKeyTermsForInstructionalSection(topicDescription, criteriaDescription, sourceText);
+            var sb = new StringBuilder();
+
+            sb.AppendLine("Concept Explanation");
+            sb.AppendLine($"{topicTitle} is studied as practical working knowledge, not only as a curriculum heading. The purpose of this section is to give you the technical understanding needed to recognise the concept, explain it in your own words, and connect it to real diesel motor mechanic work.");
+            if (!string.IsNullOrWhiteSpace(focus))
+            {
+                sb.AppendLine("The practical focus is to understand the meaning of the main concepts, how they work together, and why they matter in the workshop or workplace.");
+            }
+
+            foreach (var sentence in evidence.Take(5))
+            {
+                sb.AppendLine(sentence);
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("Key Terms");
+            if (keyTerms.Count == 0)
+            {
+                sb.AppendLine("Technical concept: an idea, component, process, or relationship that must be understood well enough to explain and apply it.");
+                sb.AppendLine("Application: the way the concept is used in real work, inspection, maintenance, diagnosis, repair, safety, or communication.");
+            }
+            else
+            {
+                foreach (var term in keyTerms.Take(6))
+                {
+                    sb.AppendLine($"{ToTitleCase(term)}: {BuildKeyTermDefinition(term)}");
+                }
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("How It Works");
+            if (evidence.Count > 5)
+            {
+                foreach (var sentence in evidence.Skip(5).Take(5))
+                {
+                    sb.AppendLine(sentence);
+                }
+            }
+            else
+            {
+                sb.AppendLine("Start by identifying the main parts of the topic, then connect each part to its function. A learner should ask: what is this item or idea, what does it do, why is it required, what can go wrong, and how would correct practice prevent failure or unsafe work?");
+                sb.AppendLine("In a diesel motor mechanic context, theory becomes useful when it helps you make sound decisions about inspection, servicing, fault finding, repair, safety, quality, and communication with supervisors or clients.");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("Worked Example");
+            sb.AppendLine($"When you encounter {topicTitle.ToLowerInvariant()} in a workplace situation, first name the concept, then describe its purpose, then explain the sequence or relationship involved. For example, if the topic concerns a system, identify the input, the process that changes or controls that input, and the output expected from a correctly working system. If the topic concerns employment or workshop practice, identify the parties involved, the rule or process that governs the situation, and the practical consequence of applying it correctly.");
+
+            sb.AppendLine();
+            sb.AppendLine("Check Your Understanding");
+            sb.AppendLine($"1. Define the main concept in {topicTitle} in your own words.");
+            sb.AppendLine("2. Explain why the concept matters in real workshop or workplace practice.");
+            sb.AppendLine("3. Give one example of correct application and one example of a problem that could occur if the concept is misunderstood.");
+
+            return NormalizeDocumentText(sb.ToString());
+        }
+
+        private static bool IsEngineRoleImportanceTopic(string? topicDescription, string? criteriaDescription)
+        {
+            var normalized = NormalizeLooseText($"{topicDescription} {criteriaDescription}");
+            return normalized.Contains("role and importance of engines", StringComparison.Ordinal) ||
+                   (normalized.Contains("engines motors vehicles", StringComparison.Ordinal) &&
+                    normalized.Contains("maintenance and repair", StringComparison.Ordinal));
+        }
+
+        private static string BuildEngineRoleImportanceInstructionalSection(string topicTitle)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Concept Explanation");
+            sb.AppendLine("Engines, motors, vehicles and light and heavy equipment are important because they convert energy into useful work. In transport, construction, agriculture, mining and industry, machines must move people, goods, tools, soil, loads and materials reliably. The engine or motor is the power source that makes this possible. A vehicle or machine without a reliable power source cannot accelerate, pull, lift, pump, generate pressure, operate attachments, or complete productive work safely.");
+            sb.AppendLine("An engine is a machine that changes energy into mechanical movement. In a diesel engine, chemical energy in diesel fuel is released through combustion. The heat and pressure from combustion push pistons downward. The piston movement is transferred through connecting rods to the crankshaft, where it becomes rotating motion. That rotating motion can drive wheels, hydraulic pumps, alternators, compressors, fans, power take-off units, or other machine systems. This is why the engine is often described as the heart of a vehicle or item of equipment: many other systems depend on it for power.");
+            sb.AppendLine("A motor also converts energy into movement, but the term is often used for electric, hydraulic or pneumatic power units. In modern vehicles and equipment, engines and motors may work together. For example, a diesel engine may drive an alternator that supplies electrical power, while electric motors operate fans, pumps or actuators. Hybrid and electric machines use electric traction motors to move the vehicle, but the same principle remains: stored energy must be converted into controlled mechanical work.");
+            sb.AppendLine("Vehicles and light and heavy equipment are important because they extend human capability. A light vehicle can move people and tools quickly. A truck can transport heavy loads. An excavator can dig, lift and swing material. A loader can move soil or aggregate. A tractor can pull implements. These machines increase productivity, reduce manual labour, support emergency services, keep supply chains working and make modern infrastructure possible. When they fail, work stops, costs rise and safety risks increase.");
+            sb.AppendLine("Maintenance and repair keep these machines safe, reliable and economical. Maintenance includes planned actions such as checking fluid levels, replacing filters, inspecting belts and hoses, lubricating moving parts, checking cooling systems, testing batteries, inspecting tyres and brakes, and recording service information. Repair is corrective work done after a defect or failure is found. A mechanic must understand both because preventing a failure is usually safer and cheaper than repairing major damage after a breakdown.");
+
+            sb.AppendLine();
+            sb.AppendLine("Key Terms");
+            sb.AppendLine("Engine: a machine that converts fuel energy into mechanical movement, usually by burning fuel inside cylinders and turning a crankshaft.");
+            sb.AppendLine("Combustion: the controlled burning of fuel with oxygen that releases heat energy and pressure.");
+            sb.AppendLine("Internal combustion engine: an engine where combustion takes place inside the engine cylinders, so expanding gases act directly on pistons or rotors.");
+            sb.AppendLine("Diesel engine: an internal combustion engine that compresses air until it is hot enough to ignite diesel fuel injected into the cylinder.");
+            sb.AppendLine("Motor: a device that converts electrical, hydraulic or pneumatic energy into mechanical movement.");
+            sb.AppendLine("Vehicle: a machine designed to transport people, goods or equipment from one place to another.");
+            sb.AppendLine("Heavy equipment: large work machines such as loaders, excavators, graders, trucks and tractors used for demanding industrial, construction, mining or agricultural work.");
+            sb.AppendLine("Maintenance: planned inspection, servicing and adjustment carried out to keep a machine safe, reliable and efficient.");
+            sb.AppendLine("Repair: fault-finding and corrective work carried out to restore a damaged, worn or failed system to proper operation.");
+            sb.AppendLine("Mechanic: a skilled person who inspects, maintains, diagnoses and repairs engines, vehicles and equipment using technical knowledge, tools, measurements and safe work practices.");
+
+            sb.AppendLine();
+            sb.AppendLine("How It Works");
+            sb.AppendLine("The role of an engine begins with energy conversion. Diesel fuel stores chemical energy. Air enters the cylinder and is compressed by the piston. Compression raises the air temperature. When diesel fuel is injected into this hot compressed air, it ignites. Combustion creates rapidly expanding gases. These gases push the piston down with force. The connecting rod transfers this force to the crankshaft, and the crankshaft changes the up-and-down piston movement into rotation.");
+            sb.AppendLine("The rotating crankshaft does not work alone. It connects to the flywheel, clutch or torque converter, transmission, drive shafts, differentials and final drives. These systems control how power reaches the wheels or tracks. On equipment, engine power may also drive hydraulic pumps. Hydraulic pressure then moves booms, buckets, blades, steering systems or lifting equipment. This shows why the engine is central: it supplies the power that other systems control, transmit and apply.");
+            sb.AppendLine("The importance of maintenance becomes clear when you consider what the engine needs to survive. It needs clean air for combustion, clean fuel for power, correct oil for lubrication, coolant for temperature control, strong electrical supply for starting and control systems, and unrestricted exhaust flow. If air filters block, combustion becomes poor. If oil is dirty or low, moving parts wear rapidly. If coolant leaks or the radiator is blocked, overheating can damage the cylinder head, pistons or seals. If fuel is contaminated, injectors and pumps can fail.");
+            sb.AppendLine("Repair requires diagnosis before parts are replaced. A mechanic listens to the complaint, checks symptoms, confirms the fault, tests related systems and identifies the root cause. For example, an overheating engine may have low coolant, a faulty thermostat, a blocked radiator, a weak water pump, a damaged fan belt, trapped air, a failed pressure cap or combustion gases entering the cooling system. Good repair work finds the actual cause, not only the most obvious symptom.");
+
+            sb.AppendLine();
+            sb.AppendLine("Worked Example");
+            sb.AppendLine("A diesel bakkie arrives at the workshop with poor power and black exhaust smoke. The role of the engine is to convert fuel into useful movement, but black smoke shows that the fuel is not burning cleanly. The mechanic checks the air intake, because diesel combustion needs enough clean air. A blocked air filter is found. The filter restriction reduces air flow, so the engine receives too much fuel for the available oxygen. Combustion becomes incomplete, power drops and soot leaves the exhaust as black smoke. Replacing the filter, checking the intake system and confirming performance restores the engine's ability to produce power efficiently.");
+            sb.AppendLine("This example shows why the mechanic's work is important. The mechanic does not only replace parts. The mechanic understands the engine's purpose, recognises symptoms, links symptoms to system operation, tests likely causes and restores safe, reliable machine performance. This protects the owner from unnecessary costs and protects the workplace from downtime and unsafe operation.");
+
+            sb.AppendLine();
+            sb.AppendLine("Check Your Understanding");
+            sb.AppendLine("1. Explain why an engine is described as a power source for a vehicle or machine.");
+            sb.AppendLine("2. Describe how a diesel engine changes fuel energy into crankshaft rotation.");
+            sb.AppendLine("3. Explain the difference between maintenance and repair.");
+            sb.AppendLine("4. Give two examples of how poor maintenance can lead to engine failure.");
+            sb.AppendLine("5. Explain why a mechanic must diagnose the root cause of a fault before replacing parts.");
+
+            return NormalizeDocumentText(sb.ToString());
+        }
+
+        private static string BuildKeyTermDefinition(string term)
+        {
+            var normalized = NormalizeLooseText(term);
+            return normalized switch
+            {
+                "engine" or "engines" => "a machine that converts stored energy, usually fuel energy, into mechanical movement that can do work.",
+                "combustion" => "the controlled burning of fuel with oxygen, releasing heat and pressure that can be used to produce movement.",
+                "internal" => "located or occurring inside a system; in an internal combustion engine, combustion happens inside the engine itself.",
+                "diesel" => "a fuel and engine type associated with compression ignition, where hot compressed air ignites injected diesel fuel.",
+                "reciprocating" => "moving backwards and forwards or up and down repeatedly, as pistons do inside many engines.",
+                "vehicle" or "vehicles" => "a machine designed to move people, goods, tools or equipment from one place to another.",
+                "maintenance" => "planned inspection and servicing used to prevent failures and keep a machine safe, reliable and efficient.",
+                "repair" or "repairs" => "corrective work used to restore a worn, damaged or faulty component or system to proper operation.",
+                "mechanic" => "a skilled person who inspects, diagnoses, services and repairs vehicles, engines and equipment.",
+                "equipment" => "machines, tools or systems used to perform work, especially in workshop, construction, agricultural, mining or industrial settings.",
+                "lubrication" => "the use of oil or grease to reduce friction, wear and heat between moving parts.",
+                "cooling" => "the process of removing excess heat so an engine or component stays within safe operating temperature.",
+                _ => "a technical term in this topic that must be defined by its function, where it is used, and how it affects safe and reliable work."
+            };
+        }
+
+        private static List<string> ExtractInstructionalSentences(string? sourceText, int maxCount)
+        {
+            var cleanedSource = Regex.Replace(sourceText ?? string.Empty, @"\b(?:Curriculum requirement|Reference material|Citation|Source)\s*:\s*", " ", RegexOptions.IgnoreCase);
+            return Regex.Split(cleanedSource, @"(?<=[\.\!\?])\s+")
+                .Select(NormalizeDocumentText)
+                .Where(sentence => DocumentTextCleaner.WordCount(sentence) >= 8)
+                .Where(sentence => sentence.Length <= 420)
+                .Where(sentence => !LooksLikeMetaInstructionOnly(sentence))
+                .Where(sentence => !LooksLikeAssessmentCriteriaRestatement(sentence))
+                .Where(sentence => !NormalizeLooseText(sentence).StartsWith("reference material", StringComparison.Ordinal))
+                .Where(sentence => !NormalizeLooseText(sentence).StartsWith("curriculum requirement", StringComparison.Ordinal))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(maxCount)
+                .ToList();
+        }
+
+        private static string CleanCurriculumRequirementText(string? value)
+        {
+            var text = NormalizeDocumentText(StripCurriculumCodesFromText(value));
+            text = Regex.Replace(text, @"\b(?:IAC|AC|ELO|KT|KM|PM|WM)\d+[A-Za-z0-9]*\b", " ", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"\(\s*Weight\s*\d+%?\s*\)", " ", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"\s*\|\s*", ". ");
+            text = Regex.Replace(text, @"\s+", " ").Trim();
+            return text.Trim(' ', '.', ';', ':');
+        }
+
+        private static List<string> ExtractKeyTermsForInstructionalSection(params string?[] values)
+        {
+            var stop = new HashSet<string>(new[]
+            {
+                "define", "describe", "discuss", "explain", "impact", "weight", "topic", "source",
+                "evidence", "learner", "focus", "study", "relation", "assessment", "criteria",
+                "this", "that", "with", "from", "their", "which", "must", "will", "able"
+            }, StringComparer.OrdinalIgnoreCase);
+
+            return Regex.Matches(string.Join(" ", values.Where(v => !string.IsNullOrWhiteSpace(v))), @"\b[A-Za-z][A-Za-z\-]{4,}\b")
+                .Select(match => match.Value.ToLowerInvariant())
+                .Where(term => !stop.Contains(term))
+                .GroupBy(term => term, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(group => group.Count())
+                .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Key)
+                .Take(8)
+                .ToList();
+        }
+
+        private static string ToTitleCase(string value)
+        {
+            var text = (value ?? string.Empty).Trim();
+            if (text.Length == 0) return text;
+            return char.ToUpperInvariant(text[0]) + (text.Length > 1 ? text[1..] : string.Empty);
+        }
+
+        private static int ParseInt(string? value, int fallback)
+        {
+            return int.TryParse((value ?? string.Empty).Trim(), out var parsed) ? parsed : fallback;
+        }
+
+        private static bool IsThinLessonBlock(GuideLessonBlock lesson)
+        {
+            var normalizedContent = NormalizeLessonContentForGuide(lesson.LessonContent);
+            if (string.IsNullOrWhiteSpace(normalizedContent))
+            {
+                return true;
+            }
+
+            var wordCount = Regex.Matches(normalizedContent, @"\b[\p{L}\p{N}]+\b").Count;
+            return normalizedContent.Length < 320 || wordCount < 45;
+        }
+
+        private static List<GuideLessonBlock> BuildEvidenceBackedLessonBlocks(
+            CurriculumDeliveryPilotService.TopicEvidenceItem? pilotTopic,
+            string? topicCode,
+            string? topicDescription,
+            string? criteriaDescription)
+        {
+            if (pilotTopic?.TopEvidence == null || pilotTopic.TopEvidence.Count == 0)
+            {
+                return new List<GuideLessonBlock>();
+            }
+
+            var focus = CleanCurriculumRequirementText(criteriaDescription);
+            if (string.IsNullOrWhiteSpace(focus))
+            {
+                focus = CleanCurriculumRequirementText(topicDescription);
+            }
+            if (string.IsNullOrWhiteSpace(focus))
+            {
+                focus = "this topic";
+            }
+
+            var blocks = new List<GuideLessonBlock>();
+            var evidenceItems = pilotTopic.TopEvidence
+                .Where(e => !string.IsNullOrWhiteSpace(e.Excerpt))
+                .OrderByDescending(e => e.ConfidencePercent)
+                .Take(4)
+                .ToList();
+            if (evidenceItems.Count == 0)
+            {
+                return blocks;
+            }
+
+            var bestTitle = NormalizeDocumentText(evidenceItems[0].MaterialTitle);
+            if (string.IsNullOrWhiteSpace(bestTitle))
+            {
+                bestTitle = NormalizeDocumentText(evidenceItems[0].Citation);
+            }
+            if (string.IsNullOrWhiteSpace(bestTitle))
+            {
+                bestTitle = NormalizeDocumentText(topicDescription);
+            }
+            if (string.IsNullOrWhiteSpace(bestTitle))
+            {
+                bestTitle = "Learning content";
+            }
+
+            _ = focus;
+            var contentLines = new List<string>();
+            for (var i = 0; i < evidenceItems.Count; i++)
+            {
+                var evidence = evidenceItems[i];
+                var excerpt = TrimEvidenceExcerpt(evidence.Excerpt, 1400);
+                if (!string.IsNullOrWhiteSpace(excerpt))
+                {
+                    contentLines.Add(excerpt);
+                }
+            }
+
+            blocks.Add(new GuideLessonBlock
+            {
+                Lpn = "LPN E01",
+                LessonPlanDescription = bestTitle,
+                LessonContent = string.Join("\n\n", contentLines),
+                LearningAids = string.Empty,
+                LecturerActions = string.Empty,
+                LearnerActions = string.Empty,
+                TimeStart = string.Empty,
+                TimeEnd = string.Empty
+            });
+
+            return blocks;
+        }
+
+        private static string BuildEvidenceCoverageLine(CurriculumDeliveryPilotService.TopicEvidenceItem pilotTopic)
+        {
+            if (pilotTopic.CoveragePercent <= 0 && string.IsNullOrWhiteSpace(pilotTopic.CoverageBandLabel))
+            {
+                return string.Empty;
+            }
+
+            var label = NormalizeDocumentText(pilotTopic.CoverageBandLabel);
+            var coverage = pilotTopic.CoveragePercent > 0 ? $"{pilotTopic.CoveragePercent}%" : "available";
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                return $"Evidence coverage for this topic: {coverage}.";
+            }
+
+            return $"Evidence coverage for this topic: {coverage} ({label}).";
+        }
+
+        private static string TrimEvidenceExcerpt(string? excerpt, int maxChars)
+        {
+            var normalized = NormalizeDocumentText(excerpt);
+            if (normalized.Length <= maxChars)
+            {
+                return normalized;
+            }
+
+            var trimmed = normalized.Substring(0, maxChars).TrimEnd();
+            var sentenceEnd = Math.Max(
+                Math.Max(trimmed.LastIndexOf('.'), trimmed.LastIndexOf('!')),
+                trimmed.LastIndexOf('?'));
+            if (sentenceEnd > maxChars / 2)
+            {
+                trimmed = trimmed.Substring(0, sentenceEnd + 1);
+            }
+
+            return $"{trimmed}...";
+        }
+
         private static string BuildSummary(List<string> blocks, string criteriaDescription)
         {
             if (blocks.Count == 0) return $"No lesson content available for {criteriaDescription}.";
@@ -4049,6 +4934,7 @@ namespace ETD.Api.Controllers
             public int MatchedRowsWithContent { get; init; }
             public int FallbackPlans { get; init; }
             public int FallbackPlansWithContent { get; init; }
+            public int EvidenceFallbackBlocks { get; init; }
             public bool HasAnyContent { get; init; }
         }
 
@@ -4469,12 +5355,32 @@ namespace ETD.Api.Controllers
                 }
 
                 var lead = NormalizeDocumentText(sentenceMatch.Groups["lead"].Value);
-                if (!LooksLikeLessonEvidenceLeadIn(lead) && !LooksLikeLessonInstructionDirective(lead) && !LooksLikeLessonCodeLabel(lead))
+
+                // If lead is an evidence lead-in or a code label, drop it and continue.
+                if (LooksLikeLessonEvidenceLeadIn(lead) || LooksLikeLessonCodeLabel(lead))
                 {
+                    current = NormalizeDocumentText(sentenceMatch.Groups["tail"].Value);
+                    continue;
+                }
+
+                // If lead looks like an instruction directive, convert it to learner-facing text
+                // instead of discarding it. Insert converted sentence and stop trimming.
+                if (LooksLikeLessonInstructionDirective(lead))
+                {
+                    var converted = ConvertInstructionDirectiveToLearnerSentence(lead);
+                    if (!string.IsNullOrWhiteSpace(converted))
+                    {
+                        current = (converted + " " + NormalizeDocumentText(sentenceMatch.Groups["tail"].Value)).Trim();
+                    }
+                    else
+                    {
+                        current = NormalizeDocumentText(sentenceMatch.Groups["tail"].Value);
+                    }
                     break;
                 }
 
-                current = NormalizeDocumentText(sentenceMatch.Groups["tail"].Value);
+                // Otherwise stop trimming.
+                break;
             }
 
             return current.Trim();
@@ -4503,12 +5409,17 @@ namespace ETD.Api.Controllers
                 || normalized.StartsWith("key emphasis areas for", StringComparison.OrdinalIgnoreCase)
                 || normalized.StartsWith("focus your study of", StringComparison.OrdinalIgnoreCase)
                 || normalized.StartsWith("build your understanding of", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("learn what each term means", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("where it appears in practice", StringComparison.OrdinalIgnoreCase)
                 || normalized.StartsWith("show learners how to apply", StringComparison.OrdinalIgnoreCase)
                 || normalized.StartsWith("emphasise the specific safety", StringComparison.OrdinalIgnoreCase)
                 || normalized.StartsWith("emphasise the safe method of work", StringComparison.OrdinalIgnoreCase)
                 || normalized.StartsWith("highlight the common mistakes learners may make", StringComparison.OrdinalIgnoreCase)
                 || normalized.StartsWith("conclude the lesson by checking", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("study the explanation below carefully", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("follow the sequence step by step", StringComparison.OrdinalIgnoreCase)
                 || normalized.StartsWith("study the lesson material for", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("work through the topic in sequence", StringComparison.OrdinalIgnoreCase)
                 || normalized.StartsWith("introduce ", StringComparison.OrdinalIgnoreCase)
                 || normalized.StartsWith("you must understand ", StringComparison.OrdinalIgnoreCase))
             {
@@ -4519,6 +5430,24 @@ namespace ETD.Api.Controllers
                 normalized,
                 @"^(?:explain|describe|demonstrate|discuss|clarify|show|outline|identify|state)\b.*(?:\bin detail\b|\bby clarifying\b|\bhow it works\b|\bwhen it is applied\b|\bthe learner will\b|\blearners will\b|\bhow you will recognise\b|\bhow the learner will recognise\b)",
                 RegexOptions.IgnoreCase);
+        }
+
+        private static bool LooksLikeAssessmentCriteriaRestatement(string? line)
+        {
+            var normalized = NormalizeLooseText(StripCurriculumCodesFromText(line));
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            if (normalized.Count(ch => ch == '|') >= 2)
+            {
+                return true;
+            }
+
+            return normalized.StartsWith("define and describe ", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("discuss the impact ", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("describe the processes ", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool LooksLikeLessonCodeLabel(string line)
@@ -4556,6 +5485,7 @@ namespace ETD.Api.Controllers
             }
 
             normalized = normalized.Replace(AutoCurriculumDraftMarker, string.Empty, StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace(AutoCurriculumCoverageGapMarker, string.Empty, StringComparison.OrdinalIgnoreCase);
             normalized = Regex.Replace(normalized, @"\bLPN\s+[A-Z0-9\-]+\b:?", string.Empty, RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\bAUTO-(?:KT|AC|KG)[A-Z0-9\-]*\b", string.Empty, RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(?:KT|AC|KG)\s*-?\s*\d+[A-Z0-9\-]*\b", string.Empty, RegexOptions.IgnoreCase);
@@ -4960,6 +5890,65 @@ namespace ETD.Api.Controllers
                 )
             );
             return new Drawing(inline);
+        }
+
+        private static string ConvertInstructionDirectiveToLearnerSentence(string lead)
+        {
+            var text = StripCurriculumCodesFromText(lead).Trim();
+            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+
+            var directiveMatch = Regex.Match(
+                text,
+                "^(?:explain|describe|demonstrate|discuss|show|outline|identify|clarify)\\s+(?<title>.+?)(?:\\s+in\\s+detail\\b|\\s+step\\s+by\\s+step\\b|\\s+for\\s+the\\s+learner\\b|$)",
+                RegexOptions.IgnoreCase);
+            if (directiveMatch.Success)
+            {
+                var title = NormalizeDocumentText(directiveMatch.Groups["title"].Value).Trim().TrimEnd('.', ':', ';');
+                if (!string.IsNullOrWhiteSpace(title))
+                {
+                    var sentence = title;
+                    sentence = char.ToLowerInvariant(sentence[0]) + sentence.Substring(1);
+                    return $"You will {sentence}.";
+                }
+            }
+
+            var replacements = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "this lesson develops the learner's ability to", "You will" },
+                { "show learners how to apply", "You will learn how to apply" },
+                { "conclude the lesson by checking", "Check that you can" },
+                { "focus your study of", "Focus on" },
+                { "build your understanding of", "Build your understanding of" },
+                { "learn what each term means", "Learn what each term means" },
+                { "study the explanation below carefully", "Study the explanation below carefully" },
+                { "work through the topic in sequence", "Work through the topic in sequence" },
+                { "introduce ", "Learn about " },
+                { "you must understand ", "You must understand " }
+            };
+
+            foreach (var kv in replacements)
+            {
+                if (text.StartsWith(kv.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    var rest = text.Substring(kv.Key.Length).Trim();
+                    if (string.IsNullOrWhiteSpace(rest)) return kv.Value + ".";
+                    rest = rest.TrimEnd('.', ':', ';');
+                    return kv.Value + " " + rest + ".";
+                }
+            }
+
+            var fallback = Regex.Match(text, "^(?<verb>explain|describe|demonstrate|discuss|show|outline|identify|clarify)\\s+(?<rest>.+)$", RegexOptions.IgnoreCase);
+            if (fallback.Success)
+            {
+                var rest = NormalizeDocumentText(fallback.Groups["rest"].Value).Trim();
+                if (!string.IsNullOrWhiteSpace(rest))
+                {
+                    rest = char.ToLowerInvariant(rest[0]) + rest.Substring(1);
+                    return $"You will {rest}.";
+                }
+            }
+
+            return string.Empty;
         }
 
         private static string SafeFileNameToken(string? value)

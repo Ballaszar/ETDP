@@ -60,13 +60,13 @@ namespace ETD.Api.Controllers
         }
 
         [HttpGet("topic-evidence")]
-        public async Task<IActionResult> GetTopicEvidence([FromQuery] int qualificationId, CancellationToken cancellationToken)
+        public async Task<IActionResult> GetTopicEvidence([FromQuery] int qualificationId, [FromQuery] bool forceRefresh = false, CancellationToken cancellationToken = default)
         {
             if (qualificationId <= 0) return BadRequest("qualificationId is required.");
 
             try
             {
-                var summary = await _curriculumDeliveryPilotService.BuildTopicEvidenceSummaryAsync(qualificationId, cancellationToken);
+                var summary = await _curriculumDeliveryPilotService.BuildTopicEvidenceSummaryAsync(qualificationId, forceRefresh, cancellationToken);
                 return Ok(summary);
             }
             catch (InvalidOperationException ex)

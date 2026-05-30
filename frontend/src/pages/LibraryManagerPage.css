@@ -107,6 +107,155 @@
   color: #a01d1d;
 }
 
+.lib-progress-card {
+  margin-bottom: 0.8rem;
+  border: 1px solid #d7e3ef;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f9ff 100%);
+  padding: 0.75rem 0.85rem;
+  box-shadow: 0 2px 8px rgba(30, 53, 90, 0.05);
+}
+
+.lib-progress-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 0.55rem;
+}
+
+.lib-progress-title {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #223a54;
+}
+
+.lib-progress-subtitle {
+  margin-top: 0.2rem;
+  color: #54708d;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.lib-progress-percent {
+  min-width: 56px;
+  text-align: right;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #185f98;
+}
+
+.lib-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #d9e6f4;
+  margin-bottom: 0.55rem;
+}
+
+.lib-progress-track.is-secondary {
+  background: #dfe9dd;
+}
+
+.lib-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2f6fb4 0%, #3d8fe3 100%);
+  transition: width 180ms ease;
+}
+
+.lib-progress-fill.is-error {
+  background: linear-gradient(90deg, #b83838 0%, #d75a5a 100%);
+}
+
+.lib-progress-fill.is-secondary {
+  background: linear-gradient(90deg, #2f7a55 0%, #4ba77a 100%);
+}
+
+.lib-progress-meta {
+  display: grid;
+  gap: 0.15rem;
+  color: #39536b;
+  font-size: 0.84rem;
+  margin-bottom: 0.5rem;
+}
+
+.lib-progress-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1rem;
+  color: #39536b;
+  font-size: 0.8rem;
+}
+
+.lib-pipeline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 0.55rem;
+}
+
+.lib-pipeline-note {
+  margin-bottom: 0.55rem;
+  color: #44627d;
+  font-size: 0.84rem;
+}
+
+.lib-pipeline-warning {
+  color: #9a3c15;
+  font-weight: 700;
+}
+
+.lib-stage-list {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.lib-stage-item {
+  display: grid;
+  gap: 0.12rem;
+  font-size: 0.81rem;
+  border-left: 3px solid #c8d9ea;
+  padding-left: 0.55rem;
+  color: #39536b;
+}
+
+.lib-stage-item.status-completed {
+  border-left-color: #2f7a55;
+}
+
+.lib-stage-item.status-running {
+  border-left-color: #2f6fb4;
+}
+
+.lib-stage-item.status-failed {
+  border-left-color: #b83838;
+}
+
+.lib-stage-item.status-skipped {
+  border-left-color: #a8842f;
+}
+
+.lib-alignment-card {
+  margin-top: 0.55rem;
+  margin-bottom: 0.55rem;
+  border: 1px solid #d9e7d5;
+  border-radius: 8px;
+  background: #f6fbf6;
+  padding: 0.6rem;
+}
+
+.lib-alignment-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.35rem;
+  color: #244d39;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 .lib-github-block {
   border: 1px solid #dbe5f0;
   border-radius: 8px;
@@ -186,7 +335,7 @@
   margin-top: 0.45rem;
   color: #6a5a31;
   font-size: 0.82rem;
- }
+}
 
 @media (max-width: 980px) {
   .lib-layout {
@@ -200,5 +349,13 @@
   .lib-oai-grid,
   .lib-oai-auth-grid {
     grid-template-columns: 1fr;
+  }
+
+  .lib-progress-header {
+    flex-direction: column;
+  }
+
+  .lib-progress-percent {
+    text-align: left;
   }
 }

@@ -413,16 +413,16 @@ const PowerPointSlidesPage = () => {
     }
     setBusyBatch(true);
     setError('');
-    setStatus('Generating all qualification slides...');
+    setStatus('Saving all qualification slides...');
     try {
-      const res = await fetch('/api/Content/export-slides-batch-download', {
+      const res = await fetch('/api/Content/export-slides-batch-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ QualificationId: qid })
       });
       if (!res.ok) throw new Error(await readErrorMessage(res));
-      await downloadResponse(res, 'slides.zip');
-      setStatus('All topic slides downloaded successfully.');
+      const data = await res.json();
+      setStatus(`Saved ${data?.fileName || 'qualification slides'} to ${data?.savedPath || data?.folderPath || 'the qualification SlideShows folder'}.`);
     } catch (e) {
       setError(`Batch export failed: ${String(e?.message || e)}`);
       setStatus('');
@@ -443,9 +443,9 @@ const PowerPointSlidesPage = () => {
     }
     setBusyBatch(true);
     setError('');
-    setStatus('Generating subject-range slides...');
+    setStatus('Saving subject-range slides...');
     try {
-      const res = await fetch('/api/Content/export-slides-batch-download', {
+      const res = await fetch('/api/Content/export-slides-batch-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -455,8 +455,8 @@ const PowerPointSlidesPage = () => {
         })
       });
       if (!res.ok) throw new Error(await readErrorMessage(res));
-      await downloadResponse(res, 'slides_range.zip');
-      setStatus('Subject-range slides downloaded successfully.');
+      const data = await res.json();
+      setStatus(`Saved ${data?.fileName || 'subject-range slides'} to ${data?.savedPath || data?.folderPath || 'the qualification SlideShows folder'}.`);
     } catch (e) {
       setError(`Subject-range export failed: ${String(e?.message || e)}`);
       setStatus('');
@@ -476,16 +476,15 @@ const PowerPointSlidesPage = () => {
     try {
       const payload = buildTopicPayload(id);
 
-      const res = await fetch('/api/Content/export-slides-topic-download', {
+      const res = await fetch('/api/Content/export-slides-topic-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error(await readErrorMessage(res));
 
-      const fallbackName = `${topicCodeOf(topic) || 'topic'}_${topicDescriptionOf(topic) || 'slides'}.pptx`;
-      await downloadResponse(res, fallbackName);
-      setTopicMessage(id, 'Slides generated and downloaded.');
+      const data = await res.json();
+      setTopicMessage(id, `Saved ${data?.fileName || 'slides'} to ${data?.savedPath || data?.folderPath || 'the qualification SlideShows folder'}.`);
     } catch (e) {
       setTopicMessage(id, String(e?.message || e), true);
     } finally {
@@ -639,10 +638,10 @@ const PowerPointSlidesPage = () => {
         </div>
         <div className="button-row">
           <button type="button" onClick={handleDownloadAllSlides} disabled={busyBatch || !selectedQualificationId}>
-            {busyBatch ? 'Generating...' : 'Download All Qualification Slides'}
+            {busyBatch ? 'Saving...' : 'Save All Qualification Slides'}
           </button>
           <button type="button" onClick={handleDownloadRangeSlides} disabled={busyBatch || !selectedQualificationId || !subjectFromId || !subjectToId}>
-            {busyBatch ? 'Generating...' : 'Download Subject Range Slides'}
+            {busyBatch ? 'Saving...' : 'Save Subject Range Slides'}
           </button>
         </div>
       </div>

@@ -203,6 +203,13 @@ const createScene = (scene) => ({
   transition: transitions.includes(String(scene?.transition || '')) ? String(scene.transition) : 'cut'
 });
 
+const resolveSceneNarrationText = (scene) => String(
+  scene?.narration
+  || scene?.onScreenText
+  || scene?.title
+  || ''
+).trim();
+
 const normalizeQualification = (row) => ({
   id: asInt(row?.id ?? row?.Id, 0),
   code: String(row?.qualificationNumber ?? row?.QualificationNumber ?? '').trim(),
@@ -264,6 +271,52 @@ const normalizeTtsOptions = (payload) => {
     }
   };
 };
+
+const normalizeChapterTool = (row, fallbackReason) => ({
+  available: Boolean(row?.available),
+  path: String(row?.path || '').trim(),
+  cliPath: String(row?.cliPath || '').trim(),
+  modelPath: String(row?.modelPath || '').trim(),
+  model: String(row?.model || '').trim(),
+  reason: String(row?.reason || fallbackReason || '').trim()
+});
+
+const normalizeChapterTools = (payload) => ({
+  aiMode: String(payload?.aiMode || '').trim(),
+  workspaceRoot: String(payload?.workspaceRoot || '').trim(),
+  defaults: {
+    language: String(payload?.defaults?.language || 'en').trim() || 'en',
+    preferLocalWhisper: Boolean(payload?.defaults?.preferLocalWhisper),
+    allowOpenAiFallback: Boolean(payload?.defaults?.allowOpenAiFallback),
+    openAiModel: String(payload?.defaults?.openAiModel || '').trim()
+  },
+  tools: {
+    ffmpeg: normalizeChapterTool(payload?.tools?.ffmpeg, 'FFmpeg not detected.'),
+    ffprobe: normalizeChapterTool(payload?.tools?.ffprobe, 'FFprobe not detected.'),
+    whisper: normalizeChapterTool(payload?.tools?.whisper, 'Local whisper not detected.'),
+    openAi: normalizeChapterTool(payload?.tools?.openAi, 'OpenAI transcription not configured.')
+  }
+});
+
+const normalizeChapterResult = (payload) => ({
+  success: Boolean(payload?.success),
+  message: String(payload?.message || '').trim(),
+  workspacePath: String(payload?.workspacePath || '').trim(),
+  manifestPath: String(payload?.manifestPath || '').trim(),
+  sourcePath: String(payload?.sourcePath || '').trim(),
+  sourceKind: String(payload?.sourceKind || '').trim(),
+  extractedAudioPath: String(payload?.extractedAudioPath || '').trim(),
+  transcriptPath: String(payload?.transcriptPath || '').trim(),
+  srtPath: String(payload?.srtPath || '').trim(),
+  transcriptPreview: String(payload?.transcriptPreview || '').trim(),
+  transcriptionProvider: String(payload?.transcription?.provider || '').trim(),
+  transcriptionModel: String(payload?.transcription?.model || '').trim(),
+  warnings: (Array.isArray(payload?.warnings) ? payload.warnings : [])
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean),
+  extraction: payload?.extraction || null,
+  transcription: payload?.transcription || null
+});
 
 const normalizeOpenAiFallbackScene = (scene, index) => {
   const transition = String(scene?.transition || '').trim().toLowerCase();
@@ -448,8 +501,37 @@ export default function TextToVideoEditorPage() {
       speed: 1
     }
   });
+  const [chapterToolsBusy, setChapterToolsBusy] = useState(false);
+  const [chapterBusy, setChapterBusy] = useState(false);
+  const [chapterTools, setChapterTools] = useState({
+    aiMode: '',
+    workspaceRoot: '',
+    defaults: {
+      language: 'en',
+      preferLocalWhisper: false,
+      allowOpenAiFallback: false,
+      openAiModel: ''
+    },
+    tools: {
+      ffmpeg: normalizeChapterTool(null, 'FFmpeg not detected.'),
+      ffprobe: normalizeChapterTool(null, 'FFprobe not detected.'),
+      whisper: normalizeChapterTool(null, 'Local whisper not detected.'),
+      openAi: normalizeChapterTool(null, 'OpenAI transcription not configured.')
+    }
+  });
+  const [chapterForm, setChapterForm] = useState({
+    chapterTitle: stateTopicDescription || 'Chapter 1',
+    sourcePath: '',
+    language: 'en',
+    preferLocalWhisper: false,
+    allowOpenAiFallback: true,
+    openAiModel: ''
+  });
+  const [chapterResult, setChapterResult] = useState(null);
 
   const importFileRef = useRef(null);
+  const narrationRequestRef = useRef(0);
+  const lastAutoNarrationKeyRef = useRef('');
 
   const selectedQualification = useMemo(
     () => qualifications.find((q) => String(q.id) === String(form.qualificationId)) || null,
@@ -466,6 +548,16 @@ export default function TextToVideoEditorPage() {
     [materials, form.sourceMaterialId]
   );
 
+  useEffect(() => {
+    const suggested = String(selectedTopic?.description || form.projectTitle || '').trim();
+    if (!suggested) return;
+    setChapterForm((prev) => {
+      const current = String(prev.chapterTitle || '').trim();
+      if (current && current !== 'Chapter 1') return prev;
+      return { ...prev, chapterTitle: suggested };
+    });
+  }, [selectedTopic?.description, form.projectTitle]);
+
   const totalDurationSec = useMemo(
     () => scenes.reduce((sum, scene) => sum + clamp(asInt(scene.durationSec, 0), 0, 180), 0),
     [scenes]
@@ -480,6 +572,95 @@ export default function TextToVideoEditorPage() {
     () => ttsProviderOptions.find((p) => p.id === String(form.ttsProvider || '').trim().toLowerCase()) || null,
     [ttsProviderOptions, form.ttsProvider]
   );
+
+  const buildNarrationOptions = () => {
+    const provider = String(form.ttsProvider || 'browser').trim().toLowerCase();
+    return {
+      provider,
+      lang: form.ttsLang || 'en-ZA',
+      preferredVoiceName: form.ttsPreferredVoice || 'Microsoft',
+      model: provider === 'openai' ? (form.ttsModel || '') : '',
+      voice: provider === 'openai' ? (form.ttsVoice || '') : '',
+      format: form.ttsFormat || 'mp3',
+      speed: clamp(Number(form.ttsSpeed || 1), 0.25, 4)
+    };
+  };
+
+  const buildNarrationKey = (scene) => {
+    const narrationText = resolveSceneNarrationText(scene);
+    if (!narrationText) return '';
+    const options = buildNarrationOptions();
+    return [
+      String(scene?.id || ''),
+      narrationText,
+      options.provider,
+      options.lang,
+      options.preferredVoiceName,
+      options.model,
+      options.voice,
+      options.format,
+      String(options.speed)
+    ].join('|');
+  };
+
+  const cancelNarration = () => {
+    narrationRequestRef.current += 1;
+    stopSpeech();
+  };
+
+  const playSceneNarration = async (scene, { announceStatus = false, silentIfEmpty = false } = {}) => {
+    const narrationText = resolveSceneNarrationText(scene);
+    if (!narrationText) {
+      if (!silentIfEmpty) {
+        setError('No narration text found in the active scene.');
+      }
+      return { ok: false, reason: 'empty_text' };
+    }
+
+    const requestId = narrationRequestRef.current + 1;
+    narrationRequestRef.current = requestId;
+    stopSpeech();
+
+    if (announceStatus) {
+      setError('');
+      setStatus('');
+      setTtsBusy(true);
+    }
+
+    try {
+      const result = await speak(narrationText, buildNarrationOptions());
+      if (narrationRequestRef.current !== requestId) {
+        return { ok: false, reason: 'superseded' };
+      }
+
+      if (!result?.ok) {
+        if (!silentIfEmpty) {
+          const details = result?.reason ? ` (${result.reason})` : '';
+          const message = result?.message ? ` ${String(result.message)}` : '';
+          setError(`TTS playback failed${details}.${message}`);
+        }
+        return result;
+      }
+
+      if (announceStatus) {
+        const providerLabel = String(result?.provider || buildNarrationOptions().provider || 'browser');
+        const voiceText = result?.voiceName ? ` using ${result.voiceName}` : '';
+        const modelText = result?.model ? ` (${result.model})` : '';
+        setStatus(`Narration started via ${providerLabel}${modelText}${voiceText}.`);
+      }
+
+      return result;
+    } catch (e) {
+      if (narrationRequestRef.current === requestId && !silentIfEmpty) {
+        setError(`TTS playback failed: ${e?.message || e}`);
+      }
+      return { ok: false, reason: 'speak_exception', message: String(e?.message || e) };
+    } finally {
+      if (announceStatus && narrationRequestRef.current === requestId) {
+        setTtsBusy(false);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!pendingMiraSeed) return;
@@ -595,6 +776,10 @@ export default function TextToVideoEditorPage() {
 
     loadTtsOptions();
     return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    void loadChapterTools();
   }, []);
 
   useEffect(() => {
@@ -723,13 +908,70 @@ export default function TextToVideoEditorPage() {
   }, [previewSceneIndex]);
 
   useEffect(() => () => {
-    stopSpeech();
+    cancelNarration();
   }, []);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      lastAutoNarrationKeyRef.current = '';
+      cancelNarration();
+      return;
+    }
+
+    const scene = scenes[previewSceneIndex] || null;
+    const narrationKey = buildNarrationKey(scene);
+    if (!narrationKey || lastAutoNarrationKeyRef.current === narrationKey) return;
+
+    lastAutoNarrationKeyRef.current = narrationKey;
+    void playSceneNarration(scene, { silentIfEmpty: true });
+  }, [
+    isPlaying,
+    previewSceneIndex,
+    scenes,
+    form.ttsProvider,
+    form.ttsLang,
+    form.ttsPreferredVoice,
+    form.ttsModel,
+    form.ttsVoice,
+    form.ttsFormat,
+    form.ttsSpeed
+  ]);
 
   const setField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
     setStatus('');
     setError('');
+  };
+
+  const setChapterField = (name, value) => {
+    setChapterForm((prev) => ({ ...prev, [name]: value }));
+    setStatus('');
+    setError('');
+  };
+
+  const loadChapterTools = async () => {
+    setChapterToolsBusy(true);
+    try {
+      const res = await fetch(`${API_ROOT}/TextToVideo/chapter-tools`);
+      if (!res.ok) throw new Error(await res.text());
+      const normalized = normalizeChapterTools(await res.json());
+      setChapterTools(normalized);
+      setChapterForm((prev) => ({
+        ...prev,
+        language: String(prev.language || normalized.defaults.language || 'en').trim() || 'en',
+        preferLocalWhisper: normalized.tools.whisper.available
+          ? Boolean(prev.preferLocalWhisper || normalized.defaults.preferLocalWhisper)
+          : false,
+        allowOpenAiFallback: normalized.tools.openAi.available
+          ? Boolean(prev.allowOpenAiFallback || normalized.defaults.allowOpenAiFallback)
+          : false,
+        openAiModel: String(prev.openAiModel || normalized.defaults.openAiModel || '').trim()
+      }));
+    } catch (e) {
+      setError(`Failed to load chapter tools: ${e?.message || e}`);
+    } finally {
+      setChapterToolsBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -819,6 +1061,78 @@ export default function TextToVideoEditorPage() {
     }
     setField('ltxSourcePath', candidate);
     setStatus('LTX conditioning path updated from selected source material.');
+  };
+
+  const applyMaterialPathForChapter = () => {
+    const candidate = String(
+      selectedMaterial?.filePath
+      || form.ltxSourcePath
+      || renderResult?.local?.outputVideoPath
+      || ''
+    ).trim();
+    if (!candidate) {
+      setError('No local source path is available yet for chapter preparation.');
+      return;
+    }
+    setChapterField('sourcePath', candidate);
+    setStatus('Chapter source path updated from the current material/video path.');
+  };
+
+  const prepareChapterAssets = async () => {
+    if (chapterBusy) return;
+
+    const sourcePath = String(chapterForm.sourcePath || '').trim();
+    if (!sourcePath) {
+      setError('Enter the chapter video or audio path before preparing subtitles.');
+      return;
+    }
+
+    setError('');
+    setStatus('Preparing chapter transcript and subtitles...');
+    setChapterBusy(true);
+    setChapterResult(null);
+
+    try {
+      const res = await fetch(`${API_ROOT}/TextToVideo/chapter-workflow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectTitle: form.projectTitle,
+          chapterTitle: chapterForm.chapterTitle || selectedTopic?.description || 'Chapter 1',
+          sourcePath,
+          language: chapterForm.language,
+          preferLocalWhisper: Boolean(chapterForm.preferLocalWhisper),
+          allowOpenAiFallback: Boolean(chapterForm.allowOpenAiFallback),
+          openAiModel: chapterForm.openAiModel || chapterTools.defaults.openAiModel || '',
+          extractAudio: true
+        })
+      });
+
+      let payload = null;
+      try {
+        payload = await res.json();
+      } catch {
+        payload = null;
+      }
+
+      if (!res.ok) {
+        throw new Error(String(payload?.error || payload?.message || `HTTP ${res.status}`));
+      }
+
+      const normalized = normalizeChapterResult(payload || {});
+      setChapterResult(normalized);
+
+      if (normalized.success) {
+        const provider = normalized.transcriptionProvider || 'transcription';
+        setStatus(`Chapter assets ready via ${provider}. Import the .srt into Camtasia and keep the workspace path for reuse.`);
+      } else {
+        setError(normalized.message || 'Chapter preparation finished without a usable transcription.');
+      }
+    } catch (e) {
+      setError(`Chapter preparation failed: ${e?.message || e}`);
+    } finally {
+      setChapterBusy(false);
+    }
   };
 
   const copyLtxInferenceCommand = async () => {
@@ -937,6 +1251,22 @@ export default function TextToVideoEditorPage() {
         return;
       }
 
+      const externalUnavailableMessage = [
+        String(payload?.message || ''),
+        String(payload?.local?.message || ''),
+        String(payload?.openAi?.message || '')
+      ].join(' ');
+
+      if (
+        !success &&
+        scenes.length > 0 &&
+        /ltx root not found|openai fallback disabled|openai_api_key is not configured|ltx repo not found/i.test(externalUnavailableMessage)
+      ) {
+        setStatus('External text-to-video generation is unavailable on this machine. Exporting ETDP preview video instead...');
+        await exportPreviewVideo();
+        return;
+      }
+
       setStatus(String(payload?.message || 'Video generation attempt completed.'));
     } catch (e) {
       setError(`Video generation failed: ${e?.message || e}`);
@@ -1048,12 +1378,20 @@ export default function TextToVideoEditorPage() {
     setIsPlaying(false);
     setPreviewElapsedSec(0);
     setTtsBusy(false);
-    stopSpeech();
+    lastAutoNarrationKeyRef.current = '';
+    cancelNarration();
   };
 
   const playPause = () => {
     if (!activeScene) return;
-    setIsPlaying((prev) => !prev);
+    if (isPlaying) {
+      setIsPlaying(false);
+      lastAutoNarrationKeyRef.current = '';
+      cancelNarration();
+      return;
+    }
+    setError('');
+    setIsPlaying(true);
   };
 
   const jumpToScene = (index) => {
@@ -1062,40 +1400,7 @@ export default function TextToVideoEditorPage() {
   };
 
   const speakScene = async () => {
-    if (!activeScene?.narration) {
-      setError('No narration text found in the active scene.');
-      return;
-    }
-    stopSpeech();
-    setError('');
-    setStatus('');
-    setTtsBusy(true);
-    try {
-      const provider = String(form.ttsProvider || 'browser').trim().toLowerCase();
-      const result = await speak(activeScene.narration, {
-        provider,
-        lang: form.ttsLang || 'en-ZA',
-        preferredVoiceName: form.ttsPreferredVoice || 'Microsoft',
-        model: provider === 'openai' ? (form.ttsModel || '') : '',
-        voice: provider === 'openai' ? (form.ttsVoice || '') : '',
-        format: form.ttsFormat || 'mp3',
-        speed: clamp(Number(form.ttsSpeed || 1), 0.25, 4)
-      });
-      if (!result?.ok) {
-        const details = result?.reason ? ` (${result.reason})` : '';
-        const message = result?.message ? ` ${String(result.message)}` : '';
-        setError(`TTS playback failed${details}.${message}`);
-        return;
-      }
-      const providerLabel = String(result?.provider || provider || 'browser');
-      const voiceText = result?.voiceName ? ` using ${result.voiceName}` : '';
-      const modelText = result?.model ? ` (${result.model})` : '';
-      setStatus(`Narration started via ${providerLabel}${modelText}${voiceText}.`);
-    } catch (e) {
-      setError(`TTS playback failed: ${e?.message || e}`);
-    } finally {
-      setTtsBusy(false);
-    }
+    await playSceneNarration(activeScene, { announceStatus: true });
   };
 
   const baseName = slugify(form.projectTitle || selectedTopic?.code || 'text-to-video');
@@ -1368,11 +1673,149 @@ export default function TextToVideoEditorPage() {
       <h2>Text-to-Video Editor</h2>
       <p>Convert curriculum topics into editable video scenes, preview timing, and export a production package.</p>
       <p className="video-hint">
-        Note: this editor can export a visual preview video as <strong>.webm</strong>. TTS (browser or OpenAI) is preview-only and is not embedded into the exported video.
+        Note: this editor can export a visual preview video as <strong>.webm</strong>. If external LTX/OpenAI video generation is not installed on the machine, use the built-in storyboard plus preview export path here. TTS (browser or OpenAI) is still preview-only, but the chapter workflow below can turn your recorded chapter into a transcript and <strong>.srt</strong> subtitles for Camtasia.
       </p>
-      <div className="video-editor-actions">
-        <button type="button" onClick={() => navigate('/repo-integration-hub')}>Open Repo Integration Hub</button>
-      </div>
+
+      <section className="video-editor-panel">
+        <div className="video-preview-header">
+          <h3>Chapter Narration Test</h3>
+          <div>Prepare subtitle assets from a recorded chapter video or audio file.</div>
+        </div>
+        <div className="video-editor-grid">
+          <label className="full-width">
+            Chapter Source Path
+            <input
+              className="mainpage-input"
+              value={chapterForm.sourcePath}
+              onChange={(e) => setChapterField('sourcePath', e.target.value)}
+              placeholder="Absolute path to your recorded chapter .mp4, .wav, .mp3, or similar file."
+            />
+          </label>
+          <label>
+            Chapter Title
+            <input
+              className="mainpage-input"
+              value={chapterForm.chapterTitle}
+              onChange={(e) => setChapterField('chapterTitle', e.target.value)}
+              placeholder="Chapter 1"
+            />
+          </label>
+          <label>
+            Transcription Language
+            <input
+              className="mainpage-input"
+              value={chapterForm.language}
+              onChange={(e) => setChapterField('language', e.target.value)}
+              placeholder="en"
+            />
+          </label>
+          <label>
+            OpenAI Transcription Model
+            <input
+              className="mainpage-input"
+              value={chapterForm.openAiModel}
+              onChange={(e) => setChapterField('openAiModel', e.target.value)}
+              disabled={!chapterTools.tools.openAi.available}
+              placeholder={chapterTools.defaults.openAiModel || 'gpt-4o-mini-transcribe'}
+            />
+          </label>
+          <label className="video-checkbox">
+            Prefer Local Whisper
+            <input
+              type="checkbox"
+              checked={Boolean(chapterForm.preferLocalWhisper)}
+              onChange={(e) => setChapterField('preferLocalWhisper', e.target.checked)}
+              disabled={!chapterTools.tools.whisper.available}
+            />
+          </label>
+          <label className="video-checkbox">
+            Allow OpenAI Fallback
+            <input
+              type="checkbox"
+              checked={Boolean(chapterForm.allowOpenAiFallback)}
+              onChange={(e) => setChapterField('allowOpenAiFallback', e.target.checked)}
+              disabled={!chapterTools.tools.openAi.available}
+            />
+          </label>
+        </div>
+
+        <div className="video-editor-actions">
+          <button type="button" onClick={loadChapterTools} disabled={chapterToolsBusy}>
+            {chapterToolsBusy ? 'Refreshing Tools...' : 'Refresh Chapter Tools'}
+          </button>
+          <button type="button" onClick={applyMaterialPathForChapter} disabled={!selectedMaterial && !form.ltxSourcePath && !renderResult?.local?.outputVideoPath}>
+            Use Current Material / Video Path
+          </button>
+          <button type="button" onClick={prepareChapterAssets} disabled={chapterBusy}>
+            {chapterBusy ? 'Preparing Chapter...' : 'Prepare Chapter Audio + Subtitles'}
+          </button>
+        </div>
+
+        <div className="video-chapter-grid">
+          <div className="video-hint video-path-block">
+            <strong>Workspace Root</strong><br />
+            {chapterTools.workspaceRoot || 'Not resolved yet.'}
+          </div>
+          <div className="video-hint video-path-block">
+            <strong>FFmpeg</strong><br />
+            {chapterTools.tools.ffmpeg.path || chapterTools.tools.ffmpeg.reason}
+          </div>
+          <div className="video-hint video-path-block">
+            <strong>Local Whisper</strong><br />
+            {chapterTools.tools.whisper.cliPath || chapterTools.tools.whisper.reason}
+            {chapterTools.tools.whisper.modelPath ? <><br />Model: {chapterTools.tools.whisper.modelPath}</> : null}
+          </div>
+          <div className="video-hint video-path-block">
+            <strong>OpenAI Fallback</strong><br />
+            {chapterTools.tools.openAi.available
+              ? `${chapterTools.tools.openAi.model || chapterTools.defaults.openAiModel || 'Configured'} ready.`
+              : (chapterTools.tools.openAi.reason || 'Not configured.')}
+          </div>
+        </div>
+
+        {chapterResult ? (
+          <div className="video-chapter-grid">
+            <div className="video-hint video-path-block">
+              <strong>Transcription Provider</strong><br />
+              {chapterResult.transcriptionProvider || 'Unknown'}
+              {chapterResult.transcriptionModel ? ` | ${chapterResult.transcriptionModel}` : ''}
+            </div>
+            <div className="video-hint video-path-block">
+              <strong>Workspace</strong><br />
+              {chapterResult.workspacePath || 'No workspace returned.'}
+            </div>
+            <div className="video-hint video-path-block">
+              <strong>Transcript</strong><br />
+              {chapterResult.transcriptPath || 'Not generated.'}
+            </div>
+            <div className="video-hint video-path-block">
+              <strong>Subtitles (SRT)</strong><br />
+              {chapterResult.srtPath || 'Not generated.'}
+            </div>
+            <div className="video-hint video-path-block">
+              <strong>Extracted Audio</strong><br />
+              {chapterResult.extractedAudioPath || 'No separate audio file was created.'}
+            </div>
+            {chapterResult.transcriptPreview ? (
+              <label className="full-width">
+                Transcript Preview
+                <textarea
+                  className="mainpage-input"
+                  rows={8}
+                  value={chapterResult.transcriptPreview}
+                  readOnly
+                />
+              </label>
+            ) : null}
+            {chapterResult.warnings.length ? (
+              <div className="video-hint full-width">
+                <strong>Warnings</strong><br />
+                {chapterResult.warnings.join(' | ')}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
 
       <section className="video-editor-panel">
         <div className="video-editor-grid">
@@ -1622,7 +2065,7 @@ export default function TextToVideoEditorPage() {
             Copy LTX Inference Command
           </button>
           <button type="button" onClick={generateVideoWithFallback} disabled={renderBusy}>
-            {renderBusy ? 'Generating Video...' : 'Generate Video (LTX -> OpenAI Fallback)'}
+            {renderBusy ? 'Generating Video...' : 'Generate Video / Export Preview'}
           </button>
           <button type="button" onClick={addScene}>Add Empty Scene</button>
         </div>

@@ -498,8 +498,8 @@ namespace ETD.Api.Utils
                 Number = number,
                 Type = "MultipleChoice",
                 Prompt = NormalizeQuestionStem(
-                    $"Which statements are True or False relating to {topicLabel}? Only one statement is True.",
-                    "Read each statement and mark which statement is True."),
+                    $"Which option best reflects correct practice for {topicLabel}?",
+                    "Which option best reflects correct practice for this lesson?"),
                 Options = options,
                 CorrectAnswer = label,
                 TopicCode = item.TopicCode,
@@ -599,6 +599,29 @@ namespace ETD.Api.Utils
                 {
                     statements.Add(NormalizeQuestionStatement(content, content));
                 }
+            }
+            if (statements.Count == 0)
+            {
+                foreach (var fallback in new[]
+                {
+                    item.LessonPlanDescription,
+                    item.TopicDescription,
+                    item.AssessmentCriteriaDescription,
+                    item.EvidenceText
+                })
+                {
+                    var cleaned = SanitizeQuestionText(fallback);
+                    if (string.IsNullOrWhiteSpace(cleaned)) continue;
+                    if (ContainsQuestionAdministrativeReference(cleaned)) continue;
+                    statements.Add(NormalizeQuestionStatement(cleaned));
+                    break;
+                }
+            }
+            if (statements.Count == 0)
+            {
+                statements.Add(NormalizeQuestionStatement(
+                    $"Learners apply safe and accurate practice during {BuildTopicQuestionLabel(item)}.",
+                    "Learners apply safe and accurate practice during this lesson."));
             }
 
             return statements;
@@ -722,7 +745,7 @@ namespace ETD.Api.Utils
                 }
 
                 if (distractors.Count >= 3) break;
-                AddDistinctOption(distractors, $"It is incorrect that {TrimForSentence(correctStatement)}.");
+                AddDistinctOption(distractors, BuildContextualNearMissStatement(item, correctStatement));
                 if (distractors.Count >= 3) break;
                 break;
             }
@@ -744,7 +767,7 @@ namespace ETD.Api.Utils
                 return mutated;
             }
 
-            return NormalizeQuestionStatement($"It is incorrect that {TrimForSentence(fact.Statement)}.");
+            return NormalizeQuestionStatement($"A common shortcut is acceptable when working with {TrimForSentence(fact.Subject)}.");
         }
 
         private static List<string> BuildFactAlternativeValues(LessonPlanFact fact, List<LessonPlanFact> facts)
@@ -900,9 +923,7 @@ namespace ETD.Api.Utils
                 return NormalizeQuestionStatement(distractor);
             }
 
-            return NormalizeQuestionStatement(
-                $"It is incorrect that {TrimForSentence(factualStatement)}.",
-                $"It is incorrect that {TrimForSentence(factualStatement)}.");
+            return BuildContextualNearMissStatement(item, factualStatement);
         }
 
         private static List<string> BuildDistractors(LessonEvidenceItem item, string correct, List<string> candidates)
@@ -933,7 +954,7 @@ namespace ETD.Api.Utils
 
             while (list.Count < 3)
             {
-                AddDistinctOption(list, $"It is incorrect that {TrimForSentence(correct)}.");
+                AddDistinctOption(list, BuildContextualNearMissStatement(item, correct));
                 if (list.Count >= 3) break;
 
                 foreach (var statement in BuildLessonPlanContentStatements(item))
@@ -967,23 +988,29 @@ namespace ETD.Api.Utils
                 options.Add(mutated);
             }
 
-            var contradiction = NormalizeQuestionStatement($"It is incorrect that {TrimForSentence(source)}.");
-            if (!string.IsNullOrWhiteSpace(contradiction) &&
-                !string.Equals(contradiction, source, StringComparison.OrdinalIgnoreCase) &&
-                !options.Any(existing => string.Equals(existing, contradiction, StringComparison.OrdinalIgnoreCase)))
-            {
-                options.Add(contradiction);
-            }
-
-            var falsehood = NormalizeQuestionStatement($"It is false that {TrimForSentence(source)}.");
-            if (!string.IsNullOrWhiteSpace(falsehood) &&
-                !string.Equals(falsehood, source, StringComparison.OrdinalIgnoreCase) &&
-                !options.Any(existing => string.Equals(existing, falsehood, StringComparison.OrdinalIgnoreCase)))
-            {
-                options.Add(falsehood);
-            }
-
             return options;
+        }
+
+        private static string BuildContextualNearMissStatement(LessonEvidenceItem item, string factualStatement)
+        {
+            var mutated = NormalizeQuestionStatement(MakeFalseStatement(factualStatement));
+            if (!string.IsNullOrWhiteSpace(mutated) &&
+                !string.Equals(mutated, factualStatement, StringComparison.OrdinalIgnoreCase) &&
+                !ContainsQuestionAdministrativeReference(mutated))
+            {
+                return mutated;
+            }
+
+            var context = BuildTopicQuestionLabel(item);
+            var source = TrimForSentence(factualStatement);
+            if (!string.IsNullOrWhiteSpace(context) &&
+                !string.Equals(context, "this topic", StringComparison.OrdinalIgnoreCase) &&
+                !source.Contains(context, StringComparison.OrdinalIgnoreCase))
+            {
+                return NormalizeQuestionStatement($"During {context}, a common shortcut is acceptable when it saves time.");
+            }
+
+            return NormalizeQuestionStatement($"A shortcut is acceptable when completing {source}.");
         }
 
         private static string BuildEvidenceText(

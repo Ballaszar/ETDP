@@ -9,10 +9,12 @@
 - `POST /api/Activation/activate`
 
 ## Current Keys
-- Activation Key:
-  - `lMHTxGvtLVUSzrJRugKiNOcyqjIA7f6kewP59hComEZaQFdY`
-- API Key:
-  - `H5RMz2fXsmjVgS4NBWDeOGY69LJ8i0yAEUwTpIqPCQZnubvr`
+- Keys are intentionally not listed in this repository documentation.
+- Load them from:
+  - `Security/keys/activation_keys.txt`
+  - `Security/keys/api_keys.txt`
+  - or the corresponding environment variables
+- Treat activation keys as the manual lecturer access codes you distribute by email for now.
 
 ## Default Key Files
 - `Security/keys/activation_keys.txt`

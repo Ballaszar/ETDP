@@ -399,12 +399,35 @@ namespace ETD.Api.Services
             }
 
             var phaseName = (phase.Name ?? string.Empty).Trim();
+            var moduleToken = ExtractPhaseModuleToken(phase);
+            if (!string.IsNullOrWhiteSpace(moduleToken))
+            {
+                var recovered = _context.Subjects
+                    .AsNoTracking()
+                    .Include(s => s.Qualification)
+                    .Where(s =>
+                        s.QualificationId == qualificationId &&
+                        EF.Functions.Like(s.SubjectCode ?? string.Empty, $"%{moduleToken}-%"))
+                    .OrderBy(s => s.SubjectCode)
+                    .ThenBy(s => s.Id)
+                    .ToList();
+
+                if (recovered.Count > 0)
+                {
+                    warnings.Add($"Selected curriculum phase had no directly linked subjects. Recovered scope from subject codes matching {moduleToken}.");
+                    return CollapseDuplicatePhaseSubjects(recovered, warnings);
+                }
+            }
+
             if (phaseName.Contains("knowledge", StringComparison.OrdinalIgnoreCase))
             {
                 var recovered = _context.Subjects
                     .AsNoTracking()
                     .Include(s => s.Qualification)
-                    .Where(s => s.QualificationId == qualificationId && EF.Functions.Like(s.SubjectCode ?? string.Empty, "KM-%"))
+                    .Where(s =>
+                        s.QualificationId == qualificationId &&
+                        (EF.Functions.Like(s.SubjectCode ?? string.Empty, "KM-%") ||
+                         EF.Functions.Like(s.SubjectCode ?? string.Empty, "%-KM-%")))
                     .OrderBy(s => s.SubjectCode)
                     .ThenBy(s => s.Id)
                     .ToList();
@@ -417,6 +440,16 @@ namespace ETD.Api.Services
             }
 
             return direct;
+        }
+
+        private static string ExtractPhaseModuleToken(CurriculumPhase phase)
+        {
+            var source = string.Join(
+                " ",
+                (phase.Name ?? string.Empty).Trim(),
+                (phase.Description ?? string.Empty).Trim());
+            var match = Regex.Match(source, @"(?i)(?:^|[^A-Z0-9])(?:\d{4,9}-)?(?<token>(?:KM|PM|WM)-\d{2})(?:[^A-Z0-9]|$)");
+            return match.Success ? match.Groups["token"].Value.ToUpperInvariant() : string.Empty;
         }
 
         private static List<Subject> CollapseDuplicatePhaseSubjects(
