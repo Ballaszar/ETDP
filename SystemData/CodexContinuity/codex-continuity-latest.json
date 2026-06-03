@@ -1,12 +1,12 @@
 ﻿{
-  "GeneratedAtUtc": "2026-05-30T05:38:22.2666707Z",
+  "GeneratedAtUtc": "2026-06-03T04:09:36.3375059Z",
   "Reason": "startup",
   "ApplicationRoot": "D:\\ETDP\\ETDP",
   "WorkspaceRoot": "D:\\ETDP",
   "Runtime": {
     "Environment": "Development",
     "MachineName": "DESKTOP-8PGPGBI",
-    "ProcessId": 35420,
+    "ProcessId": 18004,
     "AiMode": "hybrid",
     "LocalLibraryPath": "D:\\ETDP\\ETDP\\Imports"
   },
@@ -16,11 +16,11 @@
     "Models": 32,
     "Endpoints": 316,
     "DbSets": 26,
-    "Qualifications": 2,
-    "Subjects": 202,
-    "Topics": 2403,
-    "SourceMaterials": 11617,
-    "KnowledgeDeveloper": 60
+    "Qualifications": 3,
+    "Subjects": 335,
+    "Topics": 3538,
+    "SourceMaterials": 14095,
+    "KnowledgeDeveloper": 68
   },
   "Controllers": [
     {
@@ -3431,7 +3431,7 @@
     {
       "Path": "D:\\ETDP\\ETDP\\Imports\\KnowledgeHierarchy\\upload.readme.md",
       "Exists": true,
-      "LastWriteUtc": "2026-05-30T05:38:22.0327051Z",
+      "LastWriteUtc": "2026-06-03T04:09:36.1275649Z",
       "SizeBytes": 4041
     },
     {
@@ -3448,6 +3448,16 @@
     }
   ],
   "RecentCoreFileUpdates": [
+    {
+      "Path": "D:\\ETDP\\ETDP\\frontend\\src\\pages\\LearnerProgressReportPage.jsx",
+      "LastWriteUtc": "2026-06-02T10:53:19.7445624Z",
+      "SizeBytes": 19902
+    },
+    {
+      "Path": "D:\\ETDP\\ETDP\\frontend\\src\\utils\\saveExport.js",
+      "LastWriteUtc": "2026-06-02T10:52:52.0156976Z",
+      "SizeBytes": 2544
+    },
     {
       "Path": "D:\\ETDP\\ETDP\\Controllers\\WorkbookController.cs",
       "LastWriteUtc": "2026-05-26T08:12:24.9641047Z",
@@ -4037,16 +4047,6 @@
       "Path": "D:\\ETDP\\ETDP\\frontend\\src\\pages\\SubjectsPage.jsx",
       "LastWriteUtc": "2026-02-26T08:46:39.7089995Z",
       "SizeBytes": 28975
-    },
-    {
-      "Path": "D:\\ETDP\\ETDP\\frontend\\src\\components\\DocxPreviewModal.jsx",
-      "LastWriteUtc": "2026-02-26T07:20:54.7550231Z",
-      "SizeBytes": 11945
-    },
-    {
-      "Path": "D:\\ETDP\\ETDP\\frontend\\src\\utils\\docxEditExport.js",
-      "LastWriteUtc": "2026-02-26T07:05:39.8981846Z",
-      "SizeBytes": 4927
     }
   ]
 }

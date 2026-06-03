@@ -1,6 +1,6 @@
 ﻿# Codex Continuity Log
 
-Generated (UTC): 2026-05-30 05:38:22
+Generated (UTC): 2026-06-03 04:09:36
 Reason: startup
 Application Root: D:\ETDP\ETDP
 Workspace Root: D:\ETDP
@@ -11,20 +11,20 @@ Workspace Root: D:\ETDP
 - Environment: Development
 - LocalLibraryPath: D:\ETDP\ETDP\Imports
 - MachineName: DESKTOP-8PGPGBI
-- ProcessId: 35420
+- ProcessId: 18004
 
 ## Data Overview
 
 - Controllers: 39
 - DbSets: 26
 - Endpoints: 316
-- KnowledgeDeveloper: 60
+- KnowledgeDeveloper: 68
 - Models: 32
-- Qualifications: 2
+- Qualifications: 3
 - Services: 336
-- SourceMaterials: 11617
-- Subjects: 202
-- Topics: 2403
+- SourceMaterials: 14095
+- Subjects: 335
+- Topics: 3538
 
 ## Controllers and Routes
 
@@ -223,12 +223,14 @@ Workspace Root: D:\ETDP
 ## Key Knowledge Files
 
 - {"Path":"D:\\ETDP\\ETDP\\development.readme.md","Exists":true,"LastWriteUtc":"2026-03-21T00:17:29.1927791Z","SizeBytes":52436}
-- {"Path":"D:\\ETDP\\ETDP\\Imports\\KnowledgeHierarchy\\upload.readme.md","Exists":true,"LastWriteUtc":"2026-05-30T05:38:22.0327051Z","SizeBytes":4041}
+- {"Path":"D:\\ETDP\\ETDP\\Imports\\KnowledgeHierarchy\\upload.readme.md","Exists":true,"LastWriteUtc":"2026-06-03T04:09:36.1275649Z","SizeBytes":4041}
 - {"Path":"D:\\ETDP\\ETDP\\AzureAgent\\MODERATOR4_BOOTSTRAP_PROTOCOL.md","Exists":true,"LastWriteUtc":"2026-02-20T15:16:01.2046985Z","SizeBytes":4666}
 - {"Path":"D:\\ETDP\\ETDP\\BACKEND_README.md","Exists":true,"LastWriteUtc":"2026-03-17T08:13:18.3711206Z","SizeBytes":1102}
 
 ## Recent Core File Updates
 
+- {"Path":"D:\\ETDP\\ETDP\\frontend\\src\\pages\\LearnerProgressReportPage.jsx","LastWriteUtc":"2026-06-02T10:53:19.7445624Z","SizeBytes":19902}
+- {"Path":"D:\\ETDP\\ETDP\\frontend\\src\\utils\\saveExport.js","LastWriteUtc":"2026-06-02T10:52:52.0156976Z","SizeBytes":2544}
 - {"Path":"D:\\ETDP\\ETDP\\Controllers\\WorkbookController.cs","LastWriteUtc":"2026-05-26T08:12:24.9641047Z","SizeBytes":154057}
 - {"Path":"D:\\ETDP\\ETDP\\Controllers\\KnowledgeQuestionnaireController.cs","LastWriteUtc":"2026-05-26T08:12:17.6841784Z","SizeBytes":282510}
 - {"Path":"D:\\ETDP\\ETDP\\frontend\\src\\pages\\LearningMaterialSummativeMemorandaPage.jsx","LastWriteUtc":"2026-05-26T08:11:32.1788633Z","SizeBytes":872}
@@ -347,5 +349,3 @@ Workspace Root: D:\ETDP
 - {"Path":"D:\\ETDP\\ETDP\\frontend\\src\\pages\\SystemDiagnosticsPage.jsx","LastWriteUtc":"2026-02-26T15:24:28.1886864Z","SizeBytes":13859}
 - {"Path":"D:\\ETDP\\ETDP\\frontend\\src\\components\\RequireWorkflow.jsx","LastWriteUtc":"2026-02-26T08:48:37.8962663Z","SizeBytes":12723}
 - {"Path":"D:\\ETDP\\ETDP\\frontend\\src\\pages\\SubjectsPage.jsx","LastWriteUtc":"2026-02-26T08:46:39.7089995Z","SizeBytes":28975}
-- {"Path":"D:\\ETDP\\ETDP\\frontend\\src\\components\\DocxPreviewModal.jsx","LastWriteUtc":"2026-02-26T07:20:54.7550231Z","SizeBytes":11945}
-- {"Path":"D:\\ETDP\\ETDP\\frontend\\src\\utils\\docxEditExport.js","LastWriteUtc":"2026-02-26T07:05:39.8981846Z","SizeBytes":4927}
