@@ -1,5 +1,5 @@
 name: Deploy Frontend to GitHub Pages
-
+frontend/src/main.jsx
 on:
   push:
     branches:
