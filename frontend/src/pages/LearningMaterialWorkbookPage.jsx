@@ -33,8 +33,9 @@ export default function LearningMaterialWorkbookPage() {
     p.set('subjectFromId', range.fromId);
     p.set('subjectToId', range.toId);
     p.set('maxActivities', String(Number(params.maxActivities || 30)));
+    p.set('activityScope', 'all');
     openUrl(`${API}/Workbook/download-range?${p.toString()}`);
-    return 'Workbook save request submitted.';
+    return 'All workbook sets save request submitted.';
   };
 
   return (

@@ -14,6 +14,7 @@ namespace ETD.Api.Utils
         public string Seta { get; set; } = string.Empty;
         public string DocumentDeveloper { get; set; } = string.Empty;
         public string Moderator { get; set; } = string.Empty;
+        public bool IncludeAiAssistedLegalBlock { get; set; } = true;
     }
 
     public static class DocumentRevisionQualityControlPage
@@ -71,41 +72,44 @@ namespace ETD.Api.Utils
             body.Append(BuildApprovalTable("QUALITY COUNCIL / SETA APPROVAL"));
             body.Append(BuildSpacer());
 
-            body.Append(BuildParagraph(
-                "DR PC. WEPENER PROVIDES THE SOFTWARE \"AS IS\" AND WITHOUT WARRANTY OF ANY KIND. ALL EXPRESS OR IMPLIED WARRANTIES, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, PERFORMANCE, ACCURACY, RELIABILITY, AND NON-INFRINGEMENT, ARE DISCLAIMED.",
-                "18",
-                bold: true,
-                before: "120",
-                after: "80"));
+            if (options.IncludeAiAssistedLegalBlock)
+            {
+                body.Append(BuildParagraph(
+                    "DR PC. WEPENER PROVIDES THE SOFTWARE \"AS IS\" AND WITHOUT WARRANTY OF ANY KIND. ALL EXPRESS OR IMPLIED WARRANTIES, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, PERFORMANCE, ACCURACY, RELIABILITY, AND NON-INFRINGEMENT, ARE DISCLAIMED.",
+                    "18",
+                    bold: true,
+                    before: "120",
+                    after: "80"));
 
-            body.Append(BuildParagraph(
-                "AI-assisted drafting notice: This document may have been drafted or revised in part using software tools that incorporate OpenAI technology. AI-assisted content must be reviewed, corrected, moderated, and approved by the Learning Provider, Moderator, and the applicable Quality Council or SETA before use.",
-                "18",
-                before: "0",
-                after: "80"));
+                body.Append(BuildParagraph(
+                    "AI-assisted drafting notice: This document may have been drafted or revised in part using software tools that incorporate OpenAI technology. AI-assisted content must be reviewed, corrected, moderated, and approved by the Learning Provider, Moderator, and the applicable Quality Council or SETA before use.",
+                    "18",
+                    before: "0",
+                    after: "80"));
 
-            body.Append(BuildParagraph(
-                "Use of OpenAI technology does not constitute approval, moderation, endorsement, certification, or warranty of this document.",
-                "18",
-                before: "0",
-                after: "80"));
+                body.Append(BuildParagraph(
+                    "Use of OpenAI technology does not constitute approval, moderation, endorsement, certification, or warranty of this document.",
+                    "18",
+                    before: "0",
+                    after: "80"));
 
-            body.Append(BuildParagraph(
-                "OpenAI policy references:",
-                "18",
-                bold: true,
-                before: "0",
-                after: "20"));
-            body.Append(BuildParagraph(
-                "https://openai.com/policies/terms-of-use/",
-                "18",
-                before: "0",
-                after: "20"));
-            body.Append(BuildParagraph(
-                "https://openai.com/policies/sharing-publication-policy/",
-                "18",
-                before: "0",
-                after: "0"));
+                body.Append(BuildParagraph(
+                    "OpenAI policy references:",
+                    "18",
+                    bold: true,
+                    before: "0",
+                    after: "20"));
+                body.Append(BuildParagraph(
+                    "https://openai.com/policies/terms-of-use/",
+                    "18",
+                    before: "0",
+                    after: "20"));
+                body.Append(BuildParagraph(
+                    "https://openai.com/policies/sharing-publication-policy/",
+                    "18",
+                    before: "0",
+                    after: "0"));
+            }
         }
 
         private static Table BuildMetadataTable(

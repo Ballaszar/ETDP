@@ -199,6 +199,16 @@ export default function MainMenuPage() {
                 </button>
               </td>
             </tr>
+            <tr>
+              <td>8</td>
+              <td>LLM Training and Continuous Learning</td>
+              <td>{lookupDisplay}</td>
+              <td>
+                <button className="next-step-button" type="button" onClick={() => navigate('/training')}>
+                  Go to Training Page
+                </button>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>

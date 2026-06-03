@@ -24,7 +24,10 @@ export const formatAcNumber = (value) => {
 export const normalizeQualification = (row) => ({
   id: asInt(row?.id ?? row?.Id, 0),
   qualificationNumber: asText(row?.qualificationNumber ?? row?.QualificationNumber),
-  qualificationDescription: asText(row?.qualificationDescription ?? row?.QualificationDescription)
+  qualificationDescription: asText(row?.qualificationDescription ?? row?.QualificationDescription),
+  learningInstitutionName: asText(row?.learningInstitutionName ?? row?.LearningInstitutionName),
+  nqfLevel: asText(row?.nqfLevel ?? row?.NqfLevel),
+  credits: asText(row?.credits ?? row?.Credits)
 });
 
 export const normalizeTopic = (row) => {

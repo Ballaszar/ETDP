@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQualification } from '../context/QualificationContext';
 
 const API = '/api/QualityCouncilCurricula';
+const PIPELINE_API = '/api/CurriculumPipeline';
 const QUAL_API = '/api/Qualification';
 const LIBRARY_API = `${API}/library`;
 const LIBRARY_IMPORT_API = `${API}/import-from-library`;
@@ -36,6 +37,7 @@ export default function QualityCouncilCurriculaPage() {
   const [entityFilter, setEntityFilter] = useState('all');
   const [confidenceThreshold, setConfidenceThreshold] = useState(85);
   const [queueBusy, setQueueBusy] = useState(false);
+  const [autoAcceptAllPending, setAutoAcceptAllPending] = useState(true);
   const [autoAcceptHighConfidence, setAutoAcceptHighConfidence] = useState(true);
   const [cognitiveExports, setCognitiveExports] = useState([]);
   const [manualEntityType, setManualEntityType] = useState('subjects');
@@ -51,9 +53,12 @@ export default function QualityCouncilCurriculaPage() {
   const [sansQueueSummary, setSansQueueSummary] = useState(null);
   const [sansQueueFilter, setSansQueueFilter] = useState('pending');
   const [sansConfidenceThreshold, setSansConfidenceThreshold] = useState(70);
+  const [pipelineJob, setPipelineJob] = useState(null);
+  const [pipelineBusy, setPipelineBusy] = useState(false);
 
   const canAutomate = Boolean(status?.automationReady);
   const canScan = Boolean(status?.hasCurriculumSpecification);
+  const pipelineRunning = ['queued', 'running'].includes(String(pipelineJob?.status || '').toLowerCase());
 
   const filteredQueue = useMemo(() => {
     const list = Array.isArray(mappingQueue) ? mappingQueue : [];
@@ -195,6 +200,48 @@ export default function QualityCouncilCurriculaPage() {
     setSansQueueSummary(data?.reviewQueue?.summary || null);
   };
 
+  const loadPipelineJob = async (jobId) => {
+    const targetId = String(jobId || '').trim();
+    if (!targetId) {
+      setPipelineJob(null);
+      return;
+    }
+
+    const res = await fetch(`${PIPELINE_API}/jobs/${encodeURIComponent(targetId)}`);
+    if (res.status === 404) {
+      setPipelineJob(null);
+      return;
+    }
+
+    const data = await readApi(res);
+    if (!res.ok) {
+      throw new Error(data?.error || data?.message || JSON.stringify(data));
+    }
+
+    setPipelineJob(data || null);
+  };
+
+  const loadLatestPipelineJob = async (qualificationIdValue) => {
+    const targetId = Number(qualificationIdValue || 0);
+    if (!targetId) {
+      setPipelineJob(null);
+      return;
+    }
+
+    const res = await fetch(`${PIPELINE_API}/jobs/latest?qualificationId=${targetId}`);
+    if (res.status === 404) {
+      setPipelineJob(null);
+      return;
+    }
+
+    const data = await readApi(res);
+    if (!res.ok) {
+      throw new Error(data?.error || data?.message || JSON.stringify(data));
+    }
+
+    setPipelineJob(data || null);
+  };
+
   const refreshSansIndex = async () => {
     const res = await fetch(`${API}/sans-metadata-index?currentOnly=true`);
     if (res.status === 404) {
@@ -246,6 +293,7 @@ export default function QualityCouncilCurriculaPage() {
         await loadSharedLibrary(qid);
         await loadSansQueue(qid);
         await refreshSansIndex();
+        await loadLatestPipelineJob(qid);
       } else {
         setStatus(null);
         setMappingQueue([]);
@@ -258,6 +306,7 @@ export default function QualityCouncilCurriculaPage() {
         setSansQueue([]);
         setSansQueueSummary(null);
         setSansScanResult(null);
+        setPipelineJob(null);
       }
     } catch (e) {
       setError(`Failed to load page data: ${e?.message || e}`);
@@ -267,6 +316,19 @@ export default function QualityCouncilCurriculaPage() {
   useEffect(() => {
     loadAll();
   }, [qid]);
+
+  useEffect(() => {
+    if (!pipelineJob?.id) return undefined;
+    if (!pipelineRunning) return undefined;
+
+    const handle = window.setInterval(() => {
+      loadPipelineJob(pipelineJob.id).catch((e) => {
+        setError(`Pipeline refresh failed: ${e?.message || e}`);
+      });
+    }, 2500);
+
+    return () => window.clearInterval(handle);
+  }, [pipelineJob?.id, pipelineRunning]);
 
   const uploadDoc = async (docType) => {
     const file = docType === 'curriculum' ? curriculumFile : assessmentFile;
@@ -329,7 +391,24 @@ export default function QualityCouncilCurriculaPage() {
       setQueuePath(String(scanData?.reviewQueue?.queuePath || ''));
 
       let autoAcceptApplied = 0;
-      if (autoAcceptHighConfidence) {
+      let autoAcceptLabel = '';
+      if (autoAcceptAllPending) {
+        const applyRes = await fetch(`${API}/apply-mapping-review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            qualificationId: qid,
+            pendingOnly: true
+          })
+        });
+        const applyData = await readApi(applyRes);
+        if (applyRes.ok) {
+          autoAcceptApplied = Number(applyData?.applied ?? 0);
+          autoAcceptLabel = 'all pending items';
+        } else if (applyRes.status !== 400) {
+          throw new Error(applyData?.error || applyData?.message || JSON.stringify(applyData));
+        }
+      } else if (autoAcceptHighConfidence) {
         const applyRes = await fetch(`${API}/apply-mapping-review`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -342,6 +421,7 @@ export default function QualityCouncilCurriculaPage() {
         const applyData = await readApi(applyRes);
         if (applyRes.ok) {
           autoAcceptApplied = Number(applyData?.applied ?? 0);
+          autoAcceptLabel = `high confidence items >= ${Number(confidenceThreshold || 0)}%`;
         } else if (applyRes.status !== 400) {
           throw new Error(applyData?.error || applyData?.message || JSON.stringify(applyData));
         }
@@ -351,7 +431,7 @@ export default function QualityCouncilCurriculaPage() {
         `Review queue built. ` +
         `Total items: ${Number(scanData?.reviewQueue?.summary?.total ?? 0)}, ` +
         `High confidence: ${Number(scanData?.reviewQueue?.summary?.highConfidence ?? 0)}.` +
-        (autoAcceptHighConfidence ? ` Auto-accepted: ${autoAcceptApplied}.` : '')
+        (autoAcceptLabel ? ` Auto-accepted (${autoAcceptLabel}): ${autoAcceptApplied}.` : '')
       );
       await loadAll();
     } catch (e) {
@@ -471,6 +551,40 @@ export default function QualityCouncilCurriculaPage() {
       setError(`Queue automation failed: ${e?.message || e}`);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const startPipeline = async () => {
+    if (!qid) {
+      setError('No qualification selected.');
+      return;
+    }
+
+    setPipelineBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await fetch(`${PIPELINE_API}/jobs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          qualificationId: qid,
+          startPage: 1,
+          forceRestart: false
+        })
+      });
+
+      const data = await readApi(res);
+      if (!res.ok) {
+        throw new Error(data?.error || data?.message || JSON.stringify(data));
+      }
+
+      setPipelineJob(data || null);
+      setMessage(`Curriculum pipeline job ${data?.id || ''} started.`);
+    } catch (e) {
+      setError(`Pipeline start failed: ${e?.message || e}`);
+    } finally {
+      setPipelineBusy(false);
     }
   };
 
@@ -830,13 +944,89 @@ export default function QualityCouncilCurriculaPage() {
               : <span style={{ color: '#8b4a4a' }}>Blocked (both compulsory documents are required)</span>}
           </div>
         </div>
+        {pipelineJob ? (
+          <div style={{ marginBottom: 10, border: '1px solid #d8e1f2', borderRadius: 10, background: '#f8fbff', padding: 10 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>
+              Layered Pipeline: {String(pipelineJob?.status || 'unknown').toUpperCase()}
+            </div>
+            <div style={{ fontSize: 13, color: '#415d7a', marginBottom: 6 }}>
+              Job: {pipelineJob?.id || '-'} {' | '} Stage: {pipelineJob?.currentStage || '-'} {' | '} Progress: {Number(pipelineJob?.progressPercent || 0)}%
+            </div>
+            <div style={{ height: 10, background: '#dfe9f8', borderRadius: 999, overflow: 'hidden', marginBottom: 8 }}>
+              <div
+                style={{
+                  width: `${Math.max(0, Math.min(100, Number(pipelineJob?.progressPercent || 0)))}%`,
+                  height: '100%',
+                  background: pipelineJob?.status === 'failed' ? '#d24747' : '#2a72d4',
+                  transition: 'width 180ms ease'
+                }}
+              />
+            </div>
+            <div style={{ display: 'grid', gap: 4, marginBottom: 8 }}>
+              {(Array.isArray(pipelineJob?.stages) ? pipelineJob.stages : []).map((stage) => (
+                <div key={stage?.key} style={{ fontSize: 13 }}>
+                  <strong>{stage?.label || stage?.key}</strong>: {stage?.status || 'pending'}
+                  {stage?.detail ? ` - ${stage.detail}` : ''}
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 13, color: '#415d7a' }}>
+              Template confidence: {Number(pipelineJob?.templateConfidencePercent || 0)}%
+              {' | '}Template: {pipelineJob?.templateKey || 'unknown'}
+              {pipelineJob?.templateVersionHint ? ` v${pipelineJob.templateVersionHint}` : ''}
+              {' | '}Standard template: {pipelineJob?.templateLikelyStandard ? 'Likely' : 'Uncertain'}
+            </div>
+            {Array.isArray(pipelineJob?.templateNotes) && pipelineJob.templateNotes.length > 0 ? (
+              <div style={{ fontSize: 12, color: '#5a6e86', marginTop: 6 }}>
+                {pipelineJob.templateNotes.map((note, index) => (
+                  <div key={`pipeline-note-${index}`}>- {String(note)}</div>
+                ))}
+              </div>
+            ) : null}
+            {pipelineJob?.artifacts ? (
+              <div style={{ fontSize: 13, color: '#415d7a', marginTop: 6 }}>
+                Modules: {Number(pipelineJob?.artifacts?.moduleCount || 0)}
+                {' | '}Phases: {Number(pipelineJob?.artifacts?.curriculumPhaseCount || 0)}
+                {' | '}Subjects: {Number(pipelineJob?.artifacts?.knowledgeSubjectCount || 0)}
+                {' | '}Topics: {Number(pipelineJob?.artifacts?.topicCount || 0)}
+              </div>
+            ) : null}
+            {pipelineJob?.artifacts?.deliveryPilot ? (
+              <div style={{ fontSize: 13, color: '#415d7a', marginTop: 6 }}>
+                Source materials: {Number(pipelineJob?.artifacts?.deliveryPilot?.sourceMaterialCount || 0)}
+                {' | '}Chunks: {Number(pipelineJob?.artifacts?.deliveryPilot?.sourceChunkCount || 0)}
+                {' | '}Mapped criteria: {Number(pipelineJob?.artifacts?.deliveryPilot?.criteriaMappedCount || 0)}/{Number(pipelineJob?.artifacts?.deliveryPilot?.criteriaCount || 0)}
+                {' | '}Lesson drafts: {Number(pipelineJob?.artifacts?.deliveryPilot?.lessonPlanDraftsCreated || 0)} created, {Number(pipelineJob?.artifacts?.deliveryPilot?.lessonPlanDraftsUpdated || 0)} updated
+              </div>
+            ) : null}
+            {pipelineJob?.outputDir ? (
+              <div style={{ fontSize: 12, color: '#5a6e86', marginTop: 6 }}>
+                Output: {pipelineJob.outputDir}
+              </div>
+            ) : null}
+            {pipelineJob?.error ? (
+              <div style={{ marginTop: 6, color: '#8b1e1e', fontSize: 13 }}>
+                Error: {String(pipelineJob.error)}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div style={{ marginBottom: 8, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={autoAcceptAllPending}
+              onChange={(e) => setAutoAcceptAllPending(Boolean(e.target.checked))}
+              disabled={busy || queueBusy}
+            />
+            Auto-accept all pending immediately after scan
+          </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <input
               type="checkbox"
               checked={autoAcceptHighConfidence}
               onChange={(e) => setAutoAcceptHighConfidence(Boolean(e.target.checked))}
-              disabled={busy || queueBusy}
+              disabled={busy || queueBusy || autoAcceptAllPending}
             />
             Auto-accept high confidence immediately after scan
           </label>
@@ -848,12 +1038,14 @@ export default function QualityCouncilCurriculaPage() {
               max="100"
               value={confidenceThreshold}
               onChange={(e) => setConfidenceThreshold(Number(e.target.value || 0))}
-              disabled={busy || queueBusy}
+              disabled={busy || queueBusy || autoAcceptAllPending || !autoAcceptHighConfidence}
               style={{ width: 72 }}
             />
           </label>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={startPipeline} disabled={busy || queueBusy || pipelineBusy || !canScan || pipelineRunning}>Run Layered Pipeline</button>
+          <button onClick={() => loadLatestPipelineJob(qid)} disabled={busy || queueBusy || pipelineBusy || !qid}>Refresh Pipeline</button>
           <button onClick={runScrape} disabled={busy || queueBusy || !canScan}>Run Cognitive Scan + Build Review Queue</button>
           <button onClick={queueAutomation} disabled={busy || queueBusy || !canAutomate}>Automate Curriculum Build</button>
         </div>
@@ -901,6 +1093,12 @@ export default function QualityCouncilCurriculaPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            <button
+              onClick={() => applyMappingReview({})}
+              disabled={busy || queueBusy || Number(queueSummary?.pending ?? 0) === 0}
+            >
+              Accept All Pending
+            </button>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               Accept threshold
               <input

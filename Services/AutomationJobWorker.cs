@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using ETD.Api.Data;
@@ -11,11 +12,16 @@ namespace ETD.Api.Services
     public class AutomationJobWorker : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly CurriculumPipelineService _curriculumPipelineService;
         private readonly ILogger<AutomationJobWorker> _logger;
 
-        public AutomationJobWorker(IServiceScopeFactory scopeFactory, ILogger<AutomationJobWorker> logger)
+        public AutomationJobWorker(
+            IServiceScopeFactory scopeFactory,
+            CurriculumPipelineService curriculumPipelineService,
+            ILogger<AutomationJobWorker> logger)
         {
             _scopeFactory = scopeFactory;
+            _curriculumPipelineService = curriculumPipelineService;
             _logger = logger;
         }
 
@@ -71,7 +77,7 @@ namespace ETD.Api.Services
             return value.Length <= max ? value : value[..max];
         }
 
-        private static async Task<(int ExitCode, string StdOut, string StdErr, string? OutputPath)> ExecuteJobAsync(AutomationJob job, CancellationToken ct)
+        private async Task<(int ExitCode, string StdOut, string StdErr, string? OutputPath)> ExecuteJobAsync(AutomationJob job, CancellationToken ct)
         {
             if (!string.Equals(job.JobType, "build_qualification", StringComparison.OrdinalIgnoreCase))
             {
@@ -79,6 +85,126 @@ namespace ETD.Api.Services
             }
 
             var cfg = ParseConfig(job.ConfigJson);
+            var executionMode = string.IsNullOrWhiteSpace(cfg.ExecutionMode)
+                ? "internal_pipeline"
+                : cfg.ExecutionMode.Trim().ToLowerInvariant();
+
+            if (!string.Equals(executionMode, "powershell", StringComparison.OrdinalIgnoreCase))
+            {
+                return await ExecuteInternalPipelineJobAsync(job, cfg, ct);
+            }
+
+            return await ExecutePowerShellJobAsync(job, cfg, ct);
+        }
+
+        private async Task<(int ExitCode, string StdOut, string StdErr, string? OutputPath)> ExecuteInternalPipelineJobAsync(
+            AutomationJob job,
+            BuildJobConfig cfg,
+            CancellationToken ct)
+        {
+            var log = new StringBuilder();
+
+            void AppendLog(string message)
+            {
+                log.Append('[')
+                    .Append(DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture))
+                    .Append("] ")
+                    .AppendLine(message);
+            }
+
+            AppendLog($"Launching ETDP internal curriculum pipeline for qualification {job.QualificationId}.");
+            if (cfg.RunImports || cfg.RunSeedWrite)
+            {
+                AppendLog("Legacy import/seed flags were supplied. The internal pipeline now imports linked subject matter and seeds lesson-plan draft LPN rows automatically.");
+            }
+            else
+            {
+                AppendLog("ETDP will import linked subject matter, map topic evidence, and generate lesson-plan draft LPN rows automatically.");
+            }
+
+            CurriculumPipelineService.CurriculumPipelineJob pipelineJob;
+            try
+            {
+                pipelineJob = await _curriculumPipelineService.QueueQualificationAsync(
+                    job.QualificationId,
+                    cfg.StartPage,
+                    cfg.ForceRestart,
+                    ct);
+            }
+            catch (Exception ex)
+            {
+                return (1, log.ToString(), $"Failed to queue internal curriculum pipeline: {ex.Message}", null);
+            }
+
+            AppendLog($"Internal pipeline job id: {pipelineJob.Id}");
+
+            var lastStageKey = string.Empty;
+            var lastProgress = -1;
+
+            while (!ct.IsCancellationRequested)
+            {
+                var current = await _curriculumPipelineService.GetJobAsync(pipelineJob.Id, ct);
+                if (current == null)
+                {
+                    return (1, log.ToString(), $"Internal curriculum pipeline job disappeared: {pipelineJob.Id}", pipelineJob.JobFolder);
+                }
+
+                var currentStageKey = current.CurrentStage ?? string.Empty;
+                if (!string.Equals(currentStageKey, lastStageKey, StringComparison.OrdinalIgnoreCase) ||
+                    current.ProgressPercent != lastProgress)
+                {
+                    lastStageKey = currentStageKey;
+                    lastProgress = current.ProgressPercent;
+                    var currentStage = current.Stages.FirstOrDefault(stage =>
+                        string.Equals(stage.Key, currentStageKey, StringComparison.OrdinalIgnoreCase));
+                    var detail = string.IsNullOrWhiteSpace(currentStage?.Detail)
+                        ? currentStageKey
+                        : currentStage!.Detail;
+                    var stageLabel = string.IsNullOrWhiteSpace(currentStageKey)
+                        ? "Queued"
+                        : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(currentStageKey.Replace("-", " "));
+                    AppendLog($"{stageLabel} | {current.ProgressPercent}% | {detail}");
+                }
+
+                var status = (current.Status ?? string.Empty).Trim().ToLowerInvariant();
+                if (status is "completed" or "failed")
+                {
+                    var delivery = current.Artifacts?.DeliveryPilot;
+                    if (delivery != null)
+                    {
+                        AppendLog($"Topic evidence map: {delivery.TopicsMappedCount}/{delivery.TopicCount} topics and {delivery.CriteriaMappedCount}/{delivery.CriteriaCount} criteria.");
+                        AppendLog($"Lesson-plan draft LPN rows: created {delivery.LessonPlanDraftsCreated}, updated {delivery.LessonPlanDraftsUpdated}, skipped {delivery.LessonPlanDraftsSkipped}.");
+                        if (!string.IsNullOrWhiteSpace(delivery.LessonPlanDraftsPath))
+                        {
+                            AppendLog($"Draft artifact: {delivery.LessonPlanDraftsPath}");
+                        }
+                    }
+
+                    if (status == "completed")
+                    {
+                        AppendLog("Internal curriculum pipeline completed successfully.");
+                        return (0, log.ToString(), string.Empty, current.JobFolder);
+                    }
+
+                    var failedStage = current.Stages.LastOrDefault(stage =>
+                        string.Equals(stage.Status, "failed", StringComparison.OrdinalIgnoreCase));
+                    var error = string.IsNullOrWhiteSpace(current.Error)
+                        ? (failedStage?.Detail ?? "Internal curriculum pipeline failed.")
+                        : current.Error;
+                    return (1, log.ToString(), error, current.JobFolder);
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(2), ct);
+            }
+
+            return (1, log.ToString(), "Automation job was cancelled before the internal curriculum pipeline finished.", pipelineJob.JobFolder);
+        }
+
+        private static async Task<(int ExitCode, string StdOut, string StdErr, string? OutputPath)> ExecutePowerShellJobAsync(
+            AutomationJob job,
+            BuildJobConfig cfg,
+            CancellationToken ct)
+        {
             var backendBase = string.IsNullOrWhiteSpace(cfg.BackendBase) ? "http://localhost:5299/api" : cfg.BackendBase.Trim().TrimEnd('/');
             var defaultScriptPath = EtdpPaths.CombineProject("AzureAgent", "smoke-test-agent.ps1");
             var scriptPath = string.IsNullOrWhiteSpace(cfg.ScriptPath) ? defaultScriptPath : cfg.ScriptPath.Trim();
@@ -157,6 +283,9 @@ namespace ETD.Api.Services
             public bool RunImports { get; set; }
             public bool RunSeedWrite { get; set; }
             public string? BackendBase { get; set; }
+            public int? StartPage { get; set; }
+            public bool ForceRestart { get; set; }
+            public string? ExecutionMode { get; set; }
             public string? ScriptPath { get; set; }
             public string? PowerShellPath { get; set; }
         }

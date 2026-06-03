@@ -28,25 +28,71 @@ namespace ETD.Api.Services
             var cleanedText = CleanText(extractedText);
             File.WriteAllText(extractTextPath, cleanedText);
 
-            var parseResult = CurriculumKnowledgeParser.Parse(cleanedText, resolvedQualification);
-            var phaseRows = BuildPhaseRows(parseResult.Modules, parseResult.QualificationCode);
+            var knowledgeResult = CurriculumKnowledgeParser.Parse(cleanedText, resolvedQualification);
+            var practicalResult = CurriculumPracticalParser.Parse(cleanedText, resolvedQualification);
+            var workExperienceResult = CurriculumWorkExperienceParser.Parse(cleanedText, resolvedQualification);
+
+            var phaseRows = NormalizePhaseRows(
+                BuildPhaseRows(knowledgeResult.Modules, knowledgeResult.QualificationCode)
+                    .Concat(BuildPhaseRows(practicalResult.Modules, practicalResult.QualificationCode))
+                    .Concat(BuildPhaseRows(workExperienceResult.Modules, workExperienceResult.QualificationCode))
+                    .ToList());
+            var subjectRows = knowledgeResult.SubjectRows
+                .Concat(practicalResult.SubjectRows)
+                .Concat(workExperienceResult.SubjectRows)
+                .ToList();
+            var topicRows = knowledgeResult.TopicRows
+                .Concat(practicalResult.TopicRows)
+                .Concat(workExperienceResult.TopicRows)
+                .ToList();
+            var warnings = knowledgeResult.Warnings
+                .Concat(practicalResult.Warnings)
+                .Concat(workExperienceResult.Warnings)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var resolvedQualificationCode = !string.IsNullOrWhiteSpace(knowledgeResult.QualificationCode)
+                ? knowledgeResult.QualificationCode
+                : !string.IsNullOrWhiteSpace(practicalResult.QualificationCode)
+                    ? practicalResult.QualificationCode
+                    : workExperienceResult.QualificationCode;
 
             WritePhasesCsv(phasesCsvPath, phaseRows);
-            WriteSubjectsCsv(subjectCsvPath, parseResult.SubjectRows);
-            WriteTopicsCsv(topicCsvPath, parseResult.TopicRows);
+            WriteSubjectsCsv(subjectCsvPath, subjectRows);
+            WriteTopicsCsv(topicCsvPath, topicRows);
 
             var report = new
             {
                 sourcePath,
                 sourceExt,
                 startPage,
-                qualificationCode = parseResult.QualificationCode,
+                qualificationCode = resolvedQualificationCode,
                 scannedAtUtc = DateTime.UtcNow,
-                moduleCount = parseResult.Modules.Count,
+                moduleCount = phaseRows.Count,
                 curriculumPhaseCount = phaseRows.Count,
-                knowledgeSubjectCount = parseResult.SubjectRows.Count,
-                topicCount = parseResult.TopicRows.Count,
-                warnings = parseResult.Warnings,
+                knowledgeSubjectCount = subjectRows.Count,
+                topicCount = topicRows.Count,
+                warnings,
+                sectionBreakdown = new
+                {
+                    knowledge = new
+                    {
+                        moduleCount = knowledgeResult.Modules.Count,
+                        subjectCount = knowledgeResult.SubjectRows.Count,
+                        topicCount = knowledgeResult.TopicRows.Count
+                    },
+                    practical = new
+                    {
+                        moduleCount = practicalResult.Modules.Count,
+                        subjectCount = practicalResult.SubjectRows.Count,
+                        topicCount = practicalResult.TopicRows.Count
+                    },
+                    workExperience = new
+                    {
+                        moduleCount = workExperienceResult.Modules.Count,
+                        subjectCount = workExperienceResult.SubjectRows.Count,
+                        topicCount = workExperienceResult.TopicRows.Count
+                    }
+                },
                 outputs = new
                 {
                     extractTextPath,
@@ -59,12 +105,12 @@ namespace ETD.Api.Services
 
             return new CognitiveScanArtifacts
             {
-                QualificationCode = parseResult.QualificationCode,
-                ModuleCount = parseResult.Modules.Count,
+                QualificationCode = resolvedQualificationCode,
+                ModuleCount = phaseRows.Count,
                 CurriculumPhaseCount = phaseRows.Count,
-                KnowledgeSubjectCount = parseResult.SubjectRows.Count,
-                TopicCount = parseResult.TopicRows.Count,
-                Warnings = parseResult.Warnings,
+                KnowledgeSubjectCount = subjectRows.Count,
+                TopicCount = topicRows.Count,
+                Warnings = warnings,
                 ExtractTextPath = extractTextPath,
                 PhasesCsvPath = phasesCsvPath,
                 SubjectCsvPath = subjectCsvPath,
@@ -117,6 +163,36 @@ namespace ETD.Api.Services
             return rows;
         }
 
+        private static List<CurriculumPhaseCsvRow> NormalizePhaseRows(List<CurriculumPhaseCsvRow> rows)
+        {
+            var normalized = rows
+                .Where(r => !string.IsNullOrWhiteSpace(r.PhasesCode) || !string.IsNullOrWhiteSpace(r.LearningPhases))
+                .GroupBy(
+                    r => string.IsNullOrWhiteSpace(r.PhasesCode) ? r.LearningPhases.Trim().ToUpperInvariant() : r.PhasesCode.Trim().ToUpperInvariant(),
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(g =>
+                {
+                    var first = g.First();
+                    return new CurriculumPhaseCsvRow
+                    {
+                        QualificationCode = g.Select(x => x.QualificationCode).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? first.QualificationCode,
+                        LearningPhases = g.Select(x => x.LearningPhases).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? first.LearningPhases,
+                        PhasesCode = g.Select(x => x.PhasesCode).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? first.PhasesCode,
+                        PhasesDescription = g.OrderByDescending(x => (x.PhasesDescription ?? string.Empty).Length).Select(x => x.PhasesDescription).FirstOrDefault() ?? string.Empty,
+                        PhasesPurpose = g.OrderByDescending(x => (x.PhasesPurpose ?? string.Empty).Length).Select(x => x.PhasesPurpose).FirstOrDefault() ?? string.Empty
+                    };
+                })
+                .OrderBy(r => r.PhasesCode, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            for (var i = 0; i < normalized.Count; i++)
+            {
+                normalized[i].Sequence = i + 1;
+            }
+
+            return normalized;
+        }
+
         private static void WritePhasesCsv(string path, IReadOnlyList<CurriculumPhaseCsvRow> rows)
         {
             var sb = new StringBuilder();
@@ -139,7 +215,7 @@ namespace ETD.Api.Services
         private static void WriteSubjectsCsv(string path, IReadOnlyList<KnowledgeSubjectRow> rows)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("Qualification Code;Phases Code;Phases Description;Phases Purpose;SubjectCode;Subject Description;Subject Credits;Subject NQF Level;Subject Percentage");
+            sb.AppendLine("Qualification Code;Curriculum Phase Code;Curriculum Phase Description;Curriculum Phase Purpose;Subject Code;Subject Description;Subject Credits;Subject NQF Level;Subject Percentage");
             foreach (var row in rows)
             {
                 sb.AppendLine(string.Join(";", new[]
@@ -161,7 +237,7 @@ namespace ETD.Api.Services
         private static void WriteTopicsCsv(string path, IReadOnlyList<KnowledgeTopicRow> rows)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("Qualification Code;Phases Code;Phases Description;Subject Code;Subject Credits;Notional Hours;Periods per Topic;Subject Decription;Topic Code;Topic Description;Assessment Criteria Number;Assesment Criteria Description;LPN;Lesson Plan Description ");
+            sb.AppendLine("Qualification Code;Curriculum Phase Code;Curriculum Phase Description;Subject Code;Subject Description;Subject Credits;Notional Hours;Periods per Topic;Topic Code;Topic Description;Assessment Criteria Number;Assessment Criteria Description;Lesson Plan Number;Lesson Plan Description");
             foreach (var row in rows)
             {
                 sb.AppendLine(string.Join(";", new[]
@@ -170,10 +246,10 @@ namespace ETD.Api.Services
                     Csv(row.PhasesCode),
                     Csv(row.PhasesDescription),
                     Csv(row.SubjectCode),
+                    Csv(row.SubjectDescription),
                     Csv(row.SubjectCredits),
                     Csv(row.NotionalHours),
                     Csv(row.PeriodsPerTopic),
-                    Csv(row.SubjectDescription),
                     Csv(row.TopicCode),
                     Csv(row.TopicDescription),
                     Csv(row.AssessmentCriteriaNumber),
@@ -220,7 +296,7 @@ namespace ETD.Api.Services
 internal static class CurriculumKnowledgeParser
 {
     private static readonly Regex ModuleHeaderRegex = new(
-        @"^(?:\d+(?:\.\d+){0,5}\.?\s+)?(?<fullCode>\d{6,9}-KM-\d{2})\s*[:,-]?\s*(?<desc>.+?)(?=(?:,\s*NQF\s*Level\b)|$)(?:,\s*NQF\s*Level\s*(?<nqf>\d+)(?:\s*\((?<creditsPar>[\d.,]+)\)|\s*,\s*Credits?\s*(?<creditsCsv>[\d.,]+)))?.*$",
+        @"^(?:\d+(?:\.\d+){0,5}\.?\s+)?(?<fullCode>(?<qual>\d{6,9}(?:-\d{3})?(?:-\d{2})?)\s*,?\s*-?\s*(?<km>KM-?\d{2}))\s*[:,-]?\s*(?<desc>.+?)(?=(?:,\s*NQF\s*Level\b)|$)(?:,\s*NQF\s*Level\s*(?<nqf>\d+)(?:\s*\((?<creditsPar>[\d.,]+)\)|\s*,\s*Credits?\s*(?<creditsCsv>[\d.,]+)))?.*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex KnowledgeSubjectHeaderRegex = new(
@@ -231,7 +307,7 @@ internal static class CurriculumKnowledgeParser
         @"^(?:[•]\s*)?(?<code>[A-Z]{2}\d{4,6}[A-Z]?)\s+(?<desc>.+)$",
         RegexOptions.Compiled);
 
-    private static readonly Regex KmTokenRegex = new(@"^(?<km>KM-\d{2})-KT\d{2}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex KmTokenRegex = new(@"^(?<km>KM-?\d{2})-KT\d{2}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public static KnowledgeParseResult Parse(string cleanedText, string qualificationCodeFallback)
     {
@@ -242,6 +318,7 @@ internal static class CurriculumKnowledgeParser
         var orderBySubjectCode = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         var inKnowledgeSection = false;
+        var inTableOfContents = false;
         var collectingPurpose = false;
         var collectingCriteria = false;
 
@@ -254,20 +331,34 @@ internal static class CurriculumKnowledgeParser
             if (string.IsNullOrWhiteSpace(line)) continue;
             var upper = line.ToUpperInvariant();
 
-            if (upper.Contains("SECTION 3A") || upper.Contains("KNOWLEDGE SUBJECT SPECIFICATIONS") || upper.Contains("KNOWLEDGE LEARNING"))
+            if (upper.Contains("TABLE OF CONTENT", StringComparison.Ordinal))
+            {
+                inTableOfContents = true;
+                continue;
+            }
+
+            if (inTableOfContents)
+            {
+                if (upper.Contains("SECTION 1: CURRICULUM SUMMARY", StringComparison.Ordinal))
+                {
+                    inTableOfContents = false;
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
+            if (IsKnowledgeSectionStart(upper))
             {
                 inKnowledgeSection = true;
                 collectingPurpose = false;
                 collectingCriteria = false;
+                currentSubject = null;
                 continue;
             }
 
-            if (!inKnowledgeSection && ModuleHeaderRegex.IsMatch(line))
-            {
-                inKnowledgeSection = true;
-            }
-
-            if (inKnowledgeSection && (upper.Contains("SECTION 3B") || upper.Contains("PRACTICAL SKILL MODULE")))
+            if (inKnowledgeSection && IsKnowledgeSectionEnd(upper))
             {
                 break;
             }
@@ -298,7 +389,7 @@ internal static class CurriculumKnowledgeParser
                 collectingCriteria = false;
                 currentSubject = null;
 
-                var fullCode = moduleMatch.Groups["fullCode"].Value.Trim();
+                var fullCode = NormalizeModuleHeaderCode(moduleMatch.Groups["fullCode"].Value);
                 var kmToken = ExtractKmTokenFromModuleCode(fullCode);
                 var module = GetOrCreateModule(moduleByToken, modules, kmToken, fullCode, qualificationCodeFallback);
                 module.PhasesDescription = CleanLabel(moduleMatch.Groups["desc"].Value);
@@ -440,7 +531,7 @@ internal static class CurriculumKnowledgeParser
             foreach (var module in modules)
             {
                 if (!string.IsNullOrWhiteSpace(module.QualificationCode) &&
-                    !string.Equals(module.QualificationCode, qualificationCodeFallback, StringComparison.OrdinalIgnoreCase))
+                    !AreEquivalentQualificationCodes(module.QualificationCode, qualificationCodeFallback))
                 {
                     warnings.Add($"Qualification code mismatch in source ({module.QualificationCode}) for {module.KmToken}. Using override {qualificationCodeFallback}.");
                 }
@@ -525,7 +616,7 @@ internal static class CurriculumKnowledgeParser
         };
     }
 
-    private static List<string> NormalizeLines(string text)
+    internal static List<string> NormalizeLines(string text)
     {
         var normalized = (text ?? string.Empty)
             .Replace("\r\n", "\n")
@@ -583,8 +674,13 @@ internal static class CurriculumKnowledgeParser
     {
         var line = input ?? string.Empty;
         line = line.Replace("\u00A0", " ").Trim();
+        line = line
+            .Replace("ï‚·", " ")
+            .Replace("â€¢", " ")
+            .Replace("â—", " ")
+            .Replace("â—¦", " ");
         line = Regex.Replace(line, @"\s+", " ");
-        line = Regex.Replace(line, @"^[•\u2022\u25CF\u25E6]+\s*", string.Empty);
+        line = Regex.Replace(line, @"^[^\p{L}\p{N}(]+", string.Empty);
         return line.Trim();
     }
 
@@ -592,9 +688,28 @@ internal static class CurriculumKnowledgeParser
     {
         if (string.IsNullOrWhiteSpace(line)) return true;
         if (Regex.IsMatch(line, @"^\d{1,3}$")) return true; // likely page number
-        if (line.Contains("TABLE OF CONTENTS", StringComparison.OrdinalIgnoreCase)) return true;
+        if (line.Contains("TABLE OF CONTENT", StringComparison.OrdinalIgnoreCase)) return true;
         if (Regex.IsMatch(line, @"\.{4,}\s*\d+\s*$")) return true; // TOC dotted leader
+        if (Regex.IsMatch(line, @"\bPage\s+\d+\s+of\s+\d+\b", RegexOptions.IgnoreCase)) return true;
         return false;
+    }
+
+    private static bool IsKnowledgeSectionStart(string upperLine)
+    {
+        return upperLine.Contains("SECTION 3A", StringComparison.Ordinal) ||
+               upperLine.Contains("KNOWLEDGE MODULE SPECIFICATIONS", StringComparison.Ordinal) ||
+               upperLine.Contains("KNOWLEDGE SUBJECT SPECIFICATIONS", StringComparison.Ordinal) ||
+               upperLine.Contains("LIST OF KNOWLEDGE MODULES FOR WHICH SPECIFICATIONS ARE INCLUDED", StringComparison.Ordinal) ||
+               upperLine.Contains("GUIDELINES FOR TOPICS", StringComparison.Ordinal) ||
+               upperLine.Contains("PURPOSE OF THE KNOWLEDGE MODULE", StringComparison.Ordinal) ||
+               upperLine.Contains("KNOWLEDGE LEARNING", StringComparison.Ordinal);
+    }
+
+    private static bool IsKnowledgeSectionEnd(string upperLine)
+    {
+        return upperLine.Contains("SECTION 3B", StringComparison.Ordinal) ||
+               upperLine.Contains("PRACTICAL SKILL MODULE SPECIFICATIONS", StringComparison.Ordinal) ||
+               upperLine.Contains("PRACTICAL SKILL MODULE", StringComparison.Ordinal);
     }
 
     private static bool IsKnowledgeSectionNoiseHeader(string upperLine)
@@ -647,30 +762,58 @@ internal static class CurriculumKnowledgeParser
 
     private static string ResolveQualificationCodeFromModule(string fullCode, string fallback)
     {
-        var m = Regex.Match(fullCode ?? string.Empty, @"^(?<q>\d{6,9})-KM-\d{2}$", RegexOptions.IgnoreCase);
+        var normalized = NormalizeModuleHeaderCode(fullCode);
+        var m = Regex.Match(normalized ?? string.Empty, @"^(?<q>\d{6,9})(?:-\d{3})?(?:-\d{2})?-KM-?\d{2}$", RegexOptions.IgnoreCase);
         if (m.Success) return m.Groups["q"].Value;
         return fallback ?? string.Empty;
     }
 
     private static string ExtractKmTokenFromModuleCode(string moduleCode)
     {
-        var m = Regex.Match(moduleCode ?? string.Empty, @"(?<km>KM-\d{2})$", RegexOptions.IgnoreCase);
-        return m.Success ? m.Groups["km"].Value.ToUpperInvariant() : "KM-00";
+        var m = Regex.Match(moduleCode ?? string.Empty, @"(?<km>KM-?\d{2})$", RegexOptions.IgnoreCase);
+        return m.Success ? NormalizeKmToken(m.Groups["km"].Value) : "KM-00";
     }
 
     private static string ExtractKmTokenFromSubjectCode(string subjectCode)
     {
         var m = KmTokenRegex.Match(subjectCode ?? string.Empty);
-        return m.Success ? m.Groups["km"].Value.ToUpperInvariant() : "KM-00";
+        return m.Success ? NormalizeKmToken(m.Groups["km"].Value) : "KM-00";
     }
 
     private static string BuildModuleCode(string qualificationCode, string kmToken)
     {
-        if (string.IsNullOrWhiteSpace(qualificationCode)) return kmToken;
-        return $"{qualificationCode}-{kmToken}";
+        var normalizedKmToken = NormalizeKmToken(kmToken);
+        if (string.IsNullOrWhiteSpace(qualificationCode)) return normalizedKmToken;
+        return $"{qualificationCode}-{normalizedKmToken}";
     }
 
-    private static string CleanLabel(string value)
+    private static string NormalizeModuleHeaderCode(string? raw)
+    {
+        var compact = Regex.Replace(raw ?? string.Empty, @"\s+", string.Empty)
+            .Replace(",", string.Empty)
+            .ToUpperInvariant();
+        var m = Regex.Match(compact, @"^(?<qual>\d{6,9}(?:-\d{3})?(?:-\d{2})?)-?(?<km>KM-?\d{2})$", RegexOptions.IgnoreCase);
+        if (!m.Success) return compact;
+        return $"{m.Groups["qual"].Value}-{NormalizeKmToken(m.Groups["km"].Value)}";
+    }
+
+    private static string NormalizeKmToken(string? raw)
+    {
+        var m = Regex.Match(raw ?? string.Empty, @"KM-?(?<num>\d{2})", RegexOptions.IgnoreCase);
+        return m.Success ? $"KM-{m.Groups["num"].Value}" : (raw ?? string.Empty).Trim().ToUpperInvariant();
+    }
+
+    private static bool AreEquivalentQualificationCodes(string left, string right)
+    {
+        var a = Regex.Replace(left ?? string.Empty, @"\D", string.Empty);
+        var b = Regex.Replace(right ?? string.Empty, @"\D", string.Empty);
+        if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return false;
+        return string.Equals(a, b, StringComparison.OrdinalIgnoreCase) ||
+               a.StartsWith(b, StringComparison.OrdinalIgnoreCase) ||
+               b.StartsWith(a, StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static string CleanLabel(string value)
     {
         var v = (value ?? string.Empty).Trim();
         v = Regex.Replace(v, @"\s+", " ");
@@ -678,7 +821,7 @@ internal static class CurriculumKnowledgeParser
         return v.Trim();
     }
 
-    private static string AppendSentence(string? current, string next)
+    internal static string AppendSentence(string? current, string next)
     {
         var c = string.IsNullOrWhiteSpace(current) ? string.Empty : current.Trim();
         var n = string.IsNullOrWhiteSpace(next) ? string.Empty : next.Trim();
@@ -692,14 +835,14 @@ internal static class CurriculumKnowledgeParser
         return $"{c} {n}".Trim();
     }
 
-    private static string? ParseDecimalString(string raw)
+    internal static string? ParseDecimalString(string raw)
     {
         var value = ParseFlexibleNumber(raw);
         if (!value.HasValue) return null;
         return value.Value.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
-    private static double? ParseFlexibleNumber(string? raw)
+    internal static double? ParseFlexibleNumber(string? raw)
     {
         var txt = (raw ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(txt)) return null;
@@ -734,7 +877,7 @@ internal static class CurriculumKnowledgeParser
         return credits.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
-    private static string? DeriveNotionalHours(string? subjectCredits)
+    internal static string? DeriveNotionalHours(string? subjectCredits)
     {
         var sc = ParseFlexibleNumber(subjectCredits);
         if (!sc.HasValue) return null;
@@ -742,7 +885,7 @@ internal static class CurriculumKnowledgeParser
         return hours.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
-    private static List<string> BuildCriteriaMapping(int topicCount, List<string> criteria)
+    internal static List<string> BuildCriteriaMapping(int topicCount, List<string> criteria)
     {
         var outList = new List<string>();
         var items = criteria
@@ -791,6 +934,9 @@ internal sealed class KnowledgeSubject
     public string SubjectCode { get; set; } = string.Empty;
     public string SubjectDescription { get; set; } = string.Empty;
     public string? SubjectPercentage { get; set; }
+    public string? SubjectCredits { get; set; }
+    public string? SubjectNqfLevel { get; set; }
+    public string? NotionalHours { get; set; }
     public List<KnowledgeTopicElement> Topics { get; } = new();
     public List<string> AssessmentCriteria { get; } = new();
 }

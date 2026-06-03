@@ -27,14 +27,21 @@ namespace ETD.Api.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _environment;
         private readonly SemanticKernelQuestionService _semanticKernelQuestionService;
-        private const uint PortraitCoverUsableWidthTwips = 10800U;
+        private const uint WorkbookPageWidthTwips = 12240U;
+        private const uint WorkbookPageHeightTwips = 15840U;
+        private const uint WorkbookPageMarginTwips = 920U;
+        private const string WorkbookFullTableWidth = "10400";
         private const int TrueFalseOptionCount = 4;
         private const int MultipleChoiceOptionCount = 4;
         private const string DefaultSmiBaseUrl = "http://127.0.0.1:8099";
         private const int DefaultSmiTimeoutSeconds = 0;
         private const int DefaultSmiTopK = 0;
-        private const string ExportFont = "Arial Narrow";
-        private const string CompactTableCellHalfPt = "16"; // 8pt
+        private const string ExportFont = "Times New Roman";
+        private const string CompactTableCellHalfPt = "24"; // 12pt
+        private const int WorkbookMarksPerActivity = 4;
+        private const string WorkbookPrepareTimeDisplay = "20 Min";
+        private const string WorkbookPresentationTimeDisplay = "5 Min";
+        private const string WorkbookQualifierText = "Write your group's decisions within the space provided below, not more than 4 facts. Use a black pen only; no pencils are allowed. You have 15 minutes for preparation and 5 minutes for presentation. Appoint a speaker for your group and present your findings to the rest of the class. You may make use of the whiteboard or the A3 flip charts.";
         private static readonly HttpClient _http = new HttpClient();
 
         public WorkbookController(
@@ -123,7 +130,7 @@ namespace ETD.Api.Controllers
         }
 
         [HttpGet("download")]
-        public async Task<IActionResult> Download([FromQuery] int? qualificationId = null, [FromQuery] int? subjectId = null, [FromQuery] int maxActivities = 30)
+        public async Task<IActionResult> Download([FromQuery] int? qualificationId = null, [FromQuery] int? subjectId = null, [FromQuery] int maxActivities = 30, [FromQuery] string activityScope = WorkbookActivityScopes.AssessmentCriteria)
         {
             var subject = ResolveSubject(subjectId, qualificationId);
             if (subject == null) return BadRequest("No subject available for workbook export.");
@@ -131,7 +138,28 @@ namespace ETD.Api.Controllers
             if (qualification == null) return BadRequest("No qualification available for workbook export.");
 
             var max = Math.Clamp(maxActivities, 4, 80);
-            var generated = await BuildWorkbookDocumentAsync(subject, qualification, max, HttpContext.RequestAborted);
+            if (IsAllWorkbookActivityScope(activityScope))
+            {
+                using var zipStream = new MemoryStream();
+                using (var zip = new ZipArchive(zipStream, ZipArchiveMode.Create, true))
+                {
+                    foreach (var scope in ExpandWorkbookActivityScopes(activityScope))
+                    {
+                        var generatedScope = await BuildWorkbookDocumentAsync(subject, qualification, max, scope, HttpContext.RequestAborted);
+                        if (!generatedScope.Success) continue;
+
+                        var entry = zip.CreateEntry(generatedScope.FileName, CompressionLevel.Fastest);
+                        await using var entryStream = entry.Open();
+                        await entryStream.WriteAsync(generatedScope.FileBytes, 0, generatedScope.FileBytes.Length, HttpContext.RequestAborted);
+                    }
+                }
+
+                zipStream.Position = 0;
+                var safeCode = MakeSafeFilePart(subject.SubjectCode, "SUBJECT");
+                return File(zipStream.ToArray(), "application/zip", $"Workbook_AllSets_{safeCode}_{DateTime.Now:yyyyMMdd_HHmmss}.zip");
+            }
+
+            var generated = await BuildWorkbookDocumentAsync(subject, qualification, max, activityScope, HttpContext.RequestAborted);
             if (!generated.Success)
             {
                 return BadRequest(generated.ErrorMessage);
@@ -148,7 +176,8 @@ namespace ETD.Api.Controllers
             [FromQuery] int qualificationId,
             [FromQuery] int? subjectFromId = null,
             [FromQuery] int? subjectToId = null,
-            [FromQuery] int maxActivities = 30)
+            [FromQuery] int maxActivities = 30,
+            [FromQuery] string activityScope = WorkbookActivityScopes.All)
         {
             if (qualificationId <= 0) return BadRequest("qualificationId is required for range export.");
 
@@ -169,16 +198,19 @@ namespace ETD.Api.Controllers
                         continue;
                     }
 
-                    var generated = await BuildWorkbookDocumentAsync(subject, qualification, max, HttpContext.RequestAborted);
-                    if (!generated.Success)
+                    foreach (var scope in ExpandWorkbookActivityScopes(activityScope))
                     {
-                        failures.Add($"{subject.SubjectCode}: {generated.ErrorMessage}");
-                        continue;
-                    }
+                        var generated = await BuildWorkbookDocumentAsync(subject, qualification, max, scope, HttpContext.RequestAborted);
+                        if (!generated.Success)
+                        {
+                            failures.Add($"{subject.SubjectCode} ({BuildWorkbookScopeLabel(scope)}): {generated.ErrorMessage}");
+                            continue;
+                        }
 
-                    var entry = zip.CreateEntry(generated.FileName, CompressionLevel.Fastest);
-                    await using var entryStream = entry.Open();
-                    await entryStream.WriteAsync(generated.FileBytes, 0, generated.FileBytes.Length, HttpContext.RequestAborted);
+                        var entry = zip.CreateEntry(generated.FileName, CompressionLevel.Fastest);
+                        await using var entryStream = entry.Open();
+                        await entryStream.WriteAsync(generated.FileBytes, 0, generated.FileBytes.Length, HttpContext.RequestAborted);
+                    }
                 }
 
                 if (failures.Count > 0)
@@ -194,12 +226,12 @@ namespace ETD.Api.Controllers
             }
 
             zipStream.Position = 0;
-            var fileName = $"Workbook_Range_Q{qualificationId}_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+            var fileName = $"Workbook_{(IsAllWorkbookActivityScope(activityScope) ? "AllSets" : BuildWorkbookScopeLabel(activityScope).Replace(" ", string.Empty))}_Range_Q{qualificationId}_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
             return File(zipStream.ToArray(), "application/zip", fileName);
         }
 
         [HttpGet("download-consolidated")]
-        public async Task<IActionResult> DownloadConsolidated([FromQuery] int qualificationId, [FromQuery] int maxActivities = 30)
+        public async Task<IActionResult> DownloadConsolidated([FromQuery] int qualificationId, [FromQuery] int maxActivities = 30, [FromQuery] string activityScope = WorkbookActivityScopes.AssessmentCriteria)
         {
             if (qualificationId <= 0) return BadRequest("qualificationId is required for consolidated workbook export.");
 
@@ -217,6 +249,9 @@ namespace ETD.Api.Controllers
             {
                 var main = doc.AddMainDocumentPart();
                 main.Document = new Document(new Body());
+                EnsureWorkbookDocumentSettings(main);
+                EnsureWorkbookStyles(main);
+                var footerRelId = EnsureWorkbookFooter(main);
                 var body = main.Document.Body ?? (main.Document.Body = new Body());
 
                 AppendCleanCoverPage(
@@ -236,53 +271,42 @@ namespace ETD.Api.Controllers
                 var exportedSubjects = 0;
                 foreach (var subject in subjects)
                 {
-                    var (activityBundles, activitySource) = await BuildWorkbookActivitiesAsync(
-                        subject,
-                        qualification,
-                        max,
-                        HttpContext.RequestAborted);
-                    if (activityBundles.Count == 0)
+                    var activities = BuildWorkbookDiscussionActivities(subject, max, activityScope);
+                    if (activities.Count == 0)
                     {
                         continue;
                     }
 
                     exportedSubjects++;
                     body.Append(StyledHeading($"{subject.SubjectCode} — {subject.SubjectDescription}", "Heading1", 26));
-                    body.Append(BodyPara("Instruction: For each criterion, complete the practical task and answer one True/False stem.", 22));
+                    body.Append(BodyPara($"Instruction: Complete the {BuildWorkbookScopeLabel(activityScope).ToLowerInvariant()} discussion activities for this subject.", 24));
                     body.Append(Blank());
 
-                    var section = 1;
-                    foreach (var activity in activityBundles)
+                    foreach (var activity in activities)
                     {
-                        body.Append(BuildActivityTable(
-                            section,
-                            activity.Item,
-                            activity.TrueFalseQuestion));
-                        body.Append(Blank());
-                        section++;
+                        body.Append(StyledHeading($"Workbook Activity {activity.ActivityNumber}", "Heading2", 14));
+                        AppendWorkbookActivityBlock(body, activity);
+                        body.Append(PageBreak());
                     }
-
-                    body.Append(BodyPara($"Question source: {activitySource}.", 22));
-                    body.Append(PageBreak());
                 }
 
                 if (exportedSubjects == 0)
                 {
                     body.Append(StyledHeading("No Activities Generated", "Heading1", 24));
-                    body.Append(BodyPara("No subjects produced assessment-criteria workbook activities.", 22));
+                    body.Append(BodyPara("No subjects produced workbook activities for the selected workbook set.", 24));
                 }
 
-                body.Append(DefaultSectionProperties());
+                body.Append(DefaultSectionProperties(footerRelId));
                 main.Document.Save();
             }
 
             ms.Position = 0;
-            var fileName = $"Workbook_AllSubjects_Q{qualificationId}_{DateTime.Now:yyyyMMdd_HHmmss}.docx";
+            var fileName = $"Workbook_{BuildWorkbookScopeLabel(activityScope).Replace(" ", string.Empty)}_AllSubjects_Q{qualificationId}_{DateTime.Now:yyyyMMdd_HHmmss}.docx";
             return File(ms.ToArray(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", fileName);
         }
 
         [HttpGet("download-memorandum")]
-        public async Task<IActionResult> DownloadMemorandum([FromQuery] int? qualificationId = null, [FromQuery] int? subjectId = null, [FromQuery] int maxActivities = 30)
+        public async Task<IActionResult> DownloadMemorandum([FromQuery] int? qualificationId = null, [FromQuery] int? subjectId = null, [FromQuery] int maxActivities = 30, [FromQuery] string activityScope = WorkbookActivityScopes.AssessmentCriteria)
         {
             var subject = ResolveSubject(subjectId, qualificationId);
             if (subject == null) return BadRequest("No subject available for workbook memorandum export.");
@@ -307,7 +331,8 @@ namespace ETD.Api.Controllers
             [FromQuery] int qualificationId,
             [FromQuery] int? subjectFromId = null,
             [FromQuery] int? subjectToId = null,
-            [FromQuery] int maxActivities = 30)
+            [FromQuery] int maxActivities = 30,
+            [FromQuery] string activityScope = WorkbookActivityScopes.All)
         {
             if (qualificationId <= 0) return BadRequest("qualificationId is required for range export.");
 
@@ -358,7 +383,7 @@ namespace ETD.Api.Controllers
         }
 
         [HttpGet("report")]
-        public async Task<IActionResult> Report([FromQuery] int? qualificationId = null, [FromQuery] int? subjectId = null, [FromQuery] int maxActivities = 30)
+        public async Task<IActionResult> Report([FromQuery] int? qualificationId = null, [FromQuery] int? subjectId = null, [FromQuery] int maxActivities = 30, [FromQuery] string activityScope = WorkbookActivityScopes.AssessmentCriteria)
         {
             var subject = ResolveSubject(subjectId, qualificationId);
             if (subject == null) return BadRequest("No subject available for workbook report.");
@@ -366,7 +391,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return BadRequest("No qualification available for workbook report.");
 
             var max = Math.Clamp(maxActivities, 4, 80);
-            var reportResult = await BuildWorkbookReportAsync(subject, qualification, max, HttpContext.RequestAborted);
+            var reportResult = await BuildWorkbookReportAsync(subject, qualification, max, activityScope, HttpContext.RequestAborted);
             if (!reportResult.Success || reportResult.Report == null)
             {
                 return BadRequest(reportResult.ErrorMessage);
@@ -376,7 +401,7 @@ namespace ETD.Api.Controllers
         }
 
         [HttpGet("download-report")]
-        public async Task<IActionResult> DownloadReport([FromQuery] int? qualificationId = null, [FromQuery] int? subjectId = null, [FromQuery] int maxActivities = 30)
+        public async Task<IActionResult> DownloadReport([FromQuery] int? qualificationId = null, [FromQuery] int? subjectId = null, [FromQuery] int maxActivities = 30, [FromQuery] string activityScope = WorkbookActivityScopes.AssessmentCriteria)
         {
             var subject = ResolveSubject(subjectId, qualificationId);
             if (subject == null) return BadRequest("No subject available for workbook report.");
@@ -384,7 +409,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return BadRequest("No qualification available for workbook report.");
 
             var max = Math.Clamp(maxActivities, 4, 80);
-            var reportResult = await BuildWorkbookReportAsync(subject, qualification, max, HttpContext.RequestAborted);
+            var reportResult = await BuildWorkbookReportAsync(subject, qualification, max, activityScope, HttpContext.RequestAborted);
             if (!reportResult.Success || reportResult.Report == null)
             {
                 return BadRequest(reportResult.ErrorMessage);
@@ -392,7 +417,7 @@ namespace ETD.Api.Controllers
 
             var reportText = BuildWorkbookReportText(reportResult.Report);
             var safeCode = MakeSafeFilePart(subject.SubjectCode, "SUBJECT");
-            var fileName = $"Workbook_Report_{safeCode}_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
+            var fileName = $"Workbook_Report_{BuildWorkbookScopeLabel(activityScope).Replace(" ", string.Empty)}_{safeCode}_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
             return File(Encoding.UTF8.GetBytes(reportText), "text/plain; charset=utf-8", fileName);
         }
 
@@ -401,7 +426,8 @@ namespace ETD.Api.Controllers
             [FromQuery] int qualificationId,
             [FromQuery] int? subjectFromId = null,
             [FromQuery] int? subjectToId = null,
-            [FromQuery] int maxActivities = 30)
+            [FromQuery] int maxActivities = 30,
+            [FromQuery] string activityScope = WorkbookActivityScopes.All)
         {
             if (qualificationId <= 0) return BadRequest("qualificationId is required for range report export.");
 
@@ -422,22 +448,26 @@ namespace ETD.Api.Controllers
                         continue;
                     }
 
-                    var reportResult = await BuildWorkbookReportAsync(
-                        subject,
-                        qualification,
-                        max,
-                        HttpContext.RequestAborted);
-
-                    if (!reportResult.Success || reportResult.Report == null)
+                    foreach (var scope in ExpandWorkbookActivityScopes(activityScope))
                     {
-                        failures.Add($"{subject.SubjectCode}: {reportResult.ErrorMessage}");
-                        continue;
-                    }
+                        var reportResult = await BuildWorkbookReportAsync(
+                            subject,
+                            qualification,
+                            max,
+                            scope,
+                            HttpContext.RequestAborted);
 
-                    var safeCode = MakeSafeFilePart(subject.SubjectCode, "SUBJECT");
-                    var entry = zip.CreateEntry($"Workbook_Report_{safeCode}.txt", CompressionLevel.Fastest);
-                    await using var entryStream = new StreamWriter(entry.Open(), Encoding.UTF8);
-                    await entryStream.WriteAsync(BuildWorkbookReportText(reportResult.Report));
+                        if (!reportResult.Success || reportResult.Report == null)
+                        {
+                            failures.Add($"{subject.SubjectCode} ({BuildWorkbookScopeLabel(scope)}): {reportResult.ErrorMessage}");
+                            continue;
+                        }
+
+                        var safeCode = MakeSafeFilePart(subject.SubjectCode, "SUBJECT");
+                        var entry = zip.CreateEntry($"Workbook_Report_{BuildWorkbookScopeLabel(scope).Replace(" ", string.Empty)}_{safeCode}.txt", CompressionLevel.Fastest);
+                        await using var entryStream = new StreamWriter(entry.Open(), Encoding.UTF8);
+                        await entryStream.WriteAsync(BuildWorkbookReportText(reportResult.Report));
+                    }
                 }
 
                 if (failures.Count > 0)
@@ -453,7 +483,7 @@ namespace ETD.Api.Controllers
             }
 
             zipStream.Position = 0;
-            var zipName = $"Workbook_Report_Range_Q{qualificationId}_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+            var zipName = $"Workbook_Report_{(IsAllWorkbookActivityScope(activityScope) ? "AllSets" : BuildWorkbookScopeLabel(activityScope).Replace(" ", string.Empty))}_Range_Q{qualificationId}_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
             return File(zipStream.ToArray(), "application/zip", zipName);
         }
 
@@ -492,6 +522,7 @@ namespace ETD.Api.Controllers
             public int SubjectId { get; set; }
             public string SubjectCode { get; set; } = string.Empty;
             public string SubjectDescription { get; set; } = string.Empty;
+            public string ActivityScope { get; set; } = string.Empty;
             public int MaxActivitiesRequested { get; set; }
             public int ActivitiesGenerated { get; set; }
             public int TotalQuestionsGenerated { get; set; }
@@ -504,20 +535,208 @@ namespace ETD.Api.Controllers
             public DateTime GeneratedAtUtc { get; set; }
         }
 
+        private static class WorkbookActivityScopes
+        {
+            public const string Topic = "topic";
+            public const string AssessmentCriteria = "assessment";
+            public const string LessonPlan = "lessonplan";
+            public const string All = "all";
+        }
+
+        private sealed class WorkbookDiscussionActivity
+        {
+            public int ActivityNumber { get; init; }
+            public string Scope { get; init; } = WorkbookActivityScopes.AssessmentCriteria;
+            public string ScopeLabel { get; init; } = string.Empty;
+            public string SubjectCode { get; init; } = string.Empty;
+            public string SubjectDescription { get; init; } = string.Empty;
+            public string TopicCode { get; init; } = string.Empty;
+            public string TopicDescription { get; init; } = string.Empty;
+            public string PromptDescriptor { get; init; } = string.Empty;
+            public string TaskPrompt { get; init; } = string.Empty;
+            public string Qualifier { get; init; } = WorkbookQualifierText;
+            public string PrepareTime { get; init; } = WorkbookPrepareTimeDisplay;
+            public string PresentationTime { get; init; } = WorkbookPresentationTimeDisplay;
+            public int MarksPossible { get; init; } = WorkbookMarksPerActivity;
+            public string AssessmentCriteriaDescription { get; init; } = string.Empty;
+            public string LessonPlanLabel { get; init; } = string.Empty;
+            public string LessonPlanDescription { get; init; } = string.Empty;
+            public string LessonPlanContent { get; init; } = string.Empty;
+            public string SourceIdentity { get; init; } = string.Empty;
+        }
+
+        private static string NormalizeWorkbookActivityScope(string? value)
+        {
+            var scope = (value ?? string.Empty).Trim().ToLowerInvariant();
+            return scope switch
+            {
+                WorkbookActivityScopes.Topic => WorkbookActivityScopes.Topic,
+                WorkbookActivityScopes.AssessmentCriteria => WorkbookActivityScopes.AssessmentCriteria,
+                WorkbookActivityScopes.LessonPlan => WorkbookActivityScopes.LessonPlan,
+                WorkbookActivityScopes.All => WorkbookActivityScopes.All,
+                _ => WorkbookActivityScopes.AssessmentCriteria
+            };
+        }
+
+        private static IReadOnlyList<string> ExpandWorkbookActivityScopes(string? value)
+        {
+            var normalized = NormalizeWorkbookActivityScope(value);
+            return normalized == WorkbookActivityScopes.All
+                ? new[] { WorkbookActivityScopes.Topic, WorkbookActivityScopes.AssessmentCriteria, WorkbookActivityScopes.LessonPlan }
+                : new[] { normalized };
+        }
+
+        private static bool IsAllWorkbookActivityScope(string? value)
+            => string.Equals(NormalizeWorkbookActivityScope(value), WorkbookActivityScopes.All, StringComparison.OrdinalIgnoreCase);
+
+        private static string BuildWorkbookScopeLabel(string scope)
+        {
+            return NormalizeWorkbookActivityScope(scope) switch
+            {
+                WorkbookActivityScopes.Topic => "Topic",
+                WorkbookActivityScopes.LessonPlan => "Lesson Plan",
+                _ => "Assessment Criteria"
+            };
+        }
+
+        private static string BuildWorkbookDocumentTitle(string scope, bool memorandum = false)
+        {
+            var label = BuildWorkbookScopeLabel(scope).ToUpperInvariant();
+            return memorandum ? $"{label} WORKBOOK MEMORANDUM" : $"{label} WORKBOOK";
+        }
+
+        private static string BuildWorkbookPromptDescriptor(
+            AssessmentDrivenQuestionGenerator.LessonEvidenceItem item,
+            string scope)
+        {
+            var normalizedScope = NormalizeWorkbookActivityScope(scope);
+            var raw = normalizedScope switch
+            {
+                WorkbookActivityScopes.Topic => item.TopicDescription,
+                WorkbookActivityScopes.LessonPlan => string.IsNullOrWhiteSpace(item.LessonPlanDescription)
+                    ? item.LessonPlanContent
+                    : item.LessonPlanDescription,
+                _ => item.AssessmentCriteriaDescription
+            };
+
+            var descriptor = AssessmentDrivenQuestionGenerator.SanitizeQuestionText(raw);
+            if (string.IsNullOrWhiteSpace(descriptor))
+            {
+                descriptor = AssessmentDrivenQuestionGenerator.SanitizeQuestionText(item.TopicDescription);
+            }
+            if (string.IsNullOrWhiteSpace(descriptor))
+            {
+                descriptor = "the topic content";
+            }
+
+            descriptor = descriptor.Trim().TrimEnd('.', '!', '?', ':', ';');
+            return descriptor;
+        }
+
+        private static string BuildWorkbookTaskPrompt(string descriptor)
+        {
+            var cleaned = (descriptor ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                return "In your groups explain the: lesson content";
+            }
+
+            var leadVerbs = new[] { "explain", "describe", "identify", "discuss", "outline", "demonstrate", "list" };
+            if (leadVerbs.Any(v => cleaned.StartsWith(v + " ", StringComparison.OrdinalIgnoreCase)))
+            {
+                return $"In your groups: {char.ToUpperInvariant(cleaned[0])}{cleaned[1..]}";
+            }
+
+            return $"In your groups explain the: {cleaned}";
+        }
+
+        private static string NormalizeWorkbookTimeText(string? value, string fallback)
+        {
+            var text = (value ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(text)) return fallback;
+            text = Regex.Replace(text, @"\bminutes?\b", "Min", RegexOptions.IgnoreCase).Trim();
+            text = Regex.Replace(text, @"\s+", " ");
+            return text;
+        }
+
+        private List<WorkbookDiscussionActivity> BuildWorkbookDiscussionActivities(
+            Subject subject,
+            int maxActivities,
+            string activityScope)
+        {
+            var normalizedScope = NormalizeWorkbookActivityScope(activityScope);
+            var items = AssessmentDrivenQuestionGenerator.BuildOrderedLessonEvidence(_context, subject.Id);
+            if (items.Count == 0) return new List<WorkbookDiscussionActivity>();
+
+            IEnumerable<AssessmentDrivenQuestionGenerator.LessonEvidenceItem> selected = normalizedScope switch
+            {
+                WorkbookActivityScopes.Topic => items
+                    .GroupBy(item => item.TopicId > 0
+                        ? $"TOPIC:{item.TopicId}"
+                        : $"{(item.TopicCode ?? string.Empty).Trim().ToUpperInvariant()}|{(item.TopicDescription ?? string.Empty).Trim().ToUpperInvariant()}")
+                    .Select(group => group
+                        .OrderBy(item => item.AssessmentCriteriaId)
+                        .ThenBy(item => item.LessonSortOrder)
+                        .ThenBy(item => item.LessonPlanLabel)
+                        .First()),
+                WorkbookActivityScopes.LessonPlan => items
+                    .GroupBy(item => string.IsNullOrWhiteSpace(item.BundleKey)
+                        ? $"{item.TopicId}:{item.AssessmentCriteriaId}:{(item.LessonPlanLabel ?? string.Empty).Trim().ToUpperInvariant()}:{(item.LessonPlanDescription ?? string.Empty).Trim().ToUpperInvariant()}"
+                        : item.BundleKey)
+                    .Select(group => group.First()),
+                _ => BuildAssessmentCriteriaFocusedItems(items)
+            };
+
+            return selected
+                .OrderBy(item => item.TopicOrder)
+                .ThenBy(item => item.TopicCode)
+                .ThenBy(item => item.AssessmentCriteriaId)
+                .ThenBy(item => item.LessonSortOrder)
+                .ThenBy(item => item.LessonPlanLabel)
+                .Take(Math.Max(1, maxActivities))
+                .Select((item, index) =>
+                {
+                    var descriptor = BuildWorkbookPromptDescriptor(item, normalizedScope);
+                    return new WorkbookDiscussionActivity
+                    {
+                        ActivityNumber = index + 1,
+                        Scope = normalizedScope,
+                        ScopeLabel = BuildWorkbookScopeLabel(normalizedScope),
+                        SubjectCode = (subject.SubjectCode ?? string.Empty).Trim(),
+                        SubjectDescription = (subject.SubjectDescription ?? string.Empty).Trim(),
+                        TopicCode = (item.TopicCode ?? string.Empty).Trim(),
+                        TopicDescription = (item.TopicDescription ?? string.Empty).Trim(),
+                        PromptDescriptor = descriptor,
+                        TaskPrompt = BuildWorkbookTaskPrompt(descriptor),
+                        Qualifier = WorkbookQualifierText,
+                        PrepareTime = NormalizeWorkbookTimeText(WorkbookPrepareTimeDisplay, WorkbookPrepareTimeDisplay),
+                        PresentationTime = NormalizeWorkbookTimeText(WorkbookPresentationTimeDisplay, WorkbookPresentationTimeDisplay),
+                        MarksPossible = WorkbookMarksPerActivity,
+                        AssessmentCriteriaDescription = (item.AssessmentCriteriaDescription ?? string.Empty).Trim(),
+                        LessonPlanLabel = (item.LessonPlanLabel ?? string.Empty).Trim(),
+                        LessonPlanDescription = (item.LessonPlanDescription ?? string.Empty).Trim(),
+                        LessonPlanContent = (item.LessonPlanContent ?? string.Empty).Trim(),
+                        SourceIdentity = (item.BundleKey ?? string.Empty).Trim()
+                    };
+                })
+                .ToList();
+        }
+
         private async Task<GeneratedDocResult> BuildWorkbookDocumentAsync(
             Subject subject,
             Qualification qualification,
             int maxActivities,
+            string activityScope,
             CancellationToken cancellationToken)
         {
-            var (activityBundles, activitySource) = await BuildWorkbookActivitiesAsync(
-                subject,
-                qualification,
-                maxActivities,
-                cancellationToken);
-            if (activityBundles.Count == 0)
+            _ = qualification;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var normalizedScope = NormalizeWorkbookActivityScope(activityScope);
+            var activities = BuildWorkbookDiscussionActivities(subject, maxActivities, normalizedScope);
+            if (activities.Count == 0)
             {
-                return GeneratedDocResult.Fail("No workbook question data found for this subject.");
+                return GeneratedDocResult.Fail("No workbook activity data found for this subject.");
             }
 
             using var ms = new MemoryStream();
@@ -525,23 +744,25 @@ namespace ETD.Api.Controllers
             {
                 var main = doc.AddMainDocumentPart();
                 main.Document = new Document(new Body());
+                EnsureWorkbookDocumentSettings(main);
+                EnsureWorkbookStyles(main);
+                var footerRelId = EnsureWorkbookFooter(main);
                 var body = main.Document.Body ?? (main.Document.Body = new Body());
 
                 AppendCleanCoverPage(
                     body,
                     main,
                     qualification,
-                    "WORKBOOK",
+                    BuildWorkbookDocumentTitle(normalizedScope),
                     $"{subject.SubjectCode} — {subject.SubjectDescription}");
                 body.Append(PageBreak());
 
-                body.Append(StyledHeading("WORKBOOK", "Heading1", 30));
-                body.Append(BodyPara($"{subject.SubjectCode} — {subject.SubjectDescription}", 24));
-                body.Append(Blank());
-                body.Append(BodyPara("Learner name: ________________________________", 24));
-                body.Append(BodyPara("Learner number: ______________________________", 24));
-                body.Append(BodyPara("Date completed: ______________________________", 24));
-                body.Append(BodyPara("Instructions: Complete each activity using lesson notes and source material. Each activity contains one assessment-criterion practical task and one True/False stem.", 24));
+                body.Append(StyledHeading(BuildWorkbookDocumentTitle(normalizedScope), "Heading1", 20));
+                body.Append(BuildWorkbookLearnerParticularsTable(subject, activities.Count * WorkbookMarksPerActivity));
+                body.Append(PageBreak());
+
+                body.Append(StyledHeading("APPROVAL AND SIGNATURES", "Heading1", 18));
+                body.Append(BuildWorkbookRoleplayersTable());
                 body.Append(PageBreak());
 
                 AppendLegalDisclaimerPage(body, qualification);
@@ -550,43 +771,27 @@ namespace ETD.Api.Controllers
                 AppendTableOfContentsPage(body);
                 body.Append(PageBreak());
 
-                body.Append(StyledHeading("WORKBOOK ACTIVITIES", "Heading1", 28));
-                var section = 1;
-                foreach (var activity in activityBundles)
-                {
-                    body.Append(BuildActivityTable(
-                        section,
-                        activity.Item,
-                        activity.TrueFalseQuestion));
-                    body.Append(Blank());
-                    section++;
-                }
-
-                body.Append(StyledHeading("WORKBOOK SUMMARY", "Heading1", 22));
-                body.Append(BodyPara($"Question source: {activitySource}.", 22));
-
+                AppendWorkbookInstructionsPage(body);
                 body.Append(PageBreak());
-                body.Append(StyledHeading("BIBLIOGRAPHY", "Heading1", 22));
-                var bibliography = BuildBibliographyEntries(qualification, subject, activityBundles);
-                if (bibliography.Count == 0)
+
+                body.Append(StyledHeading($"{BuildWorkbookScopeLabel(normalizedScope).ToUpperInvariant()} ACTIVITIES", "Heading1", 20));
+                body.Append(BodyPara($"{subject.SubjectCode} — {subject.SubjectDescription}", 24));
+                body.Append(Blank());
+
+                foreach (var activity in activities)
                 {
-                    body.Append(BodyPara("No bibliography entries were detected for this subject export.", 22));
-                }
-                else
-                {
-                    foreach (var entry in bibliography)
-                    {
-                        body.Append(BulletPara(entry, 22));
-                    }
+                    body.Append(StyledHeading($"Workbook Activity {activity.ActivityNumber}", "Heading2", 14));
+                    AppendWorkbookActivityBlock(body, activity);
+                    body.Append(PageBreak());
                 }
 
-                body.Append(DefaultSectionProperties());
+                body.Append(DefaultSectionProperties(footerRelId));
                 main.Document.Save();
             }
 
             ms.Position = 0;
             var safeCode = MakeSafeFilePart(subject.SubjectCode, "SUBJECT");
-            var fileName = $"Workbook_{safeCode}_{DateTime.Now:yyyyMMdd}.docx";
+            var fileName = $"Workbook_{BuildWorkbookScopeLabel(normalizedScope).Replace(" ", string.Empty)}_{safeCode}_{DateTime.Now:yyyyMMdd}.docx";
             return GeneratedDocResult.Ok(ms.ToArray(), fileName);
         }
 
@@ -594,21 +799,26 @@ namespace ETD.Api.Controllers
             Subject subject,
             Qualification qualification,
             int maxActivities,
+            string activityScope,
             CancellationToken cancellationToken)
         {
-            var (activityBundles, activitySource) = await BuildWorkbookActivitiesAsync(
-                subject,
-                qualification,
-                maxActivities,
-                cancellationToken);
-            if (activityBundles.Count == 0)
+            _ = qualification;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var normalizedScope = NormalizeWorkbookActivityScope(activityScope);
+            if (normalizedScope == WorkbookActivityScopes.All)
             {
-                return WorkbookReportResult.Fail("No workbook question data found for this subject.");
+                return WorkbookReportResult.Fail("Select a single workbook set to generate a report.");
             }
 
-            var bibliography = BuildBibliographyEntries(qualification, subject, activityBundles);
-            var topicCodes = activityBundles
-                .Select(b => (b.Item.TopicCode ?? string.Empty).Trim())
+            var activities = BuildWorkbookDiscussionActivities(subject, maxActivities, normalizedScope);
+            if (activities.Count == 0)
+            {
+                return WorkbookReportResult.Fail("No workbook activity data found for this subject.");
+            }
+
+            var topicCodes = activities
+                .Select(b => (b.TopicCode ?? string.Empty).Trim())
                 .Where(v => !string.IsNullOrWhiteSpace(v))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
@@ -622,14 +832,15 @@ namespace ETD.Api.Controllers
                 SubjectId = subject.Id,
                 SubjectCode = (subject.SubjectCode ?? string.Empty).Trim(),
                 SubjectDescription = (subject.SubjectDescription ?? string.Empty).Trim(),
+                ActivityScope = BuildWorkbookScopeLabel(normalizedScope),
                 MaxActivitiesRequested = maxActivities,
-                ActivitiesGenerated = activityBundles.Count,
-                TotalQuestionsGenerated = activityBundles.Count,
-                QuestionSource = activitySource ?? string.Empty,
+                ActivitiesGenerated = activities.Count,
+                TotalQuestionsGenerated = activities.Count,
+                QuestionSource = $"Workbook set generated from {BuildWorkbookScopeLabel(normalizedScope).ToLowerInvariant()} rows with one activity worth 4 marks each.",
                 TableOfContentsIncluded = true,
-                BibliographySectionIncluded = true,
-                BibliographyEntriesFound = bibliography.Count,
-                BibliographyPreview = bibliography.Take(8).ToList(),
+                BibliographySectionIncluded = false,
+                BibliographyEntriesFound = 0,
+                BibliographyPreview = new List<string>(),
                 TopicCodes = topicCodes,
                 GeneratedAtUtc = DateTime.UtcNow
             };
@@ -644,6 +855,7 @@ namespace ETD.Api.Controllers
             sb.AppendLine($"Generated (UTC): {report.GeneratedAtUtc:yyyy-MM-dd HH:mm:ss}");
             sb.AppendLine($"Qualification: {report.QualificationNumber} - {report.QualificationDescription} (ID: {report.QualificationId})");
             sb.AppendLine($"Subject: {report.SubjectCode} - {report.SubjectDescription} (ID: {report.SubjectId})");
+            sb.AppendLine($"Workbook Set: {report.ActivityScope}");
             sb.AppendLine($"Max Activities Requested: {report.MaxActivitiesRequested}");
             sb.AppendLine($"Activities Generated: {report.ActivitiesGenerated}");
             sb.AppendLine($"Total Questions Generated: {report.TotalQuestionsGenerated}");
@@ -668,14 +880,13 @@ namespace ETD.Api.Controllers
             int maxActivities,
             CancellationToken cancellationToken)
         {
-            var (activityBundles, activitySource) = await BuildWorkbookActivitiesAsync(
-                subject,
-                qualification,
-                maxActivities,
-                cancellationToken);
-            if (activityBundles.Count == 0)
+            _ = qualification;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var activities = BuildWorkbookDiscussionActivities(subject, maxActivities, WorkbookActivityScopes.AssessmentCriteria);
+            if (activities.Count == 0)
             {
-                return GeneratedDocResult.Fail("No workbook question data found for this subject.");
+                return GeneratedDocResult.Fail("No workbook activity data found for this subject.");
             }
 
             using var ms = new MemoryStream();
@@ -683,6 +894,9 @@ namespace ETD.Api.Controllers
             {
                 var main = doc.AddMainDocumentPart();
                 main.Document = new Document(new Body());
+                EnsureWorkbookDocumentSettings(main);
+                EnsureWorkbookStyles(main);
+                var footerRelId = EnsureWorkbookFooter(main);
                 var body = main.Document.Body ?? (main.Document.Body = new Body());
 
                 AppendCleanCoverPage(
@@ -693,33 +907,21 @@ namespace ETD.Api.Controllers
                     $"{subject.SubjectCode} — {subject.SubjectDescription}");
                 body.Append(PageBreak());
 
-                body.Append(StyledHeading("Workbook Memorandum", "Heading1", 32));
+                body.Append(StyledHeading("WORKBOOK MEMORANDUM", "Heading1", 20));
                 body.Append(BodyPara($"{subject.SubjectCode} — {subject.SubjectDescription}", 24));
                 body.Append(PageBreak());
 
                 AppendLegalDisclaimerPage(body, qualification);
                 body.Append(PageBreak());
 
-                var table = new Table();
-                table.Append(DefaultTableProperties());
-                table.Append(new TableGrid());
-                table.Append(MemoRow("Activity", "Topic/LPN", "Assessment Criterion", "T/F Key", header: true));
-
-                var activity = 1;
-                foreach (var bundle in activityBundles)
+                foreach (var activity in activities)
                 {
-                    table.Append(MemoRow(
-                        activity.ToString(),
-                        $"{bundle.Item.TopicCode} | {bundle.Item.LessonPlanLabel}",
-                        bundle.Item.AssessmentCriteriaDescription,
-                        bundle.TrueFalseQuestion.CorrectAnswer));
-                    activity++;
+                    AppendWorkbookMemorandumActivityBlock(body, activity);
+                    body.Append(Blank());
                 }
 
-                body.Append(table);
-                body.Append(Blank());
-                body.Append(BodyPara($"Question source: {activitySource}.", 22));
-                body.Append(DefaultSectionProperties());
+                body.Append(BodyPara("Marking guide: Award up to 4 marks. Award 1 mark per valid group fact or correct discussion point, up to a maximum of 4 marks.", 22));
+                body.Append(DefaultSectionProperties(footerRelId));
                 main.Document.Save();
             }
 
@@ -1116,8 +1318,8 @@ namespace ETD.Api.Controllers
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (!IsLikelyEnglishText(prompt) || HasNoiseArtifacts(prompt)) return null;
-            if (options.Any(o => !IsLikelyEnglishText(o) || HasNoiseArtifacts(o))) return null;
+            if (!IsLikelyEnglishText(prompt) || HasNoiseArtifacts(prompt) || IsCurriculumEchoQuestion(prompt)) return null;
+            if (options.Any(o => !IsLikelyEnglishText(o) || HasNoiseArtifacts(o) || IsCurriculumEchoQuestion(o))) return null;
 
             if (options.Count != optionCount) return null;
             if (options.Any(AssessmentDrivenQuestionGenerator.ContainsQuestionAdministrativeReference)) return null;
@@ -1127,7 +1329,7 @@ namespace ETD.Api.Controllers
             var rationale = AssessmentDrivenQuestionGenerator.SanitizeQuestionText(parsed.Rationale);
             if (string.IsNullOrWhiteSpace(rationale))
             {
-                rationale = "Generated by SMI using lesson-plan content and qualification context.";
+                rationale = "Generated by Gemma using lesson-plan content and qualification context.";
             }
 
             string correctAnswer;
@@ -1343,8 +1545,11 @@ namespace ETD.Api.Controllers
             sb.AppendLine("- Use English only.");
             sb.AppendLine("- Use clean plain text (no garbled or corrupted characters).");
             sb.AppendLine("- Apply logical reasoning using only the provided context.");
+            sb.AppendLine("- Use the lesson content first and the supporting evidence second as the source of truth.");
+            sb.AppendLine("- Infer the real technical concept, task, component, tool, safety point, or workplace decision from the content before writing the question.");
             sb.AppendLine("- Keep the stem self-contained and practical.");
             sb.AppendLine("- Do not include topic codes, AC numbers, LPN labels, or administrative metadata in the stem/options.");
+            sb.AppendLine("- Never mention phrases such as 'lesson plan content', 'topic content', 'curriculum', 'assessment criteria', or 'content map' in the stem or options.");
             sb.AppendLine("- Keep options homogeneous and realistic.");
             sb.AppendLine("- Do not use 'All of the above' or 'None of the above'.");
             if (isTrueFalse)
@@ -1638,6 +1843,15 @@ namespace ETD.Api.Controllers
             return nonAscii > Math.Max(6, text.Length / 12);
         }
 
+        private static bool IsCurriculumEchoQuestion(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            return Regex.IsMatch(
+                text,
+                @"\b(?:lesson\s+plan\s+content|topic\s+content|curriculum(?:\s+content|\s+map)?|assessment\s+criteria?|source\s+excerpt|cited\s+source)\b|[A-Za-z]:\\|\.pdf\b|https?://",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
         private static string CleanSmiAnswerText(string? text)
         {
             var value = text ?? string.Empty;
@@ -1929,25 +2143,170 @@ namespace ETD.Api.Controllers
                    ?? _context.Qualifications.FirstOrDefault();
         }
 
-        private static SectionProperties DefaultSectionProperties()
+        private static void EnsureWorkbookDocumentSettings(MainDocumentPart main)
         {
-            return new SectionProperties(
-                new PageSize() { Orient = PageOrientationValues.Portrait, Width = 12240, Height = 15840 },
+            var settingsPart = main.DocumentSettingsPart ?? main.AddNewPart<DocumentSettingsPart>();
+            settingsPart.Settings = new Settings(new UpdateFieldsOnOpen() { Val = true });
+            settingsPart.Settings.Save();
+        }
+
+        private static void EnsureWorkbookStyles(MainDocumentPart main)
+        {
+            var stylePart = main.StyleDefinitionsPart ?? main.AddNewPart<StyleDefinitionsPart>();
+            stylePart.Styles ??= new Styles();
+
+            UpsertParagraphStyle(stylePart.Styles, BuildNormalStyle());
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading1", "heading 1", 0));
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading2", "heading 2", 1));
+            UpsertParagraphStyle(stylePart.Styles, BuildHeadingStyle("Heading3", "heading 3", 2));
+            UpsertParagraphStyle(stylePart.Styles, BuildTocStyle("TOC1", "toc 1", 0, bold: true));
+            UpsertParagraphStyle(stylePart.Styles, BuildTocStyle("TOC2", "toc 2", 240, bold: true));
+            UpsertParagraphStyle(stylePart.Styles, BuildTocStyle("TOC3", "toc 3", 480, bold: false));
+            stylePart.Styles.Save();
+        }
+
+        private static void UpsertParagraphStyle(Styles styles, Style style)
+        {
+            var existing = styles.Elements<Style>()
+                .FirstOrDefault(candidate => string.Equals(candidate.StyleId?.Value, style.StyleId?.Value, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                existing.Remove();
+            }
+
+            styles.Append(style);
+        }
+
+        private static Style BuildNormalStyle()
+        {
+            var style = new Style
+            {
+                Type = StyleValues.Paragraph,
+                StyleId = "Normal",
+                Default = true
+            };
+            style.Append(
+                new StyleName { Val = "Normal" },
+                new PrimaryStyle(),
+                new StyleRunProperties(
+                    new RunFonts { Ascii = ExportFont, HighAnsi = ExportFont },
+                    new FontSize { Val = "22" },
+                    new FontSizeComplexScript { Val = "22" }));
+            return style;
+        }
+
+        private static Style BuildHeadingStyle(string styleId, string styleName, int outlineLevel)
+        {
+            var style = new Style
+            {
+                Type = StyleValues.Paragraph,
+                StyleId = styleId,
+                CustomStyle = false
+            };
+            style.Append(
+                new StyleName { Val = styleName },
+                new BasedOn { Val = "Normal" },
+                new NextParagraphStyle { Val = "Normal" },
+                new UIPriority { Val = 9 },
+                new UnhideWhenUsed(),
+                new PrimaryStyle(),
+                new StyleParagraphProperties(
+                    new OutlineLevel { Val = outlineLevel }),
+                new StyleRunProperties(
+                    new RunFonts { Ascii = ExportFont, HighAnsi = ExportFont }));
+            return style;
+        }
+
+        private static Style BuildTocStyle(string styleId, string styleName, int leftIndentTwips, bool bold)
+        {
+            var runProperties = new StyleRunProperties(
+                new RunFonts { Ascii = ExportFont, HighAnsi = ExportFont },
+                new FontSize { Val = "22" },
+                new FontSizeComplexScript { Val = "22" });
+            if (bold)
+            {
+                runProperties.Bold = new Bold();
+            }
+
+            var style = new Style
+            {
+                Type = StyleValues.Paragraph,
+                StyleId = styleId,
+                CustomStyle = false
+            };
+            style.Append(
+                new StyleName { Val = styleName },
+                new BasedOn { Val = "Normal" },
+                new NextParagraphStyle { Val = "Normal" },
+                new AutoRedefine(),
+                new UIPriority { Val = 39 },
+                new UnhideWhenUsed(),
+                new StyleParagraphProperties(
+                    new SpacingBetweenLines { After = "100" },
+                    new Indentation { Left = leftIndentTwips.ToString() }),
+                runProperties);
+            return style;
+        }
+
+        private static string EnsureWorkbookFooter(MainDocumentPart main)
+        {
+            var footerPart = main.AddNewPart<FooterPart>();
+            var footer = new Footer();
+            footer.Append(new Paragraph(
+                new ParagraphProperties(new Justification { Val = JustificationValues.Right }),
+                FooterRun("Page "),
+                new SimpleField { Instruction = " PAGE " },
+                FooterRun(" of "),
+                new SimpleField { Instruction = " NUMPAGES " }));
+            footerPart.Footer = footer;
+            footerPart.Footer.Save();
+            return main.GetIdOfPart(footerPart);
+        }
+
+        private static Run FooterRun(string text)
+        {
+            return new Run(
+                new RunProperties(
+                    new FontSize { Val = "20" },
+                    new RunFonts { Ascii = ExportFont, HighAnsi = ExportFont }),
+                new Text(SanitizeXmlText(text ?? string.Empty)) { Space = SpaceProcessingModeValues.Preserve });
+        }
+
+        private static int CentimetresToTwips(double centimetres)
+        {
+            return Math.Max(0, (int)Math.Round(centimetres * 1440d / 2.54d));
+        }
+
+        private static SectionProperties DefaultSectionProperties(string? footerRelId = null)
+        {
+            var section = new SectionProperties();
+            if (!string.IsNullOrWhiteSpace(footerRelId))
+            {
+                section.Append(new FooterReference { Type = HeaderFooterValues.Default, Id = footerRelId });
+            }
+
+            section.Append(
+                new PageSize() { Orient = PageOrientationValues.Portrait, Width = WorkbookPageWidthTwips, Height = WorkbookPageHeightTwips },
                 new PageMargin()
                 {
-                    Top = 720,
-                    Bottom = 720,
-                    Left = 720,
-                    Right = 720,
-                    Header = 420,
-                    Footer = 420,
+                    Top = 1020,
+                    Bottom = 907,
+                    Left = WorkbookPageMarginTwips,
+                    Right = WorkbookPageMarginTwips,
+                    Header = 709,
+                    Footer = 709,
                     Gutter = 0
                 });
+
+            return section;
         }
 
         private static TableProperties DefaultTableProperties()
         {
             return new TableProperties(
+                new TableWidth() { Type = TableWidthUnitValues.Dxa, Width = WorkbookFullTableWidth },
+                new TableLayout() { Type = TableLayoutValues.Fixed },
+                new TableJustification() { Val = TableRowAlignmentValues.Left },
                 BuildVisibleTableBorders());
         }
 
@@ -2026,6 +2385,107 @@ namespace ETD.Api.Controllers
             return new Paragraph(pPr, new Run(rPr, new Text(SanitizeXmlText(text ?? string.Empty))));
         }
 
+        private static Table BuildWorkbookLearnerParticularsTable(Subject subject, int totalMarksPossible)
+        {
+            var table = new Table();
+            table.Append(DefaultTableProperties());
+            table.Append(new TableGrid(
+                new GridColumn() { Width = "5200" },
+                new GridColumn() { Width = "5200" }));
+
+            var subjectLine = ((subject.SubjectDescription ?? "WORKBOOK").Trim()).ToUpperInvariant();
+            table.Append(BuildMergedWorkbookRow(subjectLine, 2, bold: true, center: true, fontHalfPoints: "32"));
+            table.Append(BuildWorkbookLabelValueRow("LEARNER NAME:", string.Empty));
+            table.Append(BuildWorkbookLabelValueRow("LEARNER SURNAME:", string.Empty));
+            table.Append(BuildWorkbookLabelValueRow("LEARNER RSA ID NUMBER:", string.Empty));
+            table.Append(BuildWorkbookLabelValueRow("DATE COMPLETED:", string.Empty));
+            table.Append(BuildWorkbookLabelValueRow("FACILITATOR:", string.Empty));
+            table.Append(BuildWorkbookLabelValueRow("ASSESSOR:", string.Empty));
+            table.Append(BuildWorkbookLabelValueRow("MODERATOR:", string.Empty));
+            table.Append(BuildWorkbookLabelValueRow("TOTAL MARKS POSSIBLE:", totalMarksPossible.ToString()));
+            table.Append(BuildWorkbookLabelValueRow("TOTAL MARKS ACHIEVED:", string.Empty));
+            return table;
+        }
+
+        private static Table BuildWorkbookRoleplayersTable()
+        {
+            var table = new Table();
+            table.Append(DefaultTableProperties());
+            table.Append(new TableGrid(
+                new GridColumn() { Width = "4200" },
+                new GridColumn() { Width = "2200" },
+                new GridColumn() { Width = "4000" }));
+            table.Append(new TableRow(
+                BuildWorkbookCell("ROLEPLAYER", width: "4200", bold: true, center: true),
+                BuildWorkbookCell("DATE", width: "2200", bold: true, center: true),
+                BuildWorkbookCell("SIGNATURE", width: "4000", bold: true, center: true)));
+            table.Append(new TableRow(
+                BuildWorkbookCell("LECTURER/ ASSESSOR:", width: "4200", bold: true),
+                BuildWorkbookCell(string.Empty, width: "2200"),
+                BuildWorkbookCell(string.Empty, width: "4000")));
+            table.Append(new TableRow(
+                BuildWorkbookCell("MODERATOR:", width: "4200", bold: true),
+                BuildWorkbookCell(string.Empty, width: "2200"),
+                BuildWorkbookCell(string.Empty, width: "4000")));
+            table.Append(new TableRow(
+                BuildWorkbookCell("LEARNER/ CANDIDATE:", width: "4200", bold: true),
+                BuildWorkbookCell(string.Empty, width: "2200"),
+                BuildWorkbookCell(string.Empty, width: "4000")));
+            return table;
+        }
+
+        private static void AppendWorkbookInstructionsPage(Body body)
+        {
+            body.Append(StyledHeading("WORKBOOK INSTRUCTIONS", "Heading1", 18));
+            foreach (var line in new[]
+            {
+                "This Workbook is an essential part of your Portfolio of Evidence, during the programme you will be required to complete these activities during or after class hours.",
+                "This Workbook Counts 10% towards your final summative assessment mark. You therefor need to ensure that you do not abuse, lose it or allow your fellow students to copy from it.",
+                "If you lose this workbook, you will be required to start writing in new one at your own time.",
+                "Neatness if of critical importance to ensure the assessor and can read and understand what you write.",
+                "Most workbook activities will take the form of group discussions during class.",
+                "You may not use a pencil to fill in temporary answers and erase it to completed later with a black pen.",
+                "You may only use a black pen to complete these activities.",
+                "Thie purpose of this workbook is to measure your learning progress, being dishonest will only be to your disadvantage and create a situation where the lecturer is unable to measure your progress and determine learning areas in which you might need further assistance or guidance.",
+                "This workbook must be submitted at the end of each phase as part of your portfolio of evidence."
+            })
+            {
+                body.Append(BulletPara(line, 24));
+            }
+        }
+
+        private static string BuildWorkbookMemorandumExpectation(WorkbookDiscussionActivity activity)
+        {
+            var focus = (activity.PromptDescriptor ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(focus))
+            {
+                focus = (activity.TopicDescription ?? string.Empty).Trim();
+            }
+            if (string.IsNullOrWhiteSpace(focus))
+            {
+                focus = "the discussed topic";
+            }
+
+            return $"Learners must discuss and present correct findings relating to {focus}. Award 1 mark per valid fact, up to 4 marks.";
+        }
+
+        private static string CleanWorkbookMemorandumContent(string? content)
+        {
+            var text = (content ?? string.Empty)
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .Trim();
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return string.Empty;
+            }
+
+            text = Regex.Replace(text, @"\bWould you like to\b.*$", string.Empty, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            text = Regex.Replace(text, @"\n{3,}", "\n\n");
+            return text.Trim();
+        }
+
         private static void AppendTableOfContentsPage(Body body)
         {
             body.Append(StyledHeading("TABLE OF CONTENTS", "Heading1", 22));
@@ -2050,8 +2510,8 @@ namespace ETD.Api.Controllers
 
             body.Append(HeadingPara("DISCLAIMER", 18));
             body.Append(BodyPara("ETDP Courseware Release ETDP RSA PATENT 004/026785", 22));
-            body.Append(BodyPara($"(C) {year} by Dr P.C. Wepener, supported by the professional assistance of OpenAI (CODEX).", 22));
-            body.Append(BodyPara("Neither Dr P.C. Wepener nor OpenAI is accountable or liable for the correctness, completeness, factual, or academic correctness of this document. This document is generated by the ETDP App. The accredited learning institution should be contacted for content inquiries, sources, references, or citations.", 22));
+            body.Append(BodyPara($"(C) {year} by Dr P.C. Wepener. This document is generated by the ETDP App under the authority and final approval of the authorised learning-material owner.", 22));
+            body.Append(BodyPara("Neither Dr P.C. Wepener nor the ETDP App is accountable or liable for the correctness, completeness, factual, or academic correctness of this document. The accredited learning institution should be contacted for content inquiries, sources, references, or citations.", 22));
 
             body.Append(HeadingPara("NOTICE OF RIGHTS", 14));
             body.Append(BodyPara("No part of this publication may be reproduced, transmitted, transcribed, stored in a retrieval system, or translated into any language or computer language, in any form or by any means, electronic, mechanical, magnetic, optical, chemical, manual, or otherwise, without prior written permission from the branded learning institution that owns the legal and intellectual property rights to the content of this document.", 22));
@@ -2060,10 +2520,7 @@ namespace ETD.Api.Controllers
             body.Append(BodyPara("Throughout this courseware title, trademark names may be used. Rather than placing a trademark symbol at every occurrence, names are used in an editorial manner for the benefit of the trademark owner, with no intention of infringement.", 22));
 
             body.Append(HeadingPara("NOTICE OF LIABILITY", 14));
-            body.Append(BodyPara("The information in this courseware title is distributed on an 'as is' basis, without warranty. While every precaution has been taken in preparation of this courseware, neither Dr P.C. Wepener nor OpenAI shall have any liability to any person or entity for any loss or damage caused, or alleged to be caused, directly or indirectly by the instructions in this document or by the learning design and development processes described in it.", 22));
-
-            body.Append(HeadingPara("DISCLAIMER", 14));
-            body.Append(BodyPara("A sincere effort has been made to ensure typology accuracy of the material; however, no warranty, express or implied, is made regarding quality, correctness, reliability, accuracy, or freedom from error of this document or the products it describes. Data used in examples and sample files may be fictional. Any resemblance to real persons or companies is coincidental.", 22));
+            body.Append(BodyPara("The information in this courseware title is distributed on an 'as is' basis, without warranty. While every precaution has been taken in preparation of this courseware, neither Dr P.C. Wepener nor the ETDP App shall have any liability to any person or entity for any loss or damage caused, or alleged to be caused, directly or indirectly by the instructions in this document or by the learning design and development processes described in it.", 22));
 
             body.Append(HeadingPara("TERMS AND CONDITIONS", 14));
             body.Append(BodyPara("This document is developed for the learning institution holding a legal permit and may not be resold by the learning institution. Sample versions may be shared but may not be resold to a third party. For licensed users, this document may only be used under the terms of the license agreement between the learning institution and Dr P.C. Wepener.", 22));
@@ -2086,14 +2543,67 @@ namespace ETD.Api.Controllers
             var coverPath = ResolveWorkbookCoverPath(documentTitle);
             var qualificationLine = BuildCoverQualificationLine(qualification);
             var institutionLine = (qualification.LearningInstitutionName ?? "LEARNING INSTITUTION").Trim();
-            var appended = DocxCoverPageOverlay.TryAppendStandardPortraitCoverPage(
+            const string coverTextColor = "000000";
+            var topBlockStartTwips = CentimetresToTwips(7.0d);
+            var lowerBlockGapTwips = string.IsNullOrWhiteSpace(subjectLine)
+                ? CentimetresToTwips(11.4d)
+                : CentimetresToTwips(9.8d);
+            var coverLines = new List<DocxCoverPageOverlay.CoverTextLine>();
+            if (!string.IsNullOrWhiteSpace(institutionLine))
+            {
+                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+                {
+                    Text = institutionLine.ToUpperInvariant(),
+                    FontSizeHalfPt = 52,
+                    Bold = true,
+                    BeforeTwips = topBlockStartTwips,
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
+                });
+            }
+            if (!string.IsNullOrWhiteSpace(qualificationLine))
+            {
+                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+                {
+                    Text = qualificationLine,
+                    FontSizeHalfPt = 50,
+                    Bold = true,
+                    BeforeTwips = 520,
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
+                });
+            }
+            if (!string.IsNullOrWhiteSpace(documentTitle))
+            {
+                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+                {
+                    Text = documentTitle.ToUpperInvariant(),
+                    FontSizeHalfPt = 44,
+                    Bold = true,
+                    BeforeTwips = lowerBlockGapTwips,
+                    AfterTwips = 120,
+                    ColorHex = coverTextColor
+                });
+            }
+            if (!string.IsNullOrWhiteSpace(subjectLine))
+            {
+                coverLines.Add(new DocxCoverPageOverlay.CoverTextLine
+                {
+                    Text = subjectLine.ToUpperInvariant(),
+                    FontSizeHalfPt = 28,
+                    Bold = true,
+                    BeforeTwips = 240,
+                    AfterTwips = 0,
+                    ColorHex = coverTextColor
+                });
+            }
+
+            var appended = DocxCoverPageOverlay.TryAppendCenteredPortraitCoverPage(
                 body,
                 main,
                 coverPath,
-                qualificationLine,
-                subjectLine,
-                institutionLine,
-                PortraitCoverUsableWidthTwips,
+                coverLines,
+                WorkbookPageWidthTwips,
                 2101U);
 
             if (appended)
@@ -2101,18 +2611,21 @@ namespace ETD.Api.Controllers
                 return;
             }
 
-            body.Append(CenterPara(documentTitle, 34, true));
             if (!string.IsNullOrWhiteSpace(institutionLine))
             {
-                body.Append(CenterPara(institutionLine, 24, true));
+                body.Append(CenterPara(institutionLine, 26, true));
             }
             if (!string.IsNullOrWhiteSpace(qualificationLine))
             {
-                body.Append(CenterPara(qualificationLine, 20, false));
+                body.Append(CenterPara(qualificationLine, 25, true));
+            }
+            if (!string.IsNullOrWhiteSpace(documentTitle))
+            {
+                body.Append(CenterPara(documentTitle, 22, true));
             }
             if (!string.IsNullOrWhiteSpace(subjectLine))
             {
-                body.Append(CenterPara(subjectLine, 18, false));
+                body.Append(CenterPara(subjectLine, 14, true));
             }
         }
 
@@ -2127,24 +2640,15 @@ namespace ETD.Api.Controllers
 
         private static string? ResolveWorkbookCoverPath(string documentTitle)
         {
-            var normalizedTitle = (documentTitle ?? string.Empty).Trim().ToUpperInvariant();
-            var candidates = normalizedTitle.Contains("MEMORANDUM", StringComparison.Ordinal)
-                ? new[]
-                {
-                    Path.Combine("Imports", "Coverpages", "Workbook Memorandum Cover Page.png"),
-                    Path.Combine("ETDP", "Imports", "Coverpages", "Workbook Memorandum Cover Page.png"),
-                    Path.Combine("Imports", "Coverpages", "Learner Workbook.png"),
-                    Path.Combine("ETDP", "Imports", "Coverpages", "Learner Workbook.png"),
-                    Path.Combine("Imports", "Coverpages", "clean coverpage.jpg"),
-                    Path.Combine("ETDP", "Imports", "Coverpages", "clean coverpage.jpg")
-                }
-                : new[]
-                {
-                    Path.Combine("Imports", "Coverpages", "Learner Workbook.png"),
-                    Path.Combine("ETDP", "Imports", "Coverpages", "Learner Workbook.png"),
-                    Path.Combine("Imports", "Coverpages", "clean coverpage.jpg"),
-                    Path.Combine("ETDP", "Imports", "Coverpages", "clean coverpage.jpg")
-                };
+            var candidates = new[]
+            {
+                Path.Combine("Imports", "Coverpages", "clean coverpage.jpg"),
+                Path.Combine("ETDP", "Imports", "Coverpages", "clean coverpage.jpg"),
+                Path.Combine("Imports", "Coverpages", "Workbook Memorandum Cover Page.png"),
+                Path.Combine("ETDP", "Imports", "Coverpages", "Workbook Memorandum Cover Page.png"),
+                Path.Combine("Imports", "Coverpages", "Learner Workbook.png"),
+                Path.Combine("ETDP", "Imports", "Coverpages", "Learner Workbook.png")
+            };
 
             foreach (var relative in candidates)
             {
@@ -2222,10 +2726,13 @@ namespace ETD.Api.Controllers
                 FontSize = new FontSize() { Val = CompactBodyHalfPt(sizeHalfPt).ToString() },
                 RunFonts = new RunFonts() { Ascii = ExportFont, HighAnsi = ExportFont }
             };
-            return new Paragraph(new Run(rPr, new Text(SanitizeXmlText($"- {text ?? string.Empty}"))));
+            var pPr = new ParagraphProperties(
+                new SpacingBetweenLines() { Line = "280", LineRule = LineSpacingRuleValues.Auto },
+                new Indentation() { Left = "720", Hanging = "360" });
+            return new Paragraph(pPr, new Run(rPr, new Text(SanitizeXmlText($"- {text ?? string.Empty}"))));
         }
 
-        private static TableRow MemoRow(string c1, string c2, string c3, string c4, bool header = false)
+        private static TableRow MemoRow(string c1, string c2, string c3, string c4, string c5, bool header = false)
         {
             var rp = new RunProperties();
             if (header) rp.Bold = new Bold();
@@ -2235,7 +2742,251 @@ namespace ETD.Api.Controllers
             var p2 = new Paragraph(new Run((RunProperties)rp.CloneNode(true), new Text(SanitizeXmlText(c2 ?? string.Empty))));
             var p3 = new Paragraph(new Run((RunProperties)rp.CloneNode(true), new Text(SanitizeXmlText(c3 ?? string.Empty))));
             var p4 = new Paragraph(new Run((RunProperties)rp.CloneNode(true), new Text(SanitizeXmlText(c4 ?? string.Empty))));
-            return new TableRow(new TableCell(p1), new TableCell(p2), new TableCell(p3), new TableCell(p4));
+            var p5 = new Paragraph(new Run((RunProperties)rp.CloneNode(true), new Text(SanitizeXmlText(c5 ?? string.Empty))));
+            return new TableRow(new TableCell(p1), new TableCell(p2), new TableCell(p3), new TableCell(p4), new TableCell(p5));
+        }
+
+        private static void AppendWorkbookActivityBlock(Body body, WorkbookDiscussionActivity activity)
+        {
+            body.Append(BuildWorkbookActivityHeadingTable(activity));
+            body.Append(Blank());
+            body.Append(BuildWorkbookTaskTable(activity));
+            body.Append(Blank());
+            body.Append(BuildWorkbookAnswerTable());
+            body.Append(Blank());
+            body.Append(BuildWorkbookMarksTable(activity.MarksPossible));
+        }
+
+        private static void AppendWorkbookMemorandumActivityBlock(Body body, WorkbookDiscussionActivity activity)
+        {
+            body.Append(BuildWorkbookMemorandumActivityTable(activity));
+        }
+
+        private static Table BuildWorkbookActivityHeadingTable(WorkbookDiscussionActivity activity)
+        {
+            var table = new Table();
+            table.Append(DefaultTableProperties());
+            table.Append(new TableGrid(
+                new GridColumn() { Width = "4300" },
+                new GridColumn() { Width = "6100" }));
+            table.Append(new TableRow(
+                BuildWorkbookCell($"Subject Code: {activity.SubjectCode}", width: "4300", bold: true),
+                BuildWorkbookCell(activity.SubjectDescription, width: "6100", bold: true)));
+            table.Append(new TableRow(
+                BuildWorkbookCell($"Subject Topic: {activity.TopicCode}", width: "4300", bold: true),
+                BuildWorkbookCell(activity.TopicDescription, width: "6100", bold: true)));
+            table.Append(new TableRow(
+                BuildWorkbookCell($"Workbook Activity {activity.ActivityNumber}", width: "4300"),
+                BuildWorkbookCell($"Marks Possible: {activity.MarksPossible}", width: "6100", bold: true)));
+            return table;
+        }
+
+        private static Table BuildWorkbookTaskTable(WorkbookDiscussionActivity activity)
+        {
+            var table = new Table();
+            table.Append(DefaultTableProperties());
+            table.Append(new TableGrid(
+                new GridColumn() { Width = "1800" },
+                new GridColumn() { Width = "2800" },
+                new GridColumn() { Width = "1400" },
+                new GridColumn() { Width = "2800" },
+                new GridColumn() { Width = "1600" }));
+            table.Append(new TableRow(
+                BuildWorkbookCell("TASK", width: "1800", bold: true, center: true),
+                BuildWorkbookCell("Time to Prepare", width: "2800", bold: true, center: true),
+                BuildWorkbookCell(activity.PrepareTime, width: "1400", bold: true, center: true),
+                BuildWorkbookCell("Present time", width: "2800", bold: true, center: true),
+                BuildWorkbookCell(activity.PresentationTime, width: "1600", bold: true, center: true)));
+            table.Append(BuildMergedWorkbookRow(activity.TaskPrompt, 5, bold: true));
+            table.Append(BuildMergedWorkbookRow(activity.Qualifier, 5));
+            return table;
+        }
+
+        private static Table BuildWorkbookAnswerTable()
+        {
+            var table = new Table();
+            table.Append(DefaultTableProperties());
+            table.Append(new TableGrid(
+                new GridColumn() { Width = "1100" },
+                new GridColumn() { Width = "6500" },
+                new GridColumn() { Width = "1400" },
+                new GridColumn() { Width = "1400" }));
+            table.Append(new TableRow(
+                BuildWorkbookCell("Ser no", width: "1100", bold: true, center: true),
+                BuildWorkbookCell("Group Answer", width: "6500", bold: true),
+                BuildWorkbookCell("Assessor", width: "1400", bold: true, center: true),
+                BuildWorkbookCell("Moderator", width: "1400", bold: true, center: true)));
+            for (var i = 1; i <= 8; i++)
+            {
+                table.Append(new TableRow(
+                    BuildWorkbookCell(i.ToString(), width: "1100", center: true),
+                    BuildWorkbookCell(string.Empty, width: "6500"),
+                    BuildWorkbookCell(string.Empty, width: "1400"),
+                    BuildWorkbookCell(string.Empty, width: "1400")));
+            }
+            return table;
+        }
+
+        private static Table BuildWorkbookMarksTable(int marksPossible)
+        {
+            var table = new Table();
+            table.Append(DefaultTableProperties());
+            table.Append(new TableGrid(
+                new GridColumn() { Width = "8200" },
+                new GridColumn() { Width = "2200" }));
+            table.Append(new TableRow(
+                BuildWorkbookCell("MARK POSSIBLE", width: "8200", bold: true),
+                BuildWorkbookCell(marksPossible.ToString(), width: "2200", bold: true, center: true)));
+            table.Append(new TableRow(
+                BuildWorkbookCell("MARK ACHIEVED", width: "8200", bold: true),
+                BuildWorkbookCell(string.Empty, width: "2200")));
+            return table;
+        }
+
+        private static Table BuildWorkbookMemorandumActivityTable(WorkbookDiscussionActivity activity)
+        {
+            var table = new Table();
+            table.Append(DefaultTableProperties());
+            table.Append(new TableGrid(
+                new GridColumn() { Width = "1800" },
+                new GridColumn() { Width = "850" },
+                new GridColumn() { Width = "1550" },
+                new GridColumn() { Width = "850" },
+                new GridColumn() { Width = "1250" },
+                new GridColumn() { Width = "4100" }));
+
+            table.Append(new TableRow(
+                BuildWorkbookCell("Workbook Activity:", width: "1800", bold: true),
+                BuildWorkbookCell(activity.ActivityNumber.ToString(), width: "850", center: true),
+                BuildWorkbookCell("Mark", width: "1550", bold: true, center: true),
+                BuildWorkbookCell(activity.MarksPossible.ToString(), width: "850", bold: true, center: true),
+                BuildWorkbookCell("LPN", width: "1250", bold: true, center: true),
+                BuildWorkbookCell(string.IsNullOrWhiteSpace(activity.LessonPlanLabel) ? "LPN" : activity.LessonPlanLabel, width: "4100", bold: true)));
+
+            table.Append(new TableRow(
+                BuildWorkbookCell("Subject Code:", width: "1800", bold: true),
+                BuildWorkbookCell(activity.SubjectCode, width: "850", center: true),
+                BuildWorkbookCell("Subject Description", width: "1550", bold: true),
+                BuildWorkbookCell(activity.SubjectDescription, width: "6200", gridSpan: 3)));
+
+            table.Append(new TableRow(
+                BuildWorkbookCell("Topic Code:", width: "1800", bold: true),
+                BuildWorkbookCell(activity.TopicCode, width: "850", center: true),
+                BuildWorkbookCell("Topic Description", width: "1550", bold: true),
+                BuildWorkbookCell(activity.TopicDescription, width: "6200", gridSpan: 3)));
+
+            table.Append(new TableRow(
+                BuildWorkbookCell("Task:", width: "1800", bold: true),
+                BuildWorkbookCell(activity.TaskPrompt, width: "8600", bold: true, gridSpan: 5)));
+
+            table.Append(new TableRow(
+                BuildWorkbookCell("Correct Answers", width: "1800", bold: true),
+                BuildWorkbookCell("Any 4 Correct Answers from the Content Below", width: "8600", bold: true, gridSpan: 5)));
+
+            table.Append(new TableRow(
+                BuildWorkbookMultiParagraphCell(
+                    BuildWorkbookMemorandumParagraphs(activity),
+                    width: WorkbookFullTableWidth,
+                    gridSpan: 6)));
+
+            return table;
+        }
+
+        private static TableRow BuildWorkbookLabelValueRow(string label, string value)
+        {
+            return new TableRow(
+                BuildWorkbookCell(label, width: "5200", bold: true),
+                BuildWorkbookCell(value, width: "5200"));
+        }
+
+        private static TableRow BuildMergedWorkbookRow(string text, int span, bool bold = false, bool center = false, string fontHalfPoints = CompactTableCellHalfPt)
+        {
+            var cellProps = new TableCellProperties(
+                new GridSpan() { Val = span },
+                new TableCellWidth() { Type = TableWidthUnitValues.Dxa, Width = WorkbookFullTableWidth },
+                BuildVisibleTableCellBorders(),
+                new TableCellVerticalAlignment { Val = TableVerticalAlignmentValues.Center });
+
+            var runProps = new RunProperties
+            {
+                FontSize = new FontSize() { Val = fontHalfPoints },
+                RunFonts = new RunFonts() { Ascii = ExportFont, HighAnsi = ExportFont }
+            };
+            if (bold) runProps.Bold = new Bold();
+
+            var paraProps = new ParagraphProperties(
+                new Justification() { Val = center ? JustificationValues.Center : JustificationValues.Left },
+                new SpacingBetweenLines() { Line = "260", LineRule = LineSpacingRuleValues.Auto });
+
+            var paragraph = new Paragraph(paraProps, new Run(runProps, new Text(SanitizeXmlText(text ?? string.Empty))
+            {
+                Space = SpaceProcessingModeValues.Preserve
+            }));
+
+            return new TableRow(new TableCell(cellProps, paragraph));
+        }
+
+        private static TableCell BuildWorkbookCell(string text, string width, bool bold = false, bool center = false, int gridSpan = 1, string fontHalfPoints = CompactTableCellHalfPt)
+        {
+            var props = new TableCellProperties(
+                new TableCellWidth() { Type = TableWidthUnitValues.Dxa, Width = width },
+                BuildVisibleTableCellBorders(),
+                new TableCellVerticalAlignment { Val = TableVerticalAlignmentValues.Center });
+            if (gridSpan > 1)
+            {
+                props.Append(new GridSpan() { Val = gridSpan });
+            }
+
+            return new TableCell(
+                props,
+                TableCellParagraph(text, bold: bold, center: center, fontHalfPoints: fontHalfPoints));
+        }
+
+        private static TableCell BuildWorkbookMultiParagraphCell(IEnumerable<string> paragraphs, string width, int gridSpan = 1)
+        {
+            var props = new TableCellProperties(
+                new TableCellWidth() { Type = TableWidthUnitValues.Dxa, Width = width },
+                BuildVisibleTableCellBorders(),
+                new TableCellVerticalAlignment { Val = TableVerticalAlignmentValues.Top });
+            if (gridSpan > 1)
+            {
+                props.Append(new GridSpan() { Val = gridSpan });
+            }
+
+            var content = (paragraphs ?? Array.Empty<string>())
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => TableCellParagraph(line.Trim(), fontHalfPoints: "22"))
+                .ToList();
+
+            if (content.Count == 0)
+            {
+                content.Add(TableCellParagraph(string.Empty));
+            }
+
+            return new TableCell(new OpenXmlElement[] { props }.Concat(content));
+        }
+
+        private static IReadOnlyList<string> BuildWorkbookMemorandumParagraphs(WorkbookDiscussionActivity activity)
+        {
+            var cleaned = CleanWorkbookMemorandumContent(activity.LessonPlanContent);
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                cleaned = CleanWorkbookMemorandumContent(activity.LessonPlanDescription);
+            }
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                cleaned = CleanWorkbookMemorandumContent(activity.AssessmentCriteriaDescription);
+            }
+
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                return new[] { "No lesson plan content was available for this workbook activity." };
+            }
+
+            return cleaned
+                .Split('\n', StringSplitOptions.TrimEntries)
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .ToList();
         }
 
         private static Table BuildActivityTable(
@@ -2394,11 +3145,11 @@ namespace ETD.Api.Controllers
                 TableCellParagraph(text, bold: bold, center: center));
         }
 
-        private static Paragraph TableCellParagraph(string text, bool bold = false, bool center = false)
+        private static Paragraph TableCellParagraph(string text, bool bold = false, bool center = false, string fontHalfPoints = CompactTableCellHalfPt)
         {
             var runProps = new RunProperties
             {
-                FontSize = new FontSize() { Val = CompactTableCellHalfPt },
+                FontSize = new FontSize() { Val = fontHalfPoints },
                 RunFonts = new RunFonts() { Ascii = ExportFont, HighAnsi = ExportFont }
             };
             if (bold) runProps.Bold = new Bold();
@@ -2415,14 +3166,12 @@ namespace ETD.Api.Controllers
 
         private static int CompactHeadingPt(int requestedSizePt)
         {
-            var compact = (int)Math.Round(Math.Max(1, requestedSizePt) * 0.45, MidpointRounding.AwayFromZero);
-            return Math.Clamp(compact, 9, 12);
+            return Math.Clamp(Math.Max(1, requestedSizePt), 10, 40);
         }
 
         private static int CompactBodyHalfPt(int requestedSizeHalfPt)
         {
-            var compact = (int)Math.Round(Math.Max(1, requestedSizeHalfPt) * 0.72, MidpointRounding.AwayFromZero);
-            return Math.Clamp(compact, 12, 18);
+            return Math.Clamp(Math.Max(1, requestedSizeHalfPt), 18, 32);
         }
 
         private static string SanitizeXmlText(string? value)

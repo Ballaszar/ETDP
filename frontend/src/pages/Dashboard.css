@@ -18,14 +18,31 @@
 }
 
 .dashboard-root > .ai-agent.collapsed {
+  display: block;
   grid-column: auto;
   padding: 0;
   background: transparent;
   border-left: 0;
   height: auto;
+  max-height: none;
   overflow: visible;
   box-shadow: none;
   animation: none;
+  pointer-events: none;
+  contain: layout paint;
+  isolation: isolate;
+}
+
+.dashboard-root > .ai-agent.collapsed .ai-agent-collapsed-shell {
+  pointer-events: auto;
+}
+
+.dashboard-root > .ai-agent.collapsed .ai-agent-expanded-shell {
+  display: none !important;
+}
+
+.dashboard-root > .ai-agent.expanded .ai-agent-collapsed-shell {
+  display: none !important;
 }
 
 .dashboard-root > .ai-agent.expanded {

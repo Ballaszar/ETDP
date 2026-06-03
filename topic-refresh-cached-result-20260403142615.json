@@ -1,0 +1,19 @@
+{
+  "resultPath": "F:\\ETDP\\ETDP\\topic-refresh-cached-result-20260403142615.json",
+  "timings": [
+    {
+      "label": "cached-first",
+      "elapsedMs": 3140,
+      "topicCount": 2086,
+      "sourceMaterialCount": 678,
+      "coveragePercent": 85
+    },
+    {
+      "label": "cached-second",
+      "elapsedMs": 2233,
+      "topicCount": 2086,
+      "sourceMaterialCount": 678,
+      "coveragePercent": 85
+    }
+  ]
+}

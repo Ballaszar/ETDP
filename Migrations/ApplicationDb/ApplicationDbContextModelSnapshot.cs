@@ -666,6 +666,342 @@ namespace ETDP.Migrations.ApplicationDb
                     b.ToTable("QualificationPhases");
                 });
 
+            modelBuilder.Entity("ETD.Api.Models.SmiContentQuestionnaire", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MainCategoryCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MainCategoryLabel")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("PhaseId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("QualificationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Questions")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SubjectId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Version")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubjectId", "Title")
+                        .IsUnique();
+
+                    b.HasIndex("QualificationId", "PhaseId", "MainCategoryCode");
+
+                    b.ToTable("SmiContentQuestionnaires");
+                });
+
+            modelBuilder.Entity("ETD.Api.Models.SmiConversationArchive", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AssistantReply")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MemoryKeywords")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MemoryOwner")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PromptPreview")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("QualificationCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("QualificationDescription")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("QualificationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("QualificationScopeKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReplyPreview")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResponsePersona")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserPrompt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QualificationScopeKey", "CreatedAtUtc");
+
+                    b.HasIndex("UserId", "SessionId", "CreatedAtUtc");
+
+                    b.ToTable("SmiConversationArchives");
+                });
+
+            modelBuilder.Entity("ETD.Api.Models.SmiSemanticStateSnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("AnxietyGradient")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("AnxietyResonance")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("AttentionVectorJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("AttentionWeight")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("AttractorStrength")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("BehavioralConsistency")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("BoundedDrift")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("CognitiveInterpretation")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ConversationArchiveId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("DriftMagnitude")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("DriftTensorJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("EpistemicPressure")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("GammaCoherence")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("GammaCoherenceFieldJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MemoryOwner")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("PersonalityAlignment")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("PersonalityLabel")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("PersonalityManifold")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("PromptInfluenceSummary")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PromptPreview")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("QualiaIndex")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("QualiaVectorJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("QualificationCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("QualificationDescription")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("QualificationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("QualificationScopeKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReplyPreview")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResponsePersona")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("SemanticContinuity")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("SemanticEmbeddingJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("StabilityBasinDepth")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("StateIntegrity")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("StateStability")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("SummaryText")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TopAnchorsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Variant")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QualificationScopeKey", "CreatedAtUtc");
+
+                    b.HasIndex("UserId", "SessionId", "CreatedAtUtc");
+
+                    b.ToTable("SmiSemanticStateSnapshots");
+                });
+
+            modelBuilder.Entity("ETD.Api.Models.SmiTaskTableItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AssignedAgent")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Instructions")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastConfirmationSource")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("QualificationCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("QualificationDescription")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("QualificationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("QualificationScopeKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QualificationScopeKey", "TaskKey")
+                        .IsUnique();
+
+                    b.HasIndex("QualificationScopeKey", "Status", "SortOrder");
+
+                    b.ToTable("SmiTaskTableItems");
+                });
+
             modelBuilder.Entity("ETD.Api.Models.SourceMaterial", b =>
                 {
                     b.Property<int>("Id")
@@ -912,6 +1248,116 @@ namespace ETDP.Migrations.ApplicationDb
                     b.ToTable("Topics");
                 });
 
+            modelBuilder.Entity("ETD.Api.Models.WorkExperienceLogbook", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmployerAddress")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmployerName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("LearnerRegistrationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LearningInstitutionAddress")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LearningInstitutionContactEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LearningInstitutionContactPerson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LearningInstitutionContactPhone")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LearningInstitutionName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("QualificationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("QualificationNumber")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SupervisorEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SupervisorName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SupervisorPhone")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LearnerRegistrationId");
+
+                    b.HasIndex("QualificationId", "LearnerRegistrationId", "UpdatedAtUtc");
+
+                    b.ToTable("WorkExperienceLogbooks");
+                });
+
+            modelBuilder.Entity("ETD.Api.Models.WorkExperienceLogbookEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EntryDate")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Signature")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SubjectCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TopicCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TopicDescription")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("WorkExperienceLogbookId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkExperienceLogbookId", "SortOrder");
+
+                    b.ToTable("WorkExperienceLogbookEntries");
+                });
+
             modelBuilder.Entity("ETD.Api.Models.Workbook", b =>
                 {
                     b.Property<int>("Id")
@@ -1027,6 +1473,25 @@ namespace ETDP.Migrations.ApplicationDb
                     b.Navigation("CurriculumPhase");
                 });
 
+            modelBuilder.Entity("ETD.Api.Models.SmiContentQuestionnaire", b =>
+                {
+                    b.HasOne("ETD.Api.Models.Qualification", "Qualification")
+                        .WithMany()
+                        .HasForeignKey("QualificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ETD.Api.Models.Subject", "Subject")
+                        .WithMany()
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Qualification");
+
+                    b.Navigation("Subject");
+                });
+
             modelBuilder.Entity("ETD.Api.Models.Subject", b =>
                 {
                     b.HasOne("ETD.Api.Models.CurriculumPhase", "CurriculumPhase")
@@ -1075,6 +1540,27 @@ namespace ETDP.Migrations.ApplicationDb
                     b.Navigation("Subject");
                 });
 
+            modelBuilder.Entity("ETD.Api.Models.WorkExperienceLogbook", b =>
+                {
+                    b.HasOne("ETD.Api.Models.LearnerRegistration", "LearnerRegistration")
+                        .WithMany()
+                        .HasForeignKey("LearnerRegistrationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("LearnerRegistration");
+                });
+
+            modelBuilder.Entity("ETD.Api.Models.WorkExperienceLogbookEntry", b =>
+                {
+                    b.HasOne("ETD.Api.Models.WorkExperienceLogbook", "WorkExperienceLogbook")
+                        .WithMany("Entries")
+                        .HasForeignKey("WorkExperienceLogbookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("WorkExperienceLogbook");
+                });
+
             modelBuilder.Entity("ETD.Api.Models.Workbook", b =>
                 {
                     b.HasOne("ETD.Api.Models.Subject", "Subject")
@@ -1121,6 +1607,11 @@ namespace ETDP.Migrations.ApplicationDb
             modelBuilder.Entity("ETD.Api.Models.Topic", b =>
                 {
                     b.Navigation("Subtopics");
+                });
+
+            modelBuilder.Entity("ETD.Api.Models.WorkExperienceLogbook", b =>
+                {
+                    b.Navigation("Entries");
                 });
 #pragma warning restore 612, 618
         }

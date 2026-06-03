@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQualification } from '../context/QualificationContext';
+import { buildMetadataCsv, saveTextFile, toCsv, todayStamp } from '../utils/saveExport';
 
 const qId = (q) => Number(q?.id ?? q?.Id ?? 0);
 const qNumber = (q) => String(q?.qualificationNumber ?? q?.QualificationNumber ?? '').trim();
@@ -37,6 +38,8 @@ export default function LearnerProgressReportPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [saveStatus, setSaveStatus] = useState('');
+  const [saveFilename, setSaveFilename] = useState(`learner-progress-report-${todayStamp()}.csv`);
 
   const selectedQualification = useMemo(
     () => qualifications.find((q) => String(qId(q)) === String(form.qualificationId)) || null,
@@ -243,10 +246,75 @@ export default function LearnerProgressReportPage() {
   const deanValue = qualificationInfo?.deanPrincipalCEO || qualificationInfo?.DeanPrincipalCEO || '-';
   const seniorLecturerValue = qualificationInfo?.seniorLecturer || qualificationInfo?.SeniorLecturer || '-';
 
+  const saveReportCsv = async () => {
+    setSaveStatus('');
+    setError('');
+    if (rows.length === 0) {
+      setError('No report rows are available to save yet.');
+      return;
+    }
+
+    const metadata = buildMetadataCsv([
+      {
+        title: 'QCTO Learner Progress Report Frontpage',
+        rows: [
+          ['Quality Council', 'QCTO'],
+          ['Qualification Code', qualificationCode],
+          ['Qualification Description', qualificationName],
+          ['Learner Full Name', learnerFullName || '-'],
+          ['Learner RSA ID No', selectedLearner?.nationalId || '-'],
+          ['Learner Contact No', selectedLearner?.learnerCellPhoneNumber || selectedLearner?.learnerPhoneNumber || '-'],
+          ['Assessor', form.assessor || '-'],
+          ['Moderator', form.moderator || '-'],
+          ['Dean of the College', deanValue],
+          ['Senior Lecturer', seniorLecturerValue],
+          ['Date From', form.dateFrom || '-'],
+          ['Date To', form.dateTo || '-'],
+          ['Saved At', new Date().toLocaleString()]
+        ]
+      }
+    ]);
+
+    const reportCsv = toCsv(rows, [
+      { label: 'Subject Code', value: 'subjectCode' },
+      { label: 'Subject Description', value: 'subjectDescription' },
+      { label: 'Topic Purpose', value: 'topicPurpose' },
+      { label: 'Topic Code', value: 'topicCode' },
+      { label: 'Topic Description', value: 'topicDescription' },
+      { label: 'Credits', value: 'credits' },
+      { label: 'Percentage', value: 'percentage' },
+      { label: 'Assessment Criteria', value: 'assessmentCriteria' },
+      { label: 'Likert Scale', value: 'likert' },
+      { label: 'Assessor Decision', value: 'assessorDecision' },
+      { label: 'Moderator Decision', value: 'moderatorDecision' }
+    ]);
+
+    const result = await saveTextFile({
+      text: `${metadata}\r\n\r\n${reportCsv}`,
+      filename: saveFilename || `learner-progress-report-${todayStamp()}.csv`
+    });
+    if (result.mode === 'cancelled') {
+      setSaveStatus('Save cancelled.');
+      return;
+    }
+    setSaveStatus(result.mode === 'save-picker'
+      ? `Saved to selected folder as ${result.filename}.`
+      : `Downloaded ${result.filename}.`);
+  };
+
   return (
     <div className="mainpage-root">
       <h2 className="mainpage-title">Learner Progress Report</h2>
       <p>Capture assessor/moderator learner progress ratings and print the complete progress report.</p>
+
+      <section className="qcto-frontpage">
+        <div className="qcto-mark">QCTO</div>
+        <div>
+          <h3>QCTO Learner Progress Report Frontpage</h3>
+          <p>{qualificationCode} - {qualificationName}</p>
+          <p>Learner: {learnerFullName || 'Not selected'} | Date window: {form.dateFrom || '-'} to {form.dateTo || '-'}</p>
+        </div>
+      </section>
 
       <div className="form-section">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(220px, 1fr))', gap: 10 }}>
@@ -345,7 +413,23 @@ export default function LearnerProgressReportPage() {
 
       <div className="button-row" style={{ marginBottom: 8 }}>
         <button type="button" onClick={() => window.print()} disabled={rows.length === 0}>Print Complete Progress Report</button>
+        <button type="button" onClick={saveReportCsv} disabled={rows.length === 0}>Save Progress CSV</button>
         <button type="button" onClick={clearRatings} disabled={rows.length === 0}>Clear Ratings</button>
+      </div>
+      <div className="form-section">
+        <label>
+          Save to
+          <input
+            className="mainpage-input"
+            value={saveFilename}
+            onChange={(e) => setSaveFilename(e.target.value)}
+            placeholder="learner-progress-report.csv"
+          />
+        </label>
+        <div style={{ color: '#4b5e70', marginTop: 6 }}>
+          Uses the Windows save dialog where the browser supports it; otherwise it downloads normally.
+        </div>
+        {saveStatus ? <div style={{ color: '#0b6b3a', marginTop: 6 }}>{saveStatus}</div> : null}
       </div>
 
       <div style={{ overflowX: 'auto' }}>

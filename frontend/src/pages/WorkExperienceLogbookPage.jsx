@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQualification } from '../context/QualificationContext';
 
@@ -45,7 +45,43 @@ const composeEmployerAddress = (learner) => {
   return [line1, cityTown, province, code].filter(Boolean).join(', ');
 };
 
-export default function WorkExperienceLogbookPage() {
+const LOGBOOK_API = '/api/WorkExperienceLogbook';
+
+const buildInitialLogRow = (subjectList) => ({
+  ...blankLogRow(),
+  subjectCode: Array.isArray(subjectList) && subjectList.length > 0 ? subjectCodeOf(subjectList[0]) : ''
+});
+
+const normalizeSavedRows = (rows, subjectList) => {
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 0) {
+    return [buildInitialLogRow(subjectList)];
+  }
+
+  return list.map((row) => ({
+    subjectCode: asText(row?.subjectCode),
+    topicCode: asText(row?.topicCode),
+    topicDescription: asText(row?.topicDescription),
+    date: asText(row?.date),
+    signature: asText(row?.signature)
+  }));
+};
+
+const hasLogRowContent = (row) => (
+  asText(row?.topicCode) ||
+  asText(row?.topicDescription) ||
+  asText(row?.date) ||
+  asText(row?.signature)
+);
+
+const formatSavedTimestamp = (value) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleString();
+};
+
+const WorkExperienceLogbookPage = forwardRef(function WorkExperienceLogbookPage(_props, ref) {
   const location = useLocation();
   const { qualificationId, setQualificationId } = useQualification() || { qualificationId: null, setQualificationId: () => {} };
 
@@ -70,9 +106,13 @@ export default function WorkExperienceLogbookPage() {
     supervisorEmail: ''
   });
   const [logRows, setLogRows] = useState([blankLogRow()]);
+  const [logbookId, setLogbookId] = useState(null);
 
   const [loading, setLoading] = useState(false);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
 
   const selectedQualification = useMemo(
     () => qualifications.find((q) => String(qId(q)) === String(form.qualificationId)) || null,
@@ -159,8 +199,7 @@ export default function WorkExperienceLogbookPage() {
 
         setLogRows((prev) => {
           if (prev.length > 0) return prev;
-          const firstSubjectCode = subjectList.length > 0 ? subjectCodeOf(subjectList[0]) : '';
-          return [{ ...blankLogRow(), subjectCode: firstSubjectCode }];
+          return [buildInitialLogRow(subjectList)];
         });
       } catch (e) {
         if (!active) return;
@@ -198,6 +237,81 @@ export default function WorkExperienceLogbookPage() {
     }));
   }, [selectedLearner, qualificationInfo]);
 
+  useEffect(() => {
+    let active = true;
+    const qid = Number(form.qualificationId || 0);
+    const learnerId = Number(form.learnerId || 0);
+
+    const loadSavedLogbook = async () => {
+      if (!qid) {
+        setLogbookId(null);
+        setLogRows([buildInitialLogRow(subjects)]);
+        setStatus('');
+        return;
+      }
+
+      if (learners.length > 0 && !learnerId) {
+        setLogbookId(null);
+        setLogRows([buildInitialLogRow(subjects)]);
+        setStatus('');
+        return;
+      }
+
+      setLoadingSaved(true);
+      try {
+        const params = new URLSearchParams();
+        params.set('qualificationId', String(qid));
+        if (learnerId > 0) {
+          params.set('learnerId', String(learnerId));
+        }
+
+        const res = await fetch(`${LOGBOOK_API}?${params.toString()}`);
+        if (res.status === 404) {
+          if (!active) return;
+          setLogbookId(null);
+          setLogRows([buildInitialLogRow(subjects)]);
+          setStatus('');
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const data = await res.json();
+        if (!active) return;
+
+        setLogbookId(Number(data?.id || 0) || null);
+        setForm((prev) => ({
+          ...prev,
+          qualificationId: data?.qualificationId ? String(data.qualificationId) : prev.qualificationId,
+          learnerId: data?.learnerId ? String(data.learnerId) : prev.learnerId,
+          learningInstitutionName: asText(data?.learningInstitutionName),
+          learningInstitutionAddress: asText(data?.learningInstitutionAddress),
+          learningInstitutionContactPerson: asText(data?.learningInstitutionContactPerson),
+          learningInstitutionContactPhone: asText(data?.learningInstitutionContactPhone),
+          learningInstitutionContactEmail: asText(data?.learningInstitutionContactEmail),
+          employerName: asText(data?.employerName),
+          employerAddress: asText(data?.employerAddress),
+          supervisorName: asText(data?.supervisorName),
+          supervisorPhone: asText(data?.supervisorPhone),
+          supervisorEmail: asText(data?.supervisorEmail)
+        }));
+        setLogRows(normalizeSavedRows(data?.logRows, subjects));
+        const stamp = formatSavedTimestamp(data?.updatedAtUtc);
+        setStatus(stamp ? `Loaded saved logbook from ${stamp}.` : 'Loaded saved logbook.');
+      } catch (e) {
+        if (!active) return;
+        setError(`Failed to load saved logbook: ${e?.message || e}`);
+      } finally {
+        if (active) setLoadingSaved(false);
+      }
+    };
+
+    loadSavedLogbook();
+    return () => { active = false; };
+  }, [form.qualificationId, form.learnerId, learners.length, subjects]);
+
   const setField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
@@ -227,6 +341,77 @@ export default function WorkExperienceLogbookPage() {
     setLogRows((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
   };
 
+  const handleSaveLogbook = async () => {
+    const qid = Number(form.qualificationId || 0);
+    if (qid <= 0) {
+      throw new Error('Select a qualification first.');
+    }
+
+    setSaving(true);
+    setError('');
+    setStatus('');
+
+    try {
+      const qualificationNumber =
+        qNumber(selectedQualification) ||
+        asText(qualificationInfo?.qualificationNumber) ||
+        asText(qualificationInfo?.QualificationNumber);
+
+      const payload = {
+        id: logbookId || null,
+        qualificationId: qid,
+        qualificationNumber,
+        learnerId: Number(form.learnerId || 0) > 0 ? Number(form.learnerId) : null,
+        learningInstitutionName: form.learningInstitutionName,
+        learningInstitutionAddress: form.learningInstitutionAddress,
+        learningInstitutionContactPerson: form.learningInstitutionContactPerson,
+        learningInstitutionContactPhone: form.learningInstitutionContactPhone,
+        learningInstitutionContactEmail: form.learningInstitutionContactEmail,
+        employerName: form.employerName,
+        employerAddress: form.employerAddress,
+        supervisorName: form.supervisorName,
+        supervisorPhone: form.supervisorPhone,
+        supervisorEmail: form.supervisorEmail,
+        logRows: logRows
+          .filter(hasLogRowContent)
+          .map((row) => ({
+            subjectCode: asText(row.subjectCode),
+            topicCode: asText(row.topicCode),
+            topicDescription: asText(row.topicDescription),
+            date: asText(row.date),
+            signature: asText(row.signature)
+          }))
+      };
+
+      const res = await fetch(`${LOGBOOK_API}/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const data = await res.json();
+      setLogbookId(Number(data?.id || 0) || null);
+      setLogRows(normalizeSavedRows(data?.logRows, subjects));
+      const stamp = formatSavedTimestamp(data?.updatedAtUtc);
+      const message = stamp ? `Logbook saved to the database at ${stamp}.` : 'Logbook saved to the database.';
+      setStatus(message);
+      return message;
+    } catch (e) {
+      const message = e?.message || String(e);
+      setError(message);
+      throw e;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    saveLogbook: handleSaveLogbook
+  }));
+
   const learnerName = selectedLearner ? `${selectedLearner.learnerFirstName || ''} ${selectedLearner.learnerLastName || ''}`.trim() : '';
   const learnerIdNumber = asText(selectedLearner?.nationalId);
   const learnerContact = asText(selectedLearner?.learnerCellPhoneNumber) || asText(selectedLearner?.learnerPhoneNumber);
@@ -241,6 +426,8 @@ export default function WorkExperienceLogbookPage() {
       <p>Capture work-experience employer and learner details, then maintain a detailed work-experience log.</p>
 
       {error ? <div style={{ color: '#b00020', marginBottom: 10 }}>{error}</div> : null}
+      {status ? <div style={{ color: '#1b6347', marginBottom: 10 }}>{status}</div> : null}
+      {loadingSaved ? <div style={{ color: '#4a6175', marginBottom: 10 }}>Loading saved logbook...</div> : null}
 
       <div className="form-section">
         <h3 style={{ marginTop: 0 }}>Qualification Details</h3>
@@ -358,6 +545,9 @@ export default function WorkExperienceLogbookPage() {
 
       <div className="button-row" style={{ marginBottom: 8 }}>
         <button type="button" onClick={addLogRow}>Add Log Row</button>
+        <button type="button" onClick={handleSaveLogbook} disabled={saving || loading}>
+          {saving ? 'Saving...' : 'Save Log Book'}
+        </button>
         <button type="button" onClick={() => window.print()}>Print Complete Log Book</button>
       </div>
 
@@ -441,4 +631,8 @@ export default function WorkExperienceLogbookPage() {
       </div>
     </div>
   );
-}
+});
+
+WorkExperienceLogbookPage.displayName = 'WorkExperienceLogbookPage';
+
+export default WorkExperienceLogbookPage;

@@ -1,61 +1,18 @@
 import { downloadTextFile, normalizeQualification } from './questionnaireDesigner';
 
-const DEFAULT_BLOOM_DOMAIN = 'Cognitive';
-const DEFAULT_BLOOM_TARGET_LEVEL = 'Understand';
+const DEFAULT_BLOOM_DOMAIN = '';
+const DEFAULT_BLOOM_TARGET_LEVEL = '';
 const DEFAULT_REVIEW_STATUS = 'pending_smi_review';
 const MINIMUM_QUESTIONS_PER_CRITERION = 2;
 const MINIMUM_TOTAL_QUESTIONS = 100;
 const QUALIFIER_SOURCE_DETECTED = 'detected_from_criterion';
 const QUALIFIER_SOURCE_LESSON_PLAN_FALLBACK = 'lesson_plan_fallback';
 const QUALIFIER_SOURCE_SMI_REQUIRED = 'smi_required';
-const FOUNDATION_TOPIC_PATTERN = /^KG/i;
-const INTERNAL_ASSESSMENT_TOPIC_PATTERN = /internal assessment criteria/i;
 const KNOWN_MAIN_CATEGORY_LABELS = {
   'KM-01': 'Basic Engineering',
   'KM-02': 'Fitting Theory',
   'KM-03': 'Machining Theory'
 };
-
-const REMEMBER_VERBS = new Set([
-  'identify',
-  'recognize',
-  'recognise',
-  'locate',
-  'list',
-  'name',
-  'state',
-  'select',
-  'match',
-  'define',
-  'label',
-  'recall',
-  'remember'
-]);
-
-const UNDERSTAND_DESCRIBE_VERBS = new Set([
-  'describe',
-  'outline',
-  'detail',
-  'summarize',
-  'summarise',
-  'illustrate',
-  'arrange',
-  'convert',
-  'demonstrate'
-]);
-
-const UNDERSTAND_EXPLAIN_VERBS = new Set([
-  'explain',
-  'clarify',
-  'interpret',
-  'discuss',
-  'restate',
-  'translate',
-  'paraphrase',
-  'generalize',
-  'generalise',
-  'compare'
-]);
 
 export const KQ_V1_METADATA_COLUMNS = [
   'Qualification Code',
@@ -136,27 +93,24 @@ const buildCsv = (columns, rows) => {
 
 const normalizeCoverageType = (value) => {
   const normalized = asText(value).toLowerCase();
-  return normalized === 'direct' ? 'direct' : 'proxy';
+  return normalized === 'proxy' ? 'direct' : 'direct';
 };
 
 const normalizeRoutingStatus = (value) => {
-  const normalized = asText(value).toLowerCase();
-  return normalized === 'kq' ? 'KQ' : 'Other Assessment';
+  return 'KQ';
 };
 
 const normalizeBloomLevel = (value) => {
-  const normalized = asText(value).toLowerCase();
-  if (normalized === 'remember') return 'Remember';
-  if (normalized === 'understand') return 'Understand';
-  if (normalized === 'apply') return 'Apply';
-  if (normalized === 'analyze' || normalized === 'analyse') return 'Analyze';
-  if (normalized === 'evaluate') return 'Evaluate';
   return '';
 };
 
 const normalizeCanonicalVerb = (value) => asText(value).toLowerCase();
 const normalizeTextKey = (value) => asText(value).replace(/\s+/g, ' ').toLowerCase();
 const sortByText = (left, right) => asText(left).localeCompare(asText(right), undefined, { sensitivity: 'base' });
+const buildDefaultQuestionLoad = (subjectCount, topicCount) => {
+  const scopeUnits = Math.max(1, asInt(topicCount, 0), asInt(subjectCount, 0));
+  return Math.max(12, scopeUnits * 2);
+};
 
 export const deriveMainCategoryCode = (subjectCode) => {
   const parts = asText(subjectCode).split('-').filter(Boolean);
@@ -175,8 +129,7 @@ export const deriveMainCategoryLabel = (categoryCode) => {
   return suffix ? `Main Category ${suffix}` : 'Main Category';
 };
 
-export const isStandingExamExcludedTopic = (topicCode, topicDescription) =>
-  FOUNDATION_TOPIC_PATTERN.test(asText(topicCode)) || INTERNAL_ASSESSMENT_TOPIC_PATTERN.test(asText(topicDescription));
+export const isStandingExamExcludedTopic = () => false;
 
 const compareCategoryCode = (left, right) => {
   const a = asText(left).toUpperCase();
@@ -215,34 +168,12 @@ const normalizeTopicScope = (row) => ({
   topicDescription: asText(row?.topicDescription ?? row?.TopicDescription)
 });
 
-export const getVerbRule = (canonicalVerb, detectedBloomLevel = '') => {
-  const canonical = normalizeCanonicalVerb(canonicalVerb);
-  if (REMEMBER_VERBS.has(canonical)) {
-    return { bloomLevel: 'Remember', coverageType: 'direct', routingStatus: 'KQ' };
-  }
-  if (UNDERSTAND_DESCRIBE_VERBS.has(canonical) || UNDERSTAND_EXPLAIN_VERBS.has(canonical)) {
-    return { bloomLevel: 'Understand', coverageType: 'proxy', routingStatus: 'KQ' };
-  }
-
-  const fallback = normalizeBloomLevel(detectedBloomLevel);
-  if (fallback === 'Remember') {
-    return { bloomLevel: 'Remember', coverageType: 'direct', routingStatus: 'KQ' };
-  }
-  if (fallback === 'Understand') {
-    return { bloomLevel: 'Understand', coverageType: 'proxy', routingStatus: 'KQ' };
-  }
-  return { bloomLevel: fallback, coverageType: 'proxy', routingStatus: 'Other Assessment' };
-};
+export const getVerbRule = () => ({ bloomLevel: '', coverageType: 'direct', routingStatus: 'KQ' });
 
 export const applyCanonicalVerbRule = (row, nextCanonicalVerb) => {
-  const canonicalVerb = normalizeCanonicalVerb(nextCanonicalVerb);
-  const rule = getVerbRule(canonicalVerb, row?.bloomLevel);
   return {
     ...row,
-    canonicalVerb,
-    bloomLevel: rule.bloomLevel,
-    coverageType: normalizeCoverageType(rule.coverageType),
-    routingStatus: normalizeRoutingStatus(rule.routingStatus)
+    canonicalVerb: normalizeCanonicalVerb(nextCanonicalVerb)
   };
 };
 
@@ -286,16 +217,7 @@ const normalizeMetadata = (row, draft) => {
 };
 
 export const normalizeCriterionIntent = (row) => {
-  const canonicalVerb = normalizeCanonicalVerb(row?.canonicalVerb ?? row?.CanonicalVerb);
-  const rule = getVerbRule(canonicalVerb, row?.bloomLevel ?? row?.BloomLevel);
   const qualifier = asText(row?.qualifier ?? row?.Qualifier);
-  const routingStatus = normalizeRoutingStatus(row?.routingStatus ?? row?.RoutingStatus ?? rule.routingStatus);
-  let qualifierSource = asText(row?.qualifierSource ?? row?.QualifierSource).toLowerCase();
-  if (!qualifierSource) {
-    qualifierSource = routingStatus === 'KQ' ? QUALIFIER_SOURCE_LESSON_PLAN_FALLBACK : QUALIFIER_SOURCE_SMI_REQUIRED;
-  } else if (!qualifier && routingStatus === 'KQ' && qualifierSource === QUALIFIER_SOURCE_SMI_REQUIRED) {
-    qualifierSource = QUALIFIER_SOURCE_LESSON_PLAN_FALLBACK;
-  }
 
   return {
     intentId: asText(row?.intentId ?? row?.IntentId),
@@ -309,14 +231,14 @@ export const normalizeCriterionIntent = (row) => {
     topicDescription: asText(row?.topicDescription ?? row?.TopicDescription),
     originalCriterionText: asText(row?.originalCriterionText ?? row?.OriginalCriterionText),
     nounFocus: asText(row?.nounFocus ?? row?.NounFocus),
-    detectedVerb: asText(row?.detectedVerb ?? row?.DetectedVerb),
-    canonicalVerb,
-    bloomDomain: asText(row?.bloomDomain ?? row?.BloomDomain) || DEFAULT_BLOOM_DOMAIN,
-    bloomLevel: normalizeBloomLevel(row?.bloomLevel ?? row?.BloomLevel) || rule.bloomLevel,
+    detectedVerb: '',
+    canonicalVerb: '',
+    bloomDomain: '',
+    bloomLevel: '',
     qualifier,
-    qualifierSource,
-    coverageType: normalizeCoverageType(row?.coverageType ?? row?.CoverageType ?? rule.coverageType),
-    routingStatus
+    qualifierSource: '',
+    coverageType: 'direct',
+    routingStatus: 'KQ'
   };
 };
 
@@ -422,10 +344,7 @@ export const buildCategoryPlans = (draft) => {
   for (const row of criteriaRows) {
     const category = ensureCategory(row.subjectCode);
     const criteriaTextKey = normalizeTextKey(row.originalCriterionText);
-    if (row.routingStatus !== 'KQ' || !criteriaTextKey) {
-      continue;
-    }
-    if (isStandingExamExcludedTopic(row.topicCode, row.topicDescription)) {
+    if (!criteriaTextKey) {
       continue;
     }
 
@@ -505,16 +424,16 @@ export const buildCategoryPlans = (draft) => {
       const criteria = criterionGroups.flatMap((group) => group.criteria);
       const subjects = Array.from(category.subjectMap.values())
         .sort((left, right) => sortByText(left.subjectCode, right.subjectCode));
-      const topics = Array.from(category.assessableTopicMap.values())
+      const topics = Array.from(category.allTopicMap.values())
         .sort((left, right) => sortByText(left.topicCode, right.topicCode));
-      const defaultMinimumQuestionsPerCriterion = MINIMUM_QUESTIONS_PER_CRITERION;
-      const defaultTotalQuestions = criterionGroups.length * defaultMinimumQuestionsPerCriterion;
+      const defaultMinimumQuestionsPerCriterion = 0;
+      const defaultTotalQuestions = buildDefaultQuestionLoad(subjects.length, topics.length);
       const defaultMetadata = normalizeCategoryMetadata({
         questionnaireTitle: ['Knowledge Questionnaire', category.label].filter(Boolean).join(' - '),
         bloomDomain: DEFAULT_BLOOM_DOMAIN,
         bloomTargetLevel: DEFAULT_BLOOM_TARGET_LEVEL,
         minimumQuestionsPerCriterion: defaultMinimumQuestionsPerCriterion,
-        minimumTotalQuestions: defaultTotalQuestions,
+        minimumTotalQuestions: 0,
         trueFalseCount: Math.floor(defaultTotalQuestions / 2),
         multipleChoiceCount: defaultTotalQuestions - Math.floor(defaultTotalQuestions / 2),
         passMark: '',
@@ -538,11 +457,11 @@ export const buildCategoryPlans = (draft) => {
         stats: {
           totalSubjects: subjects.length,
           totalTopics: topics.length,
-          totalCriteria: criterionGroups.length,
+          totalCriteria: topics.length,
           totalIntents: criteria.length,
-          kqIntentCount: criteria.filter((row) => row.routingStatus === 'KQ').length,
-          kqCriteriaCount: criterionGroups.length,
-          otherAssessmentIntentCount: criteria.filter((row) => row.routingStatus !== 'KQ').length
+          kqIntentCount: criteria.length,
+          kqCriteriaCount: topics.length,
+          otherAssessmentIntentCount: 0
         },
         defaultMetadata
       };
@@ -620,9 +539,9 @@ export const normalizeDraft = (raw) => {
       totalTopics: asInt(raw?.stats?.totalTopics ?? raw?.Stats?.TotalTopics, topics.length),
       totalCriteria: asInt(raw?.stats?.totalCriteria ?? raw?.Stats?.TotalCriteria, new Set(criteria.map((row) => row.assessmentCriteriaId).filter((id) => id > 0)).size),
       totalIntents: asInt(raw?.stats?.totalIntents ?? raw?.Stats?.TotalIntents, criteria.length),
-      kqIntentCount: asInt(raw?.stats?.kqIntentCount ?? raw?.Stats?.KqIntentCount, criteria.filter((row) => row.routingStatus === 'KQ').length),
-      kqCriteriaCount: asInt(raw?.stats?.kqCriteriaCount ?? raw?.Stats?.KqCriteriaCount, new Set(criteria.filter((row) => row.routingStatus === 'KQ').map((row) => row.assessmentCriteriaId).filter((id) => id > 0)).size),
-      otherAssessmentIntentCount: asInt(raw?.stats?.otherAssessmentIntentCount ?? raw?.Stats?.OtherAssessmentIntentCount, criteria.filter((row) => row.routingStatus !== 'KQ').length)
+      kqIntentCount: asInt(raw?.stats?.kqIntentCount ?? raw?.Stats?.KqIntentCount, criteria.length),
+      kqCriteriaCount: asInt(raw?.stats?.kqCriteriaCount ?? raw?.Stats?.KqCriteriaCount, new Set(criteria.map((row) => row.assessmentCriteriaId).filter((id) => id > 0)).size),
+      otherAssessmentIntentCount: 0
     },
     warnings: Array.isArray(raw?.warnings ?? raw?.Warnings) ? (raw?.warnings ?? raw?.Warnings).map(asText).filter(Boolean) : []
   };
@@ -664,15 +583,14 @@ export const buildDraftStats = (draft) => {
   const criteria = Array.isArray(draft?.criteria) ? draft.criteria : [];
   const subjects = Array.isArray(draft?.subjects) ? draft.subjects : [];
   const topics = Array.isArray(draft?.topics) ? draft.topics : [];
-  const routedRows = criteria.filter((row) => row.routingStatus === 'KQ');
   return {
     totalSubjects: subjects.length,
     totalTopics: topics.length,
     totalCriteria: new Set(criteria.map((row) => row.assessmentCriteriaId).filter((id) => id > 0)).size,
     totalIntents: criteria.length,
-    kqIntentCount: routedRows.length,
-    kqCriteriaCount: new Set(routedRows.map((row) => row.assessmentCriteriaId).filter((id) => id > 0)).size,
-    otherAssessmentIntentCount: criteria.length - routedRows.length
+    kqIntentCount: criteria.length,
+    kqCriteriaCount: new Set(criteria.map((row) => row.assessmentCriteriaId).filter((id) => id > 0)).size,
+    otherAssessmentIntentCount: 0
   };
 };
 
@@ -680,11 +598,8 @@ export const buildValidation = (draft) => {
   const errors = [];
   const warnings = [];
   const metadata = draft?.metadata ?? {};
-  const criteria = Array.isArray(draft?.criteria) ? draft.criteria : [];
   const stats = buildDraftStats(draft);
-  const minimumQuestionsPerCriterion = Math.max(0, asInt(metadata.minimumQuestionsPerCriterion, MINIMUM_QUESTIONS_PER_CRITERION));
-  const formulaSuggestedTotalQuestions = stats.kqCriteriaCount * minimumQuestionsPerCriterion;
-  const minimumRequired = Math.max(0, asInt(metadata.minimumTotalQuestions, 0));
+  const totalQuestions = asInt(metadata.totalQuestions, 0);
 
   if (asInt(draft?.phaseId, 0) <= 0) {
     errors.push('Select a curriculum phase before exporting CSV files or generating with SMI.');
@@ -695,35 +610,30 @@ export const buildValidation = (draft) => {
   if (metadata.totalMarks !== metadata.totalQuestions) {
     errors.push('Total marks must equal total questions because each question carries exactly 1 mark.');
   }
-  if (metadata.totalQuestions < minimumRequired) {
-    errors.push(`Total questions must be at least ${minimumRequired} for the selected exam scope.`);
+  if (totalQuestions <= 0) {
+    errors.push('Set at least one question before generating or exporting.');
   }
-  if (metadata.totalQuestions > 0 && stats.kqCriteriaCount === 0) {
-    errors.push('No criteria are routed to KQ. Set at least one criterion intent to routing status "KQ" before exporting or generating.');
+  if (stats.totalSubjects === 0) {
+    errors.push('No subjects are available for the selected exam scope.');
   }
-  if (criteria.some((row) => !asText(row.assessmentCriteriaNumber))) {
-    warnings.push('One or more criterion rows are missing an assessment criteria number and should be confirmed by SMI.');
-  }
-  if (criteria.some((row) => row.routingStatus === 'KQ' && !asText(row.qualifier) && asText(row.qualifierSource) === QUALIFIER_SOURCE_SMI_REQUIRED)) {
-    warnings.push('Some KQ-routed rows still require an SMI-added qualifier.');
-  }
-  if (formulaSuggestedTotalQuestions > 0 && metadata.totalQuestions < formulaSuggestedTotalQuestions) {
-    warnings.push(`Manual override is below the formula suggestion of ${formulaSuggestedTotalQuestions} question(s). Coverage will be partial and SMI should confirm the final distribution.`);
-  }
-  if (formulaSuggestedTotalQuestions > 0 && metadata.totalQuestions > formulaSuggestedTotalQuestions) {
-    warnings.push('Question allocation will cycle through criteria after the configured minimum-per-criterion coverage has been reached.');
+  if (stats.totalTopics === 0) {
+    warnings.push('No topic rows were resolved in the current scope. Question generation will rely only on subject-linked lesson content.');
   }
 
-  return { errors, warnings, stats, minimumRequired, formulaSuggestedTotalQuestions, minimumQuestionsPerCriterion };
+  return {
+    errors,
+    warnings,
+    stats,
+    minimumRequired: 0,
+    formulaSuggestedTotalQuestions: 0,
+    minimumQuestionsPerCriterion: 0
+  };
 };
 
 const compareIntentRows = (left, right) => {
-  const leftRank = left?.coverageType === 'direct' ? 0 : 1;
-  const rightRank = right?.coverageType === 'direct' ? 0 : 1;
-  if (leftRank !== rightRank) return leftRank - rightRank;
   const byCriteria = asText(left?.assessmentCriteriaNumber).localeCompare(asText(right?.assessmentCriteriaNumber), undefined, { sensitivity: 'base' });
   if (byCriteria !== 0) return byCriteria;
-  return asText(left?.canonicalVerb).localeCompare(asText(right?.canonicalVerb), undefined, { sensitivity: 'base' });
+  return asText(left?.nounFocus).localeCompare(asText(right?.nounFocus), undefined, { sensitivity: 'base' });
 };
 
 const buildQuestionTypePlan = (trueFalseCount, multipleChoiceCount) => {
@@ -748,7 +658,6 @@ const buildQuestionTypePlan = (trueFalseCount, multipleChoiceCount) => {
 
 const buildCriterionGroups = (criteria) => {
   const routed = (Array.isArray(criteria) ? criteria : [])
-    .filter((row) => row.routingStatus === 'KQ')
     .sort(compareIntentRows);
 
   const groups = new Map();
@@ -898,44 +807,45 @@ export const buildMetadataRows = (draft) => {
 export const buildQuestionRows = (draft, generatedQuestions = []) => {
   const normalizedQuestions = Array.isArray(generatedQuestions) ? generatedQuestions.map(normalizeGeneratedQuestion) : [];
   const criteria = Array.isArray(draft?.criteria) ? draft.criteria : [];
-  const criteriaLookup = new Map(
-    criteria
-      .filter((row) => row.routingStatus === 'KQ')
-      .map((row) => [asText(row.assessmentCriteriaNumber).toLowerCase(), row])
-  );
+  const topics = Array.isArray(draft?.topics) ? draft.topics : [];
+  const criteriaLookup = new Map();
+  for (const row of criteria.slice().sort(compareIntentRows)) {
+    const key = asText(row.assessmentCriteriaNumber).toLowerCase();
+    if (!key || criteriaLookup.has(key)) continue;
+    criteriaLookup.set(key, row);
+  }
 
   if (normalizedQuestions.length > 0) {
     return normalizedQuestions.map((question) => buildGeneratedQuestionRow(draft, criteriaLookup, question));
   }
 
   const metadata = draft?.metadata ?? {};
-  const groups = buildCriterionGroups(criteria);
-  if (groups.length === 0) {
+  if (topics.length === 0) {
     return [];
   }
 
-  const assignments = buildAssignments(groups, metadata.trueFalseCount, metadata.multipleChoiceCount, metadata.minimumQuestionsPerCriterion);
-  return assignments.map(({ group, questionType, questionNumber, occurrence }) => {
-    const intent = group.intents[occurrence % group.intents.length] || group.representative;
+  const questionPlan = buildQuestionTypePlan(metadata.trueFalseCount, metadata.multipleChoiceCount);
+  return questionPlan.map((questionType, index) => {
+    const topic = topics[index % topics.length];
     const scaffold = buildQuestionScaffold(questionType);
     return {
-      'Subject Code': asText(intent.subjectCode),
-      'Subject Description': asText(intent.subjectDescription),
-      'Topic Code': asText(intent.topicCode),
-      'Topic Description': asText(intent.topicDescription),
-      'Assessment Criteria Number': asText(intent.assessmentCriteriaNumber),
-      'Original Criterion Text': asText(intent.originalCriterionText),
-      'Noun Focus': asText(intent.nounFocus),
-      'Detected Verb': asText(intent.detectedVerb),
-      'Canonical Verb': asText(intent.canonicalVerb),
-      'Bloom Domain': asText(intent.bloomDomain) || DEFAULT_BLOOM_DOMAIN,
-      'Bloom Level': asText(intent.bloomLevel),
-      'Qualifier': asText(intent.qualifier),
-      'Qualifier Source': asText(intent.qualifierSource),
-      'Coverage Type': normalizeCoverageType(intent.coverageType),
-      'Routing Status': normalizeRoutingStatus(intent.routingStatus),
+      'Subject Code': asText(topic.subjectCode),
+      'Subject Description': '',
+      'Topic Code': asText(topic.topicCode),
+      'Topic Description': asText(topic.topicDescription),
+      'Assessment Criteria Number': '',
+      'Original Criterion Text': '',
+      'Noun Focus': '',
+      'Detected Verb': '',
+      'Canonical Verb': '',
+      'Bloom Domain': '',
+      'Bloom Level': '',
+      'Qualifier': '',
+      'Qualifier Source': '',
+      'Coverage Type': 'direct',
+      'Routing Status': 'KQ',
       'Lesson Plan Label': '',
-      'Question ID': buildQuestionId(draft, questionNumber),
+      'Question ID': buildQuestionId(draft, index + 1),
       'Question Type': questionType,
       'Question Text': '',
       'Option A': scaffold.optionA,

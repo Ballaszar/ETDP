@@ -9,6 +9,9 @@ using System.Collections.Generic;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using A = DocumentFormat.OpenXml.Drawing;
+using DW = DocumentFormat.OpenXml.Drawing.Wordprocessing;
+using PIC = DocumentFormat.OpenXml.Drawing.Pictures;
 
 namespace ETD.Api.Controllers
 {
@@ -320,7 +323,7 @@ namespace ETD.Api.Controllers
                         imgPart.FeedData(imgStream);
                     }
                     var relId = main.GetIdOfPart(imgPart);
-                    var drawing = BuildInlineImage(relId, targetCx, targetCy, (uint)(i + 1));
+                    var drawing = BuildInlineImage(relId, targetCx, targetCy, (uint)(i + 1), $"ChartPage_{i + 1}.png");
                     body.Append(new Paragraph(new Run(drawing)));
 
                     if (i < pages.Count - 1)
@@ -501,33 +504,35 @@ namespace ETD.Api.Controllers
             return Ok(new { data, archivedPath = path });
         }
 
-        private static DocumentFormat.OpenXml.Drawing.Wordprocessing.Inline BuildInlineImage(string relId, long cx, long cy, uint drawingId)
+        private static Drawing BuildInlineImage(string relId, long cx, long cy, uint drawingId, string imageName)
         {
-            var inline = new DocumentFormat.OpenXml.Drawing.Wordprocessing.Inline(
-                new DocumentFormat.OpenXml.Drawing.Wordprocessing.Extent() { Cx = cx, Cy = cy },
-                new DocumentFormat.OpenXml.Drawing.Graphic(
-                    new DocumentFormat.OpenXml.Drawing.GraphicData(
-                        new DocumentFormat.OpenXml.Drawing.Pictures.Picture(
-                            new DocumentFormat.OpenXml.Drawing.Pictures.NonVisualPictureProperties(
-                                new DocumentFormat.OpenXml.Drawing.Pictures.NonVisualDrawingProperties() { Id = drawingId, Name = "Chart.png" },
-                                new DocumentFormat.OpenXml.Drawing.Pictures.NonVisualPictureDrawingProperties()
+            var inline = new DW.Inline(
+                new DW.Extent() { Cx = cx, Cy = cy },
+                new DW.DocProperties() { Id = drawingId, Name = imageName },
+                new DW.NonVisualGraphicFrameDrawingProperties(new A.GraphicFrameLocks() { NoChangeAspect = true }),
+                new A.Graphic(
+                    new A.GraphicData(
+                        new PIC.Picture(
+                            new PIC.NonVisualPictureProperties(
+                                new PIC.NonVisualDrawingProperties() { Id = drawingId, Name = imageName },
+                                new PIC.NonVisualPictureDrawingProperties()
                             ),
-                            new DocumentFormat.OpenXml.Drawing.Pictures.BlipFill(
-                                new DocumentFormat.OpenXml.Drawing.Blip() { Embed = relId },
-                                new DocumentFormat.OpenXml.Drawing.Stretch(new DocumentFormat.OpenXml.Drawing.FillRectangle())
+                            new PIC.BlipFill(
+                                new A.Blip() { Embed = relId },
+                                new A.Stretch(new A.FillRectangle())
                             ),
-                            new DocumentFormat.OpenXml.Drawing.Pictures.ShapeProperties(
-                                new DocumentFormat.OpenXml.Drawing.Transform2D(
-                                    new DocumentFormat.OpenXml.Drawing.Offset() { X = 0, Y = 0 },
-                                    new DocumentFormat.OpenXml.Drawing.Extents() { Cx = cx, Cy = cy }
+                            new PIC.ShapeProperties(
+                                new A.Transform2D(
+                                    new A.Offset() { X = 0, Y = 0 },
+                                    new A.Extents() { Cx = cx, Cy = cy }
                                 ),
-                                new DocumentFormat.OpenXml.Drawing.PresetGeometry(new DocumentFormat.OpenXml.Drawing.AdjustValueList()) { Preset = DocumentFormat.OpenXml.Drawing.ShapeTypeValues.Rectangle }
+                                new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle }
                             )
                         )
                     ) { Uri = "http://schemas.openxmlformats.org/drawingml/2006/picture" }
                 )
             );
-            return inline;
+            return new Drawing(inline);
         }
 
         private List<Subject> ResolveSubjectRange(int qualificationId, int? subjectFromId, int? subjectToId)

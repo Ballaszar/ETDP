@@ -24,6 +24,7 @@ import LecturerToolkitPage from './pages/LecturerToolkitPage';
 import GraphsPage from './pages/GraphsPage';
 import LearningMaterialPage from './pages/LearningMaterialPage';
 import AIAgent from './pages/AIAgent';
+import AgentPlaygroundPage from './pages/AgentPlaygroundPage';
 import LearningMaterialSchedulePage from './pages/LearningMaterialSchedulePage';
 import LearningMaterialRolloutPage from './pages/LearningMaterialRolloutPage';
 import LearningMaterialLearnerGuidePage from './pages/LearningMaterialLearnerGuidePage';
@@ -50,10 +51,8 @@ import LessonPlanReview from './pages/LessonPlanReview';
 import LearnerGuidePage from './pages/LearnerGuidePage';
 import WorkbookPage from './pages/WorkbookPage';
 import PowerPointSlidesPage from './pages/PowerPointSlidesPage';
-import ElectricBookExportPage from './pages/ElectricBookExportPage';
 import TextToVideoEditorPage from './pages/TextToVideoEditorPage';
 import Wan21Page from './pages/Wan21Page';
-import RepoIntegrationHubPage from './pages/RepoIntegrationHubPage';
 import LecturerAssistancePage from './pages/LecturerAssistancePage';
 import ProjectRolloutPlanPage from './pages/ProjectRolloutPlanPage';
 import AssessmentCompliancePage from './pages/AssessmentCompliancePage';
@@ -62,16 +61,25 @@ import LearnerProgressReportPage from './pages/LearnerProgressReportPage';
 import WorkExperienceLogbookPage from './pages/WorkExperienceLogbookPage';
 import AutomationJobsPage from './pages/AutomationJobsPage';
 import SystemDiagnosticsPage from './pages/SystemDiagnosticsPage';
+import TrainingPage from './pages/TrainingPage';
 import UserGuidePage from './pages/UserGuidePage';
 import QualityCouncilCurriculaPage from './pages/QualityCouncilCurriculaPage';
+import ActivationPage from './pages/ActivationPage';
+import RequireActivation from './pages/RequireActivation';
+import AgentGovernancePage from './pages/AgentGovernancePage';
 
 const App = () => (
     <ErrorBoundary fallback={ErrorFallback}>
         <GlossaryAutoTagger />
         <ScriptErrorWarning />
         <Routes>
-            <Route path="/activation" element={<Navigate to="/" replace />} />
-            <Route path="/" element={<Dashboard />}>
+            <Route path="/activation" element={<ActivationPage />} />
+            <Route path="/training" element={<TrainingPage />} />
+            <Route path="/llm-training" element={<TrainingPage />} />
+            <Route path="/llm-assessment" element={<TrainingPage initialPanel="assessment" />} />
+            <Route path="/playground/training" element={<TrainingPage />} />
+            <Route path="/playground/assessment" element={<TrainingPage initialPanel="assessment" />} />
+            <Route path="/" element={<RequireActivation><Dashboard /></RequireActivation>}>
                 <Route path="main-menu" element={<MainMenuPage />} />
                 <Route path="main" element={<MainPage />} />
                 <Route path="qualification-review" element={<QualificationReview />} />
@@ -179,12 +187,20 @@ const App = () => (
                 } />
                 <Route path="print-menu" element={<Navigate to="/learning-material" replace />} />
                 <Route path="exports" element={<Navigate to="/learning-material" replace />} />
-                <Route path="ai-agent" element={<AIAgent />} />
+                <Route path="ai-agent" element={<Navigate to="/qualia/mira" replace />} />
+                <Route path="qualia" element={<Navigate to="/qualia/mira" replace />} />
+                <Route path="qualia/mira" element={<AIAgent agentMode="mira" />} />
+                <Route path="qualia/qwen" element={<AIAgent agentMode="qwen" />} />
+                <Route path="playground" element={<Navigate to="/playground/mira" replace />} />
+                <Route path="playground/mira" element={<AgentPlaygroundPage agentMode="mira" />} />
+                <Route path="playground/qwen" element={<AgentPlaygroundPage agentMode="qwen" />} />
+                <Route path="playground/training" element={<TrainingPage />} />
+                <Route path="playground/assessment" element={<TrainingPage initialPanel="assessment" />} />
 
                 <Route path="learner-guide-export" element={<LearnerGuidePage />} />
                 <Route path="workbook-export" element={<WorkbookPage />} />
                 <Route path="powerpoint-slides-export" element={<PowerPointSlidesPage />} />
-                <Route path="electric-book-export" element={<ElectricBookExportPage />} />
+                <Route path="electric-book-export" element={<Navigate to="/learning-material" replace />} />
                 <Route path="lecturer-assistance" element={
                     <RequireQualification><LecturerAssistancePage /></RequireQualification>
                 } />
@@ -194,7 +210,7 @@ const App = () => (
                 <Route path="wan-2-1" element={
                     <RequireQualification><Wan21Page /></RequireQualification>
                 } />
-                <Route path="repo-integration-hub" element={<RepoIntegrationHubPage />} />
+                <Route path="repo-integration-hub" element={<Navigate to="/learning-material" replace />} />
                 <Route path="project-rollout-plan" element={<ProjectRolloutPlanPage />} />
                 <Route path="assessment-compliance" element={<AssessmentCompliancePage />} />
                 <Route path="learner-registration" element={<LearnerRegistrationPage />} />
@@ -204,7 +220,11 @@ const App = () => (
                 <Route path="work-experience-logbook" element={<WorkExperienceLogbookPage />} />
                 <Route path="automation-jobs" element={<AutomationJobsPage />} />
                 <Route path="system-diagnostics" element={<SystemDiagnosticsPage />} />
+                <Route path="training" element={<TrainingPage />} />
+                <Route path="llm-training" element={<TrainingPage />} />
+                <Route path="llm-assessment" element={<TrainingPage initialPanel="assessment" />} />
                 <Route path="user-guide" element={<UserGuidePage />} />
+                <Route path="agent-governance" element={<AgentGovernancePage />} />
             </Route>
         </Routes>
     </ErrorBoundary>

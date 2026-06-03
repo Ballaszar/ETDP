@@ -1,9 +1,34 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { jsPDF } from 'jspdf';
+import { useLocation } from 'react-router-dom';
+import { useQualification } from '../context/QualificationContext';
+import { normalizeLearningMaterialParams, readLearningMaterialParams, writeLearningMaterialParams } from '../utils/learningMaterialParams';
+import { subjectCodeOf, subjectDescriptionOf, subjectIdOf } from '../utils/learningMaterialCommon';
 
 const API_BASE = '/api';
 const A4_PORTRAIT = { width: 794, height: 1123 };
+const A4_EXPORT_PORTRAIT = { width: A4_PORTRAIT.width * 2, height: A4_PORTRAIT.height * 2 };
 const PHASE_PALETTE = ['#2b2d42', '#006d77', '#3a86ff', '#8338ec', '#ff006e', '#fb5607', '#2a9d8f', '#264653'];
+const CATEGORY_OPTIONS = [
+  { key: 'basicEngineering', label: 'Basic Engineering', aliases: ['basic engineering'], codeTokens: ['KM-01'] },
+  { key: 'fittingTheory', label: 'Fitting Theory', aliases: ['fitting theory'], codeTokens: ['KM-02'] },
+  { key: 'machineTheory', label: 'Machine Theory', aliases: ['machine theory', 'machining theory'], codeTokens: ['KM-03'] },
+];
+
+const qId = (q) => Number(q?.id ?? q?.Id ?? 0);
+const qNumber = (q) => String(q?.qualificationNumber ?? q?.QualificationNumber ?? '').trim();
+const qDescription = (q) => String(q?.qualificationDescription ?? q?.QualificationDescription ?? '').trim();
+const learningPhasesOf = (value) => String(value?.learningPhases ?? value?.LearningPhases ?? value?.phaseName ?? value?.PhaseName ?? '').trim();
+const subjectPurposeOf = (value) => String(value?.subjectPurpose ?? value?.SubjectPurpose ?? '').trim();
+
+const createDefaultCategoryFilters = () =>
+  CATEGORY_OPTIONS.reduce((acc, option) => {
+    acc[option.key] = true;
+    return acc;
+  }, {});
+
+const normalizeFilterText = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 const colorFromKey = (key) => {
   const text = `${key ?? ''}`;
@@ -11,6 +36,26 @@ const colorFromKey = (key) => {
   for (let i = 0; i < text.length; i += 1) sum += text.charCodeAt(i);
   return PHASE_PALETTE[sum % PHASE_PALETTE.length];
 };
+
+const colorWithAlpha = (hex, alpha = 1) => {
+  const value = String(hex ?? '').replace('#', '').trim();
+  const full = value.length === 3
+    ? value.split('').map((part) => `${part}${part}`).join('')
+    : value;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return hex;
+  const int = Number.parseInt(full, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+};
+
+const sanitizeFilePart = (value) => String(value ?? '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .slice(0, 48);
 
 const clampText = (value, max = 120) => {
   const text = `${value ?? ''}`.replace(/\s+/g, ' ').trim();
@@ -52,37 +97,125 @@ const getSvgSize = (svg) => {
   };
 };
 
-const serializeSvgForExport = (svg) => {
+const serializeSvgForExport = (svg, width, height) => {
   const clone = svg.cloneNode(true);
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+  clone.setAttribute('version', '1.1');
+  clone.setAttribute('width', String(width));
+  clone.setAttribute('height', String(height));
+  if (!clone.getAttribute('viewBox')) {
+    clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  }
+  clone.setAttribute('preserveAspectRatio', 'xMinYMin meet');
   clone.style.transform = '';
   clone.style.transformOrigin = '';
-  clone.style.width = '';
-  clone.style.height = '';
-  return new XMLSerializer().serializeToString(clone);
+  clone.style.width = `${width}px`;
+  clone.style.height = `${height}px`;
+  clone.style.background = '#ffffff';
+  clone.style.overflow = 'visible';
+  return `<?xml version="1.0" encoding="UTF-8"?>${new XMLSerializer().serializeToString(clone)}`;
 };
 
-const renderSvgToCanvas = (svgString, width, height) =>
+const renderSvgToCanvas = (svgString, width, height, renderScale = 1) =>
   new Promise((resolve, reject) => {
     const img = new Image();
+    img.decoding = 'sync';
     const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);
     img.onload = () => {
+      const ratio = Math.max(1, (window.devicePixelRatio || 1) * renderScale);
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = Math.max(1, Math.round(width * ratio));
+      canvas.height = Math.max(1, Math.round(height * ratio));
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
       const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, width, height);
       ctx.drawImage(img, 0, 0, width, height);
       URL.revokeObjectURL(url);
       resolve(canvas);
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error('Failed to render SVG image'));
+      reject(new Error('Failed to render the flow diagram SVG.'));
     };
     img.src = url;
   });
+
+const downloadJsonPayload = (payload, fileName) => {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+const downloadBlob = (blob, fileName) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 1500);
+};
+
+const canvasToBlob = (canvas, type = 'image/png') =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+        return;
+      }
+      reject(new Error('Canvas export failed.'));
+    }, type);
+  });
+
+const resolveSubjectCategoryKey = (value) => {
+  const codeText = normalizeFilterText(
+    value?.subjectCode ??
+    value?.SubjectCode ??
+    value?.code ??
+    value?.Code ??
+    value?.name ??
+    ''
+  );
+  const text = normalizeFilterText([
+    value?.subjectDescription ?? value?.SubjectDescription ?? value?.description ?? value?.Description ?? value?.name ?? '',
+    learningPhasesOf(value),
+    value?.phaseName ?? value?.PhaseName ?? '',
+    subjectPurposeOf(value),
+  ].join(' '));
+
+  for (const option of CATEGORY_OPTIONS) {
+    const aliasMatch = option.aliases.some((alias) => text.includes(normalizeFilterText(alias)));
+    const codeMatch = option.codeTokens.some((token) => codeText.includes(normalizeFilterText(token)));
+    if (aliasMatch || codeMatch) {
+      return option.key;
+    }
+  }
+
+  return '';
+};
+
+const matchesSubjectCategoryFilters = (value, categoryFilters) => {
+  const selectedKeys = CATEGORY_OPTIONS.filter((option) => categoryFilters?.[option.key]).map((option) => option.key);
+  if (selectedKeys.length === CATEGORY_OPTIONS.length) return true;
+  if (selectedKeys.length === 0) return false;
+  const resolvedKey = resolveSubjectCategoryKey(value);
+  if (!resolvedKey) return false;
+  return selectedKeys.includes(resolvedKey);
+};
 
 const normalizeFlowData = (data) => {
   if (!data || !Array.isArray(data.modules)) return data;
@@ -174,15 +307,17 @@ const recomputeModule = (module) => {
   return { ...module, topics, sessions, totalDurationMinutes };
 };
 
-const buildA4Pages = (canvas) => {
-  const pageWidth = A4_PORTRAIT.width;
-  const pageHeight = A4_PORTRAIT.height;
+const buildA4Pages = (canvas, pageSize = A4_PORTRAIT) => {
+  const pageWidth = pageSize.width;
+  const pageHeight = pageSize.height;
   const scale = pageWidth / canvas.width;
   const scaledHeight = Math.max(1, Math.ceil(canvas.height * scale));
   const scaledCanvas = document.createElement('canvas');
   scaledCanvas.width = pageWidth;
   scaledCanvas.height = scaledHeight;
   const scaledCtx = scaledCanvas.getContext('2d');
+  scaledCtx.imageSmoothingEnabled = true;
+  scaledCtx.imageSmoothingQuality = 'high';
   scaledCtx.fillStyle = '#ffffff';
   scaledCtx.fillRect(0, 0, scaledCanvas.width, scaledCanvas.height);
   scaledCtx.drawImage(canvas, 0, 0, pageWidth, scaledHeight);
@@ -193,6 +328,8 @@ const buildA4Pages = (canvas) => {
     pageCanvas.width = pageWidth;
     pageCanvas.height = pageHeight;
     const pageCtx = pageCanvas.getContext('2d');
+    pageCtx.imageSmoothingEnabled = true;
+    pageCtx.imageSmoothingQuality = 'high';
     pageCtx.fillStyle = '#ffffff';
     pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
     const copyHeight = Math.min(pageHeight, scaledHeight - y);
@@ -205,7 +342,31 @@ const buildA4Pages = (canvas) => {
 
 const GraphsPage = () => {
   const graphRef = useRef();
-  const [view, setView] = useState('flow');
+  const location = useLocation();
+  const { qualificationId, setQualificationId } = useQualification() || { qualificationId: null, setQualificationId: () => {} };
+  const routeParams = useMemo(
+    () => normalizeLearningMaterialParams(location.state?.learningMaterialParams || {}),
+    [location.state]
+  );
+  const storedParams = useMemo(() => normalizeLearningMaterialParams(readLearningMaterialParams()), []);
+  const initialQualificationId = String(
+    routeParams.qualificationId ||
+    location.state?.qualificationId ||
+    qualificationId ||
+    storedParams.qualificationId ||
+    localStorage.getItem('qualificationId') ||
+    ''
+  );
+
+  const [view, setView] = useState('topics');
+  const [qualifications, setQualifications] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [filters, setFilters] = useState({
+    qualificationId: initialQualificationId,
+    subjectFromId: String(routeParams.subjectFromId || storedParams.subjectFromId || ''),
+    subjectToId: String(routeParams.subjectToId || storedParams.subjectToId || ''),
+    categories: createDefaultCategoryFilters(),
+  });
   const [flowData, setFlowData] = useState(null);
   const [sunburstData, setSunburstData] = useState(null);
   const [scale, setScale] = useState(1);
@@ -215,34 +376,307 @@ const GraphsPage = () => {
   const [previewPageIndex, setPreviewPageIndex] = useState(0);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewBusy, setPreviewBusy] = useState(false);
+  const [filterBusy, setFilterBusy] = useState(false);
+  const [graphBusy, setGraphBusy] = useState(false);
+  const [filterError, setFilterError] = useState('');
+  const [graphError, setGraphError] = useState('');
   const [draggingLesson, setDraggingLesson] = useState(null);
   const [reorderMessage, setReorderMessage] = useState('');
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const f = await axios.get(`${API_BASE}/Charts/flow-program`);
-        setFlowData(normalizeFlowData(f.data.data));
-        const s = await axios.get(`${API_BASE}/Charts/sunburst`);
-        setSunburstData(s.data.data);
-      } catch {
-        setReorderMessage('Failed to load graph data.');
-      }
-    };
-    load();
-  }, []);
+  const qid = Number(filters.qualificationId || 0);
+  const selectedQualification = useMemo(
+    () => qualifications.find((q) => String(qId(q)) === String(filters.qualificationId)) || null,
+    [qualifications, filters.qualificationId]
+  );
+  const selectedSubjectFrom = useMemo(
+    () => subjects.find((subject) => subjectIdOf(subject) === String(filters.subjectFromId)) || null,
+    [subjects, filters.subjectFromId]
+  );
+  const selectedSubjectTo = useMemo(
+    () => subjects.find((subject) => subjectIdOf(subject) === String(filters.subjectToId)) || null,
+    [subjects, filters.subjectToId]
+  );
+  const selectedCategoryCount = CATEGORY_OPTIONS.filter((option) => filters.categories?.[option.key]).length;
+  const categoryCounts = useMemo(
+    () => CATEGORY_OPTIONS.map((option) => ({
+      ...option,
+      count: subjects.filter((subject) => resolveSubjectCategoryKey(subject) === option.key).length,
+    })),
+    [subjects]
+  );
+
+  const chartQueryParams = useMemo(() => {
+    const params = {};
+    if (qid > 0) params.qualificationId = qid;
+    if (Number(filters.subjectFromId || 0) > 0) params.subjectFromId = Number(filters.subjectFromId);
+    if (Number(filters.subjectToId || 0) > 0) params.subjectToId = Number(filters.subjectToId);
+    return params;
+  }, [qid, filters.subjectFromId, filters.subjectToId]);
+
+  const visibleFlowData = useMemo(() => {
+    if (!flowData) return null;
+    const modules = (flowData.modules || []).filter((module) => matchesSubjectCategoryFilters(module, filters.categories));
+    return { ...flowData, modules };
+  }, [flowData, filters.categories]);
+
+  const visibleSunburstData = useMemo(() => {
+    if (!sunburstData) return null;
+    const children = (sunburstData.children || [])
+      .map((phase) => ({
+        ...phase,
+        children: (phase.children || []).filter((subject) => matchesSubjectCategoryFilters({
+          subjectCode: subject.name,
+          subjectDescription: subject.name,
+          phaseName: phase.name,
+        }, filters.categories)),
+      }))
+      .filter((phase) => (phase.children || []).length > 0);
+    return { ...sunburstData, children };
+  }, [sunburstData, filters.categories]);
 
   const previewImage = useMemo(() => previewPages[previewPageIndex] || null, [previewPages, previewPageIndex]);
+  const totalRangeSubjects = (flowData?.modules || []).length;
+  const visibleRangeSubjects = (visibleFlowData?.modules || []).length;
+  const hasVisibleGraphData = view === 'sunburst'
+    ? (visibleSunburstData?.children || []).length > 0
+    : (visibleFlowData?.modules || []).length > 0;
+  const exportFileStem = useMemo(() => {
+    const rangeParts = [];
+    if (selectedSubjectFrom) rangeParts.push(subjectCodeOf(selectedSubjectFrom));
+    if (selectedSubjectTo && subjectIdOf(selectedSubjectTo) !== subjectIdOf(selectedSubjectFrom)) {
+      rangeParts.push(subjectCodeOf(selectedSubjectTo));
+    }
+    const parts = ['flow-diagram', view, ...rangeParts]
+      .map(sanitizeFilePart)
+      .filter(Boolean);
+    return parts.join('_') || 'flow-diagram';
+  }, [view, selectedSubjectFrom, selectedSubjectTo]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadQualifications = async () => {
+      setFilterBusy(true);
+      setFilterError('');
+      try {
+        const res = await fetch(`${API_BASE}/Qualification`);
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        if (!active) return;
+        const list = Array.isArray(data) ? data : [];
+        setQualifications(list);
+        if (!filters.qualificationId && list.length > 0) {
+          const firstId = String(qId(list[0]));
+          setFilters((prev) => ({ ...prev, qualificationId: firstId }));
+        }
+      } catch (error) {
+        if (!active) return;
+        setFilterError(`Failed to load qualifications: ${error?.message || error}`);
+      } finally {
+        if (active) setFilterBusy(false);
+      }
+    };
+
+    loadQualifications();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const subjectFrom = subjects.find((subject) => subjectIdOf(subject) === String(filters.subjectFromId)) || null;
+    const subjectTo = subjects.find((subject) => subjectIdOf(subject) === String(filters.subjectToId)) || null;
+    const current = normalizeLearningMaterialParams(readLearningMaterialParams());
+    const qualificationLabel = selectedQualification
+      ? `${qNumber(selectedQualification) || '#'} - ${qDescription(selectedQualification) || 'No description'}`
+      : current.qualificationLabel;
+
+    writeLearningMaterialParams({
+      ...current,
+      qualificationId: String(filters.qualificationId || ''),
+      qualificationLabel,
+      subjectFromId: String(filters.subjectFromId || ''),
+      subjectToId: String(filters.subjectToId || ''),
+      subjectFromCode: subjectFrom ? subjectCodeOf(subjectFrom) : '',
+      subjectToCode: subjectTo ? subjectCodeOf(subjectTo) : '',
+    });
+
+    if (qid > 0) {
+      setQualificationId(qid);
+    }
+  }, [filters.qualificationId, filters.subjectFromId, filters.subjectToId, qid, selectedQualification, subjects, setQualificationId]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadSubjects = async () => {
+      if (qid <= 0) {
+        setSubjects([]);
+        setFlowData(null);
+        setSunburstData(null);
+        return;
+      }
+
+      setFilterBusy(true);
+      setFilterError('');
+      try {
+        const res = await fetch(`${API_BASE}/Subject/byQualification?qualificationId=${qid}`);
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        if (!active) return;
+        const list = Array.isArray(data) ? data : [];
+        setSubjects(list);
+        setFilters((prev) => {
+          let next = prev;
+          const hasFrom = list.some((subject) => subjectIdOf(subject) === String(prev.subjectFromId));
+          const hasTo = list.some((subject) => subjectIdOf(subject) === String(prev.subjectToId));
+          if (!hasFrom && list.length > 0) {
+            next = { ...next, subjectFromId: subjectIdOf(list[0]) };
+          }
+          if (!hasTo && list.length > 0) {
+            next = { ...next, subjectToId: subjectIdOf(list[Math.max(list.length - 1, 0)]) };
+          }
+          return next;
+        });
+      } catch (error) {
+        if (!active) return;
+        setFilterError(`Failed to load subjects for flow diagram filters: ${error?.message || error}`);
+        setSubjects([]);
+      } finally {
+        if (active) setFilterBusy(false);
+      }
+    };
+
+    loadSubjects();
+    return () => { active = false; };
+  }, [qid]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadGraphs = async () => {
+      if (qid <= 0) {
+        setFlowData(null);
+        setSunburstData(null);
+        return;
+      }
+
+      setGraphBusy(true);
+      setGraphError('');
+      setPreviewPages([]);
+      setPreviewPageIndex(0);
+      setPreviewZoom(1);
+      setScale(1);
+      setPan({ x: 0, y: 0 });
+      setReorderMessage('');
+
+      try {
+        const [flowRes, sunburstRes] = await Promise.all([
+          axios.get(`${API_BASE}/Charts/flow-program`, { params: chartQueryParams }),
+          axios.get(`${API_BASE}/Charts/sunburst`, { params: chartQueryParams }),
+        ]);
+        if (!active) return;
+        setFlowData(normalizeFlowData(flowRes.data?.data));
+        setSunburstData(sunburstRes.data?.data || null);
+      } catch (error) {
+        if (!active) return;
+        const message = error?.response?.data || error?.message || 'Failed to load graph data.';
+        setGraphError(typeof message === 'string' ? message : 'Failed to load graph data.');
+        setFlowData(null);
+        setSunburstData(null);
+      } finally {
+        if (active) setGraphBusy(false);
+      }
+    };
+
+    loadGraphs();
+    return () => { active = false; };
+  }, [qid, chartQueryParams]);
+
+  const updateFilterField = (name, value) => {
+    setFilterError('');
+    setGraphError('');
+    setPreviewPages([]);
+    setFilters((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'qualificationId') {
+        next.subjectFromId = '';
+        next.subjectToId = '';
+      }
+      return next;
+    });
+  };
+
+  const updateCategoryFilter = (key, checked) => {
+    setPreviewPages([]);
+    setGraphError('');
+    setFilters((prev) => ({
+      ...prev,
+      categories: {
+        ...prev.categories,
+        [key]: checked,
+      },
+    }));
+  };
 
   const handleZoomIn = () => setScale((prev) => Math.min(prev + 0.2, 4));
   const handleZoomOut = () => setScale((prev) => Math.max(prev - 0.2, 0.4));
-  const handlePrint = () => window.print();
+  const handlePrint = async () => {
+    try {
+      setPreviewBusy(true);
+      const { pages, pageWidth, pageHeight } = await buildPagedExportAssets({
+        syncPreview: true,
+        exportPageSize: A4_EXPORT_PORTRAIT,
+        previewPageSize: A4_PORTRAIT,
+        renderScale: 2,
+      });
+      const popup = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1100');
+      if (!popup) throw new Error('Pop-up blocked by the browser.');
+      popup.document.write(`<!doctype html>
+<html>
+  <head>
+    <title>Flow Diagram Print</title>
+    <style>
+      body { margin: 0; padding: 24px; background: #eef3fb; font-family: "Segoe UI", Arial, sans-serif; }
+      .page { width: ${pageWidth}px; min-height: ${pageHeight}px; margin: 0 auto 24px; background: #fff; box-shadow: 0 10px 28px rgba(27, 42, 73, 0.12); }
+      img { display: block; width: ${pageWidth}px; height: ${pageHeight}px; }
+      @media print {
+        body { margin: 0; padding: 0; background: #fff; }
+        .page { margin: 0; box-shadow: none; page-break-after: always; }
+      }
+    </style>
+  </head>
+  <body>
+    ${pages.map((page, index) => `<div class="page"><img src="${page}" alt="Flow Diagram Page ${index + 1}" /></div>`).join('')}
+    <script>
+      window.onload = function () {
+        setTimeout(function () {
+          window.print();
+        }, 150);
+      };
+    <\/script>
+  </body>
+</html>`);
+      popup.document.close();
+    } catch (error) {
+      alert(`Print failed: ${error?.message || error}`);
+    } finally {
+      setPreviewBusy(false);
+    }
+  };
 
   const handleArchive = async () => {
+    const payload = view === 'sunburst' ? visibleSunburstData : visibleFlowData;
+    if (!payload) return;
+
+    if (selectedCategoryCount !== CATEGORY_OPTIONS.length) {
+      downloadJsonPayload(payload, `chart_${view}_filtered_${Date.now()}.json`);
+      alert('Filtered JSON downloaded.');
+      return;
+    }
+
     try {
       const res = view === 'sunburst'
-        ? await axios.get(`${API_BASE}/Charts/sunburst?archive=true`)
-        : await axios.get(`${API_BASE}/Charts/flow-program?archive=true`);
+        ? await axios.get(`${API_BASE}/Charts/sunburst`, { params: { ...chartQueryParams, archive: true } })
+        : await axios.get(`${API_BASE}/Charts/flow-program`, { params: { ...chartQueryParams, archive: true } });
       alert(`Archived to: ${res.data.archivedPath || 'N/A'}`);
     } catch {
       alert('Archive failed');
@@ -264,39 +698,51 @@ const GraphsPage = () => {
 
   const handleMouseUp = () => setDrag({ active: false, startX: 0, startY: 0, origX: 0, origY: 0 });
 
-  const buildExportCanvas = async () => {
+  const buildExportCanvas = async (renderScale = 1) => {
     const svg = graphRef.current?.querySelector('svg');
-    if (!svg) return null;
+    if (!svg) {
+      throw new Error('The flow diagram is not ready to export yet.');
+    }
     const { width, height } = getSvgSize(svg);
-    const svgStr = serializeSvgForExport(svg);
-    return renderSvgToCanvas(svgStr, width, height);
+    const svgStr = serializeSvgForExport(svg, width, height);
+    return renderSvgToCanvas(svgStr, width, height, renderScale);
+  };
+
+  const buildPagedExportAssets = async ({
+    syncPreview = false,
+    exportPageSize = A4_PORTRAIT,
+    previewPageSize = A4_PORTRAIT,
+    renderScale = 1,
+  } = {}) => {
+    const canvas = await buildExportCanvas(renderScale);
+    const paged = buildA4Pages(canvas, exportPageSize);
+    if (syncPreview) {
+      const previewPaged = (previewPageSize.width === exportPageSize.width && previewPageSize.height === exportPageSize.height)
+        ? paged
+        : buildA4Pages(canvas, previewPageSize);
+      setPreviewPages(previewPaged.pages);
+      setPreviewPageIndex(0);
+      setPreviewZoom(1);
+    }
+    return { canvas, ...paged };
   };
 
   const exportPng = async () => {
     try {
       const canvas = await buildExportCanvas();
-      if (!canvas) return;
-      const pngUrl = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = pngUrl;
-      a.download = `chart_${view}_${Date.now()}.png`;
-      a.click();
-    } catch {
-      alert('PNG export failed');
+      const blob = await canvasToBlob(canvas, 'image/png');
+      downloadBlob(blob, `${exportFileStem}_${Date.now()}.png`);
+    } catch (error) {
+      alert(`PNG export failed: ${error?.message || error}`);
     }
   };
 
   const generatePreviewPages = async () => {
     try {
       setPreviewBusy(true);
-      const canvas = await buildExportCanvas();
-      if (!canvas) return;
-      const { pages } = buildA4Pages(canvas);
-      setPreviewPages(pages);
-      setPreviewPageIndex(0);
-      setPreviewZoom(1);
-    } catch {
-      alert('Preview generation failed');
+      await buildPagedExportAssets({ syncPreview: true });
+    } catch (error) {
+      alert(`Preview generation failed: ${error?.message || error}`);
     } finally {
       setPreviewBusy(false);
     }
@@ -305,25 +751,51 @@ const GraphsPage = () => {
   const exportDocx = async () => {
     try {
       setPreviewBusy(true);
-      const canvas = await buildExportCanvas();
-      if (!canvas) return;
-      const { pages, pageWidth, pageHeight } = buildA4Pages(canvas);
-      setPreviewPages(pages);
-      setPreviewPageIndex(0);
+      const { pages, pageWidth, pageHeight } = await buildPagedExportAssets({
+        syncPreview: true,
+        exportPageSize: A4_EXPORT_PORTRAIT,
+        previewPageSize: A4_PORTRAIT,
+        renderScale: 2,
+      });
       const res = await axios.post(
         `${API_BASE}/Charts/export-docx`,
         { Base64PngPages: pages, WidthPx: pageWidth, HeightPx: pageHeight },
         { responseType: 'blob' }
       );
       const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-      const link = document.createElement('a');
-      const blobUrl = URL.createObjectURL(blob);
-      link.href = blobUrl;
-      link.download = `chart_${view}_${Date.now()}.docx`;
-      link.click();
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      alert('DOCX export failed');
+      downloadBlob(blob, `${exportFileStem}_${Date.now()}.docx`);
+    } catch (error) {
+      alert(`DOCX export failed: ${error?.message || error}`);
+    } finally {
+      setPreviewBusy(false);
+    }
+  };
+
+  const exportPdf = async () => {
+    try {
+      setPreviewBusy(true);
+      const { pages, pageWidth, pageHeight } = await buildPagedExportAssets({
+        syncPreview: true,
+        exportPageSize: A4_EXPORT_PORTRAIT,
+        previewPageSize: A4_PORTRAIT,
+        renderScale: 2,
+      });
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: [pageWidth, pageHeight],
+        compress: true,
+        hotfixes: ['px_scaling'],
+      });
+      pages.forEach((page, index) => {
+        if (index > 0) {
+          pdf.addPage([pageWidth, pageHeight], 'portrait');
+        }
+        pdf.addImage(page, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'NONE');
+      });
+      pdf.save(`${exportFileStem}_${Date.now()}.pdf`);
+    } catch (error) {
+      alert(`PDF export failed: ${error?.message || error}`);
     } finally {
       setPreviewBusy(false);
     }
@@ -351,7 +823,7 @@ const GraphsPage = () => {
           const items = [...(topic.lessonPlans || [])];
           const [moved] = items.splice(fromIndex, 1);
           items.splice(toIndex, 0, moved);
-          orderedIds = items.map((x) => x.lessonPlanId).filter((id) => Number.isInteger(id));
+          orderedIds = items.map((item) => item.lessonPlanId).filter((id) => Number.isInteger(id));
           return { ...topic, lessonPlans: items };
         });
         return recomputeModule({ ...module, topics });
@@ -364,17 +836,17 @@ const GraphsPage = () => {
   };
 
   const renderFlow = () => {
-    if (!flowData) return null;
-    const modules = flowData.modules || [];
+    if (!visibleFlowData) return null;
+    const modules = visibleFlowData.modules || [];
     const cards = [];
     modules.forEach((module) => {
       const sourceCards = (module.lessonCards && module.lessonCards.length > 0)
         ? module.lessonCards
-        : (module.sessions || []).map((s, idx) => ({
+        : (module.sessions || []).map((session, idx) => ({
           index: idx + 1,
           lpn: `LPN ${idx + 1}`,
-          lessonPlanDescription: s.title || 'Lesson Plan',
-          topic: `${s.topicCode || ''} ${s.topicDescription || ''}`.trim(),
+          lessonPlanDescription: session.title || 'Lesson Plan',
+          topic: `${session.topicCode || ''} ${session.topicDescription || ''}`.trim(),
           timeStart: '',
           timeEnd: '',
         }));
@@ -393,7 +865,7 @@ const GraphsPage = () => {
     if (cards.length === 0) {
       return (
         <svg width={1000} height={240}>
-          <text x={40} y={120} fill="#5b6b8a" fontSize="16">No lesson cards to display for this qualification.</text>
+          <text x={40} y={120} fill="#5b6b8a" fontSize="16">No lesson cards to display for the current filter selection.</text>
         </svg>
       );
     }
@@ -462,8 +934,8 @@ const GraphsPage = () => {
               <text x={node.x + cardWidth / 2} y={node.y - 2} fill="#fff" fontSize="11" textAnchor="middle" fontWeight="700">
                 {node.idx + 1}
               </text>
-              {descLines.map((line, i) => (
-                <text key={`desc-${node.idx}-${i}`} x={node.x + 12} y={node.y + 54 + i * 16} fill="#2d3d5e" fontSize="11.5">
+              {descLines.map((line, idx) => (
+                <text key={`desc-${node.idx}-${idx}`} x={node.x + 12} y={node.y + 54 + idx * 16} fill="#2d3d5e" fontSize="11.5">
                   {line.toUpperCase()}
                 </text>
               ))}
@@ -481,8 +953,8 @@ const GraphsPage = () => {
   };
 
   const renderTopicsFlow = () => {
-    if (!flowData) return null;
-    const modules = flowData.modules || [];
+    if (!visibleFlowData) return null;
+    const modules = visibleFlowData.modules || [];
     const topicCards = modules.flatMap((module) =>
       (module.topics || []).map((topic, idx) => ({
         key: `${module.subjectId}-${topic.topicId}-${idx}`,
@@ -497,38 +969,104 @@ const GraphsPage = () => {
     if (topicCards.length === 0) {
       return (
         <svg width={980} height={220}>
-          <text x={40} y={110} fill="#5b6b8a" fontSize="16">No topic cards to display for this qualification.</text>
+          <text x={40} y={110} fill="#5b6b8a" fontSize="16">No topic cards to display for the current filter selection.</text>
         </svg>
       );
     }
 
     const cols = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(topicCards.length))));
     const cardWidth = 260;
-    const cardHeight = 110;
+    const cardHeight = 118;
     const gapX = 26;
-    const gapY = 22;
+    const gapY = 34;
     const marginX = 34;
-    const marginY = 28;
+    const marginY = 34;
     const rows = Math.ceil(topicCards.length / cols);
     const width = marginX * 2 + cols * cardWidth + (cols - 1) * gapX;
-    const height = marginY * 2 + rows * cardHeight + Math.max(0, rows - 1) * gapY;
+    const height = marginY * 2 + rows * cardHeight + Math.max(0, rows - 1) * gapY + 8;
+    const positioned = topicCards.map((card, idx) => {
+      const row = Math.floor(idx / cols);
+      const col = idx % cols;
+      const x = marginX + col * (cardWidth + gapX);
+      const y = marginY + row * (cardHeight + gapY);
+      const accent = colorFromKey(`${card.subjectCode}-${card.topicCode}-${idx}`);
+      return { ...card, idx, row, col, x, y, accent };
+    });
 
     return (
       <svg width={width} height={height} style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, transformOrigin: '0 0' }}>
-        {topicCards.map((card, idx) => {
-          const row = Math.floor(idx / cols);
-          const col = idx % cols;
-          const x = marginX + col * (cardWidth + gapX);
-          const y = marginY + row * (cardHeight + gapY);
-          const title = `${card.topicCode} - ${clampText(card.topicDescription, 30)}`;
-          const subject = `${card.subjectCode} - ${clampText(card.subjectDescription, 26)}`;
+        <defs>
+          <marker id="topicsFlowArrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
+            <polygon points="0 0, 8 3.5, 0 7" fill="#38558a" />
+          </marker>
+        </defs>
+        {positioned.map((card, idx) => {
+          if (idx === 0) return null;
+          const prev = positioned[idx - 1];
+          const sameRow = prev.row === card.row;
+          const startX = sameRow ? prev.x + cardWidth : prev.x + (cardWidth / 2);
+          const startY = sameRow ? prev.y + (cardHeight / 2) : prev.y + cardHeight;
+          const endX = sameRow ? card.x : card.x + (cardWidth / 2);
+          const endY = sameRow ? card.y + (cardHeight / 2) : card.y;
+          const path = sameRow
+            ? `M ${startX} ${startY} C ${(startX + endX) / 2} ${startY}, ${(startX + endX) / 2} ${endY}, ${endX} ${endY}`
+            : `M ${startX} ${startY} C ${startX} ${(startY + endY) / 2}, ${endX} ${(startY + endY) / 2}, ${endX} ${endY}`;
+          return (
+            <path
+              key={`topic-line-${card.key}`}
+              d={path}
+              stroke={colorWithAlpha(card.accent, 0.85)}
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+              markerEnd="url(#topicsFlowArrow)"
+            />
+          );
+        })}
+        {positioned.map((card) => {
+          const titleLines = splitLines(`${card.topicCode} - ${card.topicDescription}`, 30, 2);
+          const subject = `${card.subjectCode} - ${clampText(card.subjectDescription, 28)}`;
           return (
             <g key={card.key}>
-              <rect x={x} y={y} width={cardWidth} height={cardHeight} rx="10" fill="#f5f8ff" stroke="#ccdaf0" />
-              <rect x={x} y={y} width={cardWidth} height={28} rx="10" fill="#2d5d9b" />
-              <text x={x + 10} y={y + 18} fill="#fff" fontSize="11.5" fontWeight="700">{title}</text>
-              <text x={x + 10} y={y + 54} fill="#2f4262" fontSize="11">{subject}</text>
-              <text x={x + 10} y={y + 78} fill="#5f7294" fontSize="10.5">Lesson Plans: {card.lessonPlans}</text>
+              <rect
+                x={card.x}
+                y={card.y}
+                width={cardWidth}
+                height={cardHeight}
+                rx="14"
+                fill={colorWithAlpha(card.accent, 0.08)}
+                stroke={colorWithAlpha(card.accent, 0.32)}
+              />
+              <rect x={card.x} y={card.y} width={cardWidth} height={32} rx="14" fill={card.accent} />
+              {titleLines.map((line, lineIndex) => (
+                <text
+                  key={`${card.key}-title-${lineIndex}`}
+                  x={card.x + 12}
+                  y={card.y + 20 + (lineIndex * 12)}
+                  fill="#fff"
+                  fontSize="11.5"
+                  fontWeight="700"
+                >
+                  {line}
+                </text>
+              ))}
+              <rect
+                x={card.x + 12}
+                y={card.y + 44}
+                width={cardWidth - 24}
+                height={26}
+                rx="7"
+                fill="#ffffff"
+                stroke={colorWithAlpha(card.accent, 0.16)}
+              />
+              <text x={card.x + 20} y={card.y + 61} fill="#304567" fontSize="10.8">{subject}</text>
+              <text x={card.x + 12} y={card.y + 87} fill="#5c6f92" fontSize="10.8">
+                Lesson Plans: {card.lessonPlans}
+              </text>
+              <text x={card.x + cardWidth - 12} y={card.y + 87} fill={card.accent} fontSize="10.4" textAnchor="end" fontWeight="700">
+                Topic Flow
+              </text>
             </g>
           );
         })}
@@ -537,13 +1075,13 @@ const GraphsPage = () => {
   };
 
   const renderCurriculumChain = () => {
-    if (!flowData) return null;
-    const qualification = flowData.qualification || {};
-    const modules = flowData.modules || [];
+    if (!visibleFlowData) return null;
+    const qualification = visibleFlowData.qualification || {};
+    const modules = visibleFlowData.modules || [];
     if (modules.length === 0) {
       return (
         <svg width={980} height={220}>
-          <text x={40} y={110} fill="#5b6b8a" fontSize="16">No curriculum workflow nodes to display.</text>
+          <text x={40} y={110} fill="#5b6b8a" fontSize="16">No curriculum workflow nodes to display for the current filter selection.</text>
         </svg>
       );
     }
@@ -572,7 +1110,7 @@ const GraphsPage = () => {
           const cx = x + subjectWidth / 2;
           const topics = module.topics || [];
           const topicCount = topics.length;
-          const lessonCount = topics.reduce((sum, t) => sum + ((t.lessonPlans || []).length || 0), 0);
+          const lessonCount = topics.reduce((sum, topic) => sum + ((topic.lessonPlans || []).length || 0), 0);
           const firstTopic = topicCount > 0 ? `${topics[0].topicCode || ''} ${topics[0].topicDescription || ''}`.trim() : 'No topic mapped';
           return (
             <g key={`full-${module.subjectId}-${idx}`}>
@@ -595,9 +1133,9 @@ const GraphsPage = () => {
   };
 
   const renderSunburst = () => {
-    if (!sunburstData) return null;
+    if (!visibleSunburstData) return null;
     const width = 1100;
-    const phases = sunburstData.children || [];
+    const phases = visibleSunburstData.children || [];
     const phaseWidth = 220;
     const phaseGap = 36;
     const subjectGap = 10;
@@ -607,14 +1145,23 @@ const GraphsPage = () => {
     const totalWidth = phases.length * phaseWidth + Math.max(0, phases.length - 1) * phaseGap;
     const startX = Math.max(24, (width - totalWidth) / 2);
     let maxY = phaseY + 120;
-    phases.forEach((p) => {
-      const count = (p.children || []).length;
+    phases.forEach((phase) => {
+      const count = (phase.children || []).length;
       const bottom = phaseY + 58 + count * (subjectHeight + subjectGap);
       if (bottom > maxY) maxY = bottom;
     });
     const height = maxY + 70;
     const cx = width / 2;
-    const root = sunburstData;
+    const root = visibleSunburstData;
+
+    if (phases.length === 0) {
+      return (
+        <svg width={width} height={220}>
+          <text x={40} y={110} fill="#5b6b8a" fontSize="16">No phase-to-subject map to display for the current filter selection.</text>
+        </svg>
+      );
+    }
+
     return (
       <svg width={width} height={height} style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, transformOrigin: '0 0' }}>
         <rect x={cx - 240} y={rootY} width={480} height={44} rx="12" fill="#2b2d42" />
@@ -622,7 +1169,7 @@ const GraphsPage = () => {
         {phases.map((phase, pi) => {
           const phaseX = startX + pi * (phaseWidth + phaseGap);
           const phaseColor = colorFromKey(phase.name);
-          const subjects = phase.children || [];
+          const subjectsForPhase = phase.children || [];
           return (
             <g key={`phase-${pi}`}>
               <line x1={cx} y1={rootY + 44} x2={phaseX + phaseWidth / 2} y2={phaseY} stroke="#4f5d7a" strokeWidth="1.5" />
@@ -630,10 +1177,10 @@ const GraphsPage = () => {
               <text x={phaseX + phaseWidth / 2} y={phaseY + 27} textAnchor="middle" fill="#fff" fontSize="12" fontWeight="700">
                 {phase.name}
               </text>
-              {subjects.map((subject, si) => {
-                const sy = phaseY + 58 + si * (subjectHeight + subjectGap);
+              {subjectsForPhase.map((subject, idx) => {
+                const sy = phaseY + 58 + idx * (subjectHeight + subjectGap);
                 return (
-                  <g key={`subject-${pi}-${si}`}>
+                  <g key={`subject-${pi}-${idx}`}>
                     <line x1={phaseX + phaseWidth / 2} y1={phaseY + 44} x2={phaseX + phaseWidth / 2} y2={sy} stroke="#8a94ad" strokeWidth="1.2" />
                     <rect x={phaseX + 8} y={sy} width={phaseWidth - 16} height={subjectHeight} rx="8" fill="#edf2fb" stroke="#d5dff0" />
                     <text x={phaseX + 16} y={sy + 22} fill="#2a3b5f" fontSize="11">
@@ -653,8 +1200,8 @@ const GraphsPage = () => {
   };
 
   const renderLessonPlanTable = () => {
-    if (view !== 'flow' || !flowData) return null;
-    const modules = flowData.modules || [];
+    if (view !== 'flow' || !visibleFlowData) return null;
+    const modules = visibleFlowData.modules || [];
     return (
       <div style={{ marginTop: 16, border: '1px solid #c8d7f0', background: '#fff', borderRadius: 8, padding: 12 }}>
         <h3 style={{ marginTop: 0 }}>Lesson Plans (Drag To Reorder)</h3>
@@ -718,24 +1265,135 @@ const GraphsPage = () => {
     );
   };
 
+  const qualificationLabel = selectedQualification
+    ? `${qNumber(selectedQualification) || '#'} - ${qDescription(selectedQualification) || 'No description'}`
+    : 'Not selected';
+
   return (
     <div>
-      <h2>Graphs & Flow Diagrams</h2>
+      <h2>Graphs &amp; Flow Diagrams</h2>
+
+      <div style={{ marginBottom: 16, border: '1px solid #c8d7f0', background: '#fff', borderRadius: 8, padding: 12 }}>
+        <h3 style={{ marginTop: 0 }}>Graph Filters</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(220px, 1fr))', gap: 10 }}>
+          <label>
+            Qualification
+            <select
+              className="mainpage-input"
+              value={filters.qualificationId}
+              onChange={(e) => updateFilterField('qualificationId', e.target.value)}
+              disabled={filterBusy || qualifications.length === 0}
+            >
+              {qualifications.length === 0 ? <option value="">No qualifications found</option> : null}
+              {qualifications.map((qualification) => {
+                const id = qId(qualification);
+                return (
+                  <option key={id} value={id}>
+                    {qNumber(qualification) || id} - {qDescription(qualification) || 'No description'}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          <label>
+            From Subject
+            <select
+              className="mainpage-input"
+              value={filters.subjectFromId}
+              onChange={(e) => updateFilterField('subjectFromId', e.target.value)}
+              disabled={subjects.length === 0}
+            >
+              {subjects.length === 0 ? <option value="">No subjects</option> : null}
+              {subjects.map((subject) => (
+                <option key={subjectIdOf(subject)} value={subjectIdOf(subject)}>
+                  {subjectCodeOf(subject) || 'SUBJECT'} - {subjectDescriptionOf(subject) || 'No description'}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            To Subject
+            <select
+              className="mainpage-input"
+              value={filters.subjectToId}
+              onChange={(e) => updateFilterField('subjectToId', e.target.value)}
+              disabled={subjects.length === 0}
+            >
+              {subjects.length === 0 ? <option value="">No subjects</option> : null}
+              {subjects.map((subject) => (
+                <option key={subjectIdOf(subject)} value={subjectIdOf(subject)}>
+                  {subjectCodeOf(subject) || 'SUBJECT'} - {subjectDescriptionOf(subject) || 'No description'}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <strong>Main Sub Categories</strong>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+            {categoryCounts.map((option) => (
+              <label
+                key={option.key}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 10px',
+                  border: '1px solid #d8e1ea',
+                  borderRadius: 8,
+                  background: filters.categories?.[option.key] ? '#f6fbff' : '#fafafa',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={Boolean(filters.categories?.[option.key])}
+                  onChange={(e) => updateCategoryFilter(option.key, e.target.checked)}
+                />
+                <span>{option.label} ({option.count})</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 10, color: '#355' }}>
+          <strong>Lookup Parameters:</strong> {qualificationLabel}
+        </div>
+        <div style={{ marginTop: 6, color: '#355' }}>
+          <strong>Active Range:</strong> {selectedSubjectFrom ? subjectCodeOf(selectedSubjectFrom) : '-'} to {selectedSubjectTo ? subjectCodeOf(selectedSubjectTo) : '-'}
+          {' | '}
+          <strong>Visible Subjects:</strong> {visibleRangeSubjects} of {totalRangeSubjects}
+        </div>
+        <div style={{ marginTop: 6, color: '#516a9e', fontSize: 13 }}>
+          Topics Flow is the default view. Set From Subject and To Subject to the same chapter when you want a single-subject PNG or DOCX figure.
+        </div>
+        {selectedCategoryCount === 0 ? (
+          <div style={{ marginTop: 8, color: '#8b1e1e' }}>
+            Select at least one sub category to render the diagram.
+          </div>
+        ) : null}
+        {filterBusy ? <div style={{ marginTop: 8, color: '#355' }}>Loading filter options...</div> : null}
+        {filterError ? <div style={{ marginTop: 8, color: '#b00020' }}>{filterError}</div> : null}
+        {graphError ? <div style={{ marginTop: 8, color: '#b00020' }}>{graphError}</div> : null}
+      </div>
+
       <div style={{ marginBottom: 16 }}>
         <select value={view} onChange={(e) => setView(e.target.value)} style={{ marginRight: 12 }}>
-          <option value="flow">Lesson Plan Flow</option>
           <option value="topics">Topics Flow</option>
+          <option value="flow">Lesson Plan Flow</option>
           <option value="full">Curriculum Full Flow</option>
           <option value="sunburst">Phase to Subject Map</option>
         </select>
         <button onClick={handleZoomIn}>Zoom In</button>
         <button onClick={handleZoomOut}>Zoom Out</button>
         <button onClick={handlePrint}>Print</button>
-        <button onClick={handleArchive}>Archive JSON</button>
-        <button onClick={exportPng}>Export PNG</button>
-        <button onClick={generatePreviewPages} disabled={previewBusy}>Preview A4 Pages</button>
-        <button onClick={exportDocx} disabled={previewBusy}>Export DOCX</button>
+        <button onClick={handleArchive} disabled={!hasVisibleGraphData || graphBusy}>Archive JSON</button>
+        <button onClick={exportPng} disabled={!hasVisibleGraphData || graphBusy}>Export PNG</button>
+        <button onClick={exportPdf} disabled={previewBusy || graphBusy || !hasVisibleGraphData}>Export PDF</button>
+        <button onClick={generatePreviewPages} disabled={previewBusy || graphBusy || !hasVisibleGraphData}>Preview A4 Pages</button>
+        <button onClick={exportDocx} disabled={previewBusy || graphBusy || !hasVisibleGraphData}>Export DOCX</button>
       </div>
+
       <div
         ref={graphRef}
         onMouseDown={handleMouseDown}
@@ -744,7 +1402,17 @@ const GraphsPage = () => {
         onMouseLeave={handleMouseUp}
         style={{ border: '1px solid #23395d', minHeight: 300, background: '#f4f8ff', marginBottom: 16, overflow: 'auto', cursor: drag.active ? 'grabbing' : 'grab' }}
       >
-        {view === 'sunburst' ? renderSunburst() : view === 'topics' ? renderTopicsFlow() : view === 'full' ? renderCurriculumChain() : renderFlow()}
+        {graphBusy ? (
+          <div style={{ padding: 24, color: '#355' }}>Loading graph data...</div>
+        ) : (
+          view === 'sunburst'
+            ? renderSunburst()
+            : view === 'topics'
+              ? renderTopicsFlow()
+              : view === 'full'
+                ? renderCurriculumChain()
+                : renderFlow()
+        )}
       </div>
 
       {renderLessonPlanTable()}
@@ -752,10 +1420,10 @@ const GraphsPage = () => {
       <div style={{ marginTop: 16, border: '1px solid #c8d7f0', background: '#fff', borderRadius: 8, padding: 12 }}>
         <h3 style={{ marginTop: 0 }}>A4 Portrait Preview</h3>
         <div style={{ marginBottom: 10 }}>
-          <button onClick={() => setPreviewZoom((z) => Math.max(0.4, z - 0.1))} disabled={!previewImage}>Preview Zoom Out</button>
-          <button onClick={() => setPreviewZoom((z) => Math.min(2.5, z + 0.1))} disabled={!previewImage}>Preview Zoom In</button>
-          <button onClick={() => setPreviewPageIndex((i) => Math.max(0, i - 1))} disabled={!previewImage || previewPageIndex === 0}>Prev Page</button>
-          <button onClick={() => setPreviewPageIndex((i) => Math.min(previewPages.length - 1, i + 1))} disabled={!previewImage || previewPageIndex >= previewPages.length - 1}>Next Page</button>
+          <button onClick={() => setPreviewZoom((zoom) => Math.max(0.4, zoom - 0.1))} disabled={!previewImage}>Preview Zoom Out</button>
+          <button onClick={() => setPreviewZoom((zoom) => Math.min(2.5, zoom + 0.1))} disabled={!previewImage}>Preview Zoom In</button>
+          <button onClick={() => setPreviewPageIndex((index) => Math.max(0, index - 1))} disabled={!previewImage || previewPageIndex === 0}>Prev Page</button>
+          <button onClick={() => setPreviewPageIndex((index) => Math.min(previewPages.length - 1, index + 1))} disabled={!previewImage || previewPageIndex >= previewPages.length - 1}>Next Page</button>
           <span style={{ marginLeft: 8, color: '#38558a' }}>
             {previewImage ? `Page ${previewPageIndex + 1} of ${previewPages.length}` : 'No preview generated yet.'}
           </span>

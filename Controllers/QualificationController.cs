@@ -135,6 +135,20 @@ namespace ETD.Api.Controllers
                 return BadRequest(new { error = validationError });
             }
 
+            var normalizedQualificationNumber = SortKey(dto.QualificationNumber);
+            if (!string.IsNullOrWhiteSpace(normalizedQualificationNumber))
+            {
+                var existing = _context.Qualifications
+                    .FirstOrDefault(q => (q.QualificationNumber ?? string.Empty).Trim() == normalizedQualificationNumber);
+                if (existing != null)
+                {
+                    return Conflict(new
+                    {
+                        error = $"Qualification number {normalizedQualificationNumber} already exists as Id {existing.Id}. Open the existing qualification instead of creating a duplicate."
+                    });
+                }
+            }
+
             var model = new Qualification
             {
                 QualificationNumber = dto.QualificationNumber,
@@ -169,6 +183,21 @@ namespace ETD.Api.Controllers
 
             var item = _context.Qualifications.Find(id);
             if (item == null) return NotFound();
+
+            var normalizedQualificationNumber = SortKey(dto.QualificationNumber);
+            if (!string.IsNullOrWhiteSpace(normalizedQualificationNumber))
+            {
+                var existing = _context.Qualifications
+                    .FirstOrDefault(q => q.Id != id && (q.QualificationNumber ?? string.Empty).Trim() == normalizedQualificationNumber);
+                if (existing != null)
+                {
+                    return Conflict(new
+                    {
+                        error = $"Qualification number {normalizedQualificationNumber} already exists as Id {existing.Id}. Open the existing qualification instead of saving a duplicate."
+                    });
+                }
+            }
+
             item.QualificationNumber = dto.QualificationNumber;
             item.QualificationDescription = dto.QualificationDescription;
             item.CesmField = cesmField;

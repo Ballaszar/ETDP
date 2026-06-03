@@ -18,20 +18,12 @@ export default function AutomationJobsPage() {
 
   const [qid, setQid] = useState(defaultQid > 0 ? String(defaultQid) : '28');
   const [requestedBy, setRequestedBy] = useState('operator');
-  const [runImports, setRunImports] = useState(false);
-  const [runSeedWrite, setRunSeedWrite] = useState(false);
-  const [requiresApproval, setRequiresApproval] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
-
-  const destructive = runImports || runSeedWrite;
-  useEffect(() => {
-    if (destructive) setRequiresApproval(true);
-  }, [destructive]);
 
   const loadJobs = async (preserveSelectedId = null) => {
     try {
@@ -70,10 +62,8 @@ export default function AutomationJobsPage() {
     try {
       const body = {
         qualificationId: numericQid,
-        runImports,
-        runSeedWrite,
-        requiresApproval,
-        requestedBy: (requestedBy || '').trim() || 'operator'
+        requestedBy: (requestedBy || '').trim() || 'operator',
+        requiresApproval: false
       };
       const res = await fetch(`${API}/jobs/build-qualification`, {
         method: 'POST',
@@ -152,10 +142,13 @@ export default function AutomationJobsPage() {
   return (
     <div className="mainpage-root">
       <h2 className="mainpage-title">Automation Jobs</h2>
-      <p>Queue and monitor autonomous curriculum build jobs with optional approval gates.</p>
+      <p>Queue and monitor Qwen curriculum pipeline jobs that import subject matter, map evidence, and generate lesson-plan draft LPN rows.</p>
 
       <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, background: '#fff', marginBottom: 14 }}>
-        <div style={{ fontWeight: 600, marginBottom: 10 }}>Queue Build Job</div>
+        <div style={{ background: '#eef6ff', border: '1px solid #c7d8eb', borderRadius: 8, padding: 10, color: '#23435f', marginBottom: 12 }}>
+          Flow order: imported subject matter -&gt; Qwen lesson-plan draft LPN rows -&gt; learning schedule rebuild.
+        </div>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Queue Qwen Build Job</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
           <label>
             QualificationId
@@ -164,23 +157,6 @@ export default function AutomationJobsPage() {
           <label>
             Requested By
             <input className="mainpage-input" value={requestedBy} onChange={e => setRequestedBy(e.target.value)} />
-          </label>
-          <label>
-            <input type="checkbox" checked={runImports} onChange={e => setRunImports(e.target.checked)} />
-            {' '}Run Imports (destructive)
-          </label>
-          <label>
-            <input type="checkbox" checked={runSeedWrite} onChange={e => setRunSeedWrite(e.target.checked)} />
-            {' '}Run Seed Write (destructive)
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={requiresApproval}
-              disabled={destructive}
-              onChange={e => setRequiresApproval(e.target.checked)}
-            />
-            {' '}Requires Approval
           </label>
         </div>
         <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>

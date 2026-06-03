@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Globalization;
@@ -21,11 +21,12 @@ namespace ETD.Api.Controllers
         private readonly ApplicationDbContext _context;
         private readonly OcrExtractionService _ocrExtractionService;
         private readonly CurriculumKnowledgeScanService _curriculumKnowledgeScanService;
+        private readonly CurriculumPipelineService _curriculumPipelineService;
         private readonly KnowledgeHierarchyService _knowledgeHierarchyService;
         private readonly SansMetadataService _sansMetadataService;
         private static readonly HashSet<string> AllowedExt = new(StringComparer.OrdinalIgnoreCase) { ".pdf", ".docx", ".txt", ".md" };
-        private static readonly Regex PhaseCodeRegex = new(@"^\d{6,9}-KM-\d{2}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex SubjectCodeRegex = new(@"^KM-\d{2}-KT\d{2}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex PhaseCodeRegex = new(@"^\d{6,9}-(?:KM|PM|WM)-\d{2}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex SubjectCodeRegex = new(@"^(?:KM-\d{2}-KT\d{2}|PM-\d{2}-PS\d{2}|WM-\d{2}-WE\d{2})$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex TopicCodeRegex = new(@"^[A-Z]{2}\d{4,6}[A-Z]?$", RegexOptions.Compiled);
         private static readonly Regex SharedQctoCodeRegex = new(@"^QCTO_(?<code>\d{4,})_", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
@@ -33,12 +34,14 @@ namespace ETD.Api.Controllers
             ApplicationDbContext context,
             OcrExtractionService ocrExtractionService,
             CurriculumKnowledgeScanService curriculumKnowledgeScanService,
+            CurriculumPipelineService curriculumPipelineService,
             KnowledgeHierarchyService knowledgeHierarchyService,
             SansMetadataService sansMetadataService)
         {
             _context = context;
             _ocrExtractionService = ocrExtractionService;
             _curriculumKnowledgeScanService = curriculumKnowledgeScanService;
+            _curriculumPipelineService = curriculumPipelineService;
             _knowledgeHierarchyService = knowledgeHierarchyService;
             _sansMetadataService = sansMetadataService;
         }
@@ -54,7 +57,7 @@ namespace ETD.Api.Controllers
 
             var nodes = qualifications.Select(q =>
             {
-                var dir = ResolveQualificationFolder(baseDir, q.QualificationNumber, ensureExists: false);
+                var dir = ResolveQualificationFolder(baseDir, q, ensureExists: false);
                 var files = Directory.Exists(dir)
                     ? Directory.GetFiles(dir, "QC_*.*")
                         .Where(f => AllowedExt.Contains(Path.GetExtension(f)))
@@ -92,7 +95,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return NotFound("Qualification not found.");
 
             var baseDir = ResolveImportsBaseDir();
-            var dir = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: false);
+            var dir = ResolveQualificationFolder(baseDir, qualification, ensureExists: false);
             var files = Directory.Exists(dir)
                 ? Directory.GetFiles(dir, "QC_*.*")
                     .Where(f => AllowedExt.Contains(Path.GetExtension(f)))
@@ -118,6 +121,8 @@ namespace ETD.Api.Controllers
         }
 
         [HttpPost("upload")]
+        [RequestSizeLimit(500_000_000)]
+        [RequestFormLimits(MultipartBodyLengthLimit = 500_000_000)]
         public async Task<IActionResult> Upload([FromForm] UploadRequest req)
         {
             if (req.QualificationId <= 0) return BadRequest("QualificationId is required.");
@@ -134,7 +139,7 @@ namespace ETD.Api.Controllers
                 return BadRequest("Unsupported file type. Allowed: .pdf, .docx, .txt, .md");
 
             var baseDir = ResolveImportsBaseDir();
-            var dir = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: true);
+            var dir = ResolveQualificationFolder(baseDir, qualification, ensureExists: true);
             var prefix = docType == "curriculum" ? "QC_CurriculumSpecification" : "QC_AssessmentSpecification";
 
             foreach (var existing in Directory.GetFiles(dir, $"{prefix}.*"))
@@ -143,9 +148,44 @@ namespace ETD.Api.Controllers
             }
 
             var path = Path.Combine(dir, $"{prefix}{ext}");
-            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+            try
             {
+                using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
                 await req.File.CopyToAsync(fs);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = $"Failed to save upload: {ex.Message}", path });
+            }            var structure = EnsureQualificationLibraryStructure(qualification);
+            var curriculumLibraryDocumentPath = MirrorSpecificationToCurriculumLibrary(structure, path, docType);
+
+            object? pipelineJob = null;
+            if (req.AutoStartPipeline)
+            {
+                try
+                {
+                    pipelineJob = await _curriculumPipelineService.QueueQualificationAsync(
+                        qualification.Id,
+                        req.StartPage,
+                        forceRestart: false);
+                }
+                catch (Exception ex)
+                {
+                    return Ok(new
+                    {
+                        uploaded = true,
+                        qualificationId = qualification.Id,
+                        qualificationNumber = qualification.QualificationNumber,
+                        qualificationDescription = qualification.QualificationDescription,
+                        docType,
+                        path,
+                        qualificationLibraryRootPath = structure.QualificationRootPath,
+                        curriculumLibraryPath = structure.CurriculumLibraryPath,
+                        curriculumLibraryDocumentPath,
+                        pipelineQueued = false,
+                        pipelineQueueError = ex.Message
+                    });
+                }
             }
 
             return Ok(new
@@ -153,8 +193,14 @@ namespace ETD.Api.Controllers
                 uploaded = true,
                 qualificationId = qualification.Id,
                 qualificationNumber = qualification.QualificationNumber,
+                qualificationDescription = qualification.QualificationDescription,
                 docType,
-                path
+                path,
+                qualificationLibraryRootPath = structure.QualificationRootPath,
+                curriculumLibraryPath = structure.CurriculumLibraryPath,
+                curriculumLibraryDocumentPath,
+                pipelineQueued = pipelineJob != null,
+                pipelineJob
             });
         }
 
@@ -182,7 +228,7 @@ namespace ETD.Api.Controllers
         }
 
         [HttpPost("import-from-library")]
-        public IActionResult ImportFromSharedLibrary([FromBody] ImportFromLibraryRequest req)
+        public async Task<IActionResult> ImportFromSharedLibrary([FromBody] ImportFromLibraryRequest req)
         {
             if (req == null) return BadRequest("Import payload is required.");
             if (req.QualificationId <= 0) return BadRequest("QualificationId is required.");
@@ -222,7 +268,7 @@ namespace ETD.Api.Controllers
             }
 
             var baseDir = ResolveImportsBaseDir();
-            var dir = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: true);
+            var dir = ResolveQualificationFolder(baseDir, qualification, ensureExists: true);
             var prefix = docType == "curriculum" ? "QC_CurriculumSpecification" : "QC_AssessmentSpecification";
 
             foreach (var existing in Directory.GetFiles(dir, $"{prefix}.*"))
@@ -231,7 +277,10 @@ namespace ETD.Api.Controllers
             }
 
             var destinationPath = Path.Combine(dir, $"{prefix}{ext}");
-            System.IO.File.Copy(sourceFullPath, destinationPath, overwrite: true);
+            var resolvedGitLfsPointer = await GitLfsPointerResolver.CopyResolvedContentAsync(sourceFullPath, destinationPath);
+
+            var structure = EnsureQualificationLibraryStructure(qualification);
+            var curriculumLibraryDocumentPath = MirrorSpecificationToCurriculumLibrary(structure, destinationPath, docType);
 
             return Ok(new
             {
@@ -242,7 +291,11 @@ namespace ETD.Api.Controllers
                 docType,
                 sourcePath = sourceFullPath,
                 destinationPath,
-                libraryRootPath
+                resolvedGitLfsPointer,
+                libraryRootPath,
+                qualificationLibraryRootPath = structure.QualificationRootPath,
+                curriculumLibraryPath = structure.CurriculumLibraryPath,
+                curriculumLibraryDocumentPath
             });
         }
 
@@ -254,7 +307,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return NotFound("Qualification not found.");
 
             var baseDir = ResolveImportsBaseDir();
-            var dir = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: false);
+            var dir = ResolveQualificationFolder(baseDir, qualification, ensureExists: false);
             if (!Directory.Exists(dir)) return NotFound($"Qualification folder not found: {dir}");
 
             var allQcFiles = Directory.GetFiles(dir, "QC_*.*")
@@ -332,7 +385,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return NotFound("Qualification not found.");
 
             var baseDir = ResolveImportsBaseDir();
-            var dir = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: false);
+            var dir = ResolveQualificationFolder(baseDir, qualification, ensureExists: false);
             if (!Directory.Exists(dir)) return NotFound($"Qualification folder not found: {dir}");
 
             var curriculum = Directory.GetFiles(dir, "QC_*.*")
@@ -483,7 +536,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return NotFound("Qualification not found.");
 
             var baseDir = ResolveImportsBaseDir();
-            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: false);
+            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification, ensureExists: false);
             var queuePath = ResolveExistingMappingReviewQueuePath(qualificationFolder, qualification.QualificationNumber, qualification.QualificationDescription);
             if (string.IsNullOrWhiteSpace(queuePath) || !System.IO.File.Exists(queuePath))
             {
@@ -515,7 +568,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return NotFound("Qualification not found.");
 
             var baseDir = ResolveImportsBaseDir();
-            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: false);
+            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification, ensureExists: false);
             var queuePath = ResolveExistingMappingReviewQueuePath(qualificationFolder, qualification.QualificationNumber, qualification.QualificationDescription);
             if (string.IsNullOrWhiteSpace(queuePath) || !System.IO.File.Exists(queuePath))
             {
@@ -630,7 +683,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return NotFound("Qualification not found.");
 
             var baseDir = ResolveImportsBaseDir();
-            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: false);
+            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification, ensureExists: false);
             var queuePath = ResolveExistingMappingReviewQueuePath(qualificationFolder, qualification.QualificationNumber, qualification.QualificationDescription);
             if (string.IsNullOrWhiteSpace(queuePath) || !System.IO.File.Exists(queuePath))
             {
@@ -662,7 +715,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return NotFound("Qualification not found.");
 
             var baseDir = ResolveImportsBaseDir();
-            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: false);
+            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification, ensureExists: false);
             var queuePath = ResolveExistingMappingReviewQueuePath(qualificationFolder, qualification.QualificationNumber, qualification.QualificationDescription);
             if (string.IsNullOrWhiteSpace(queuePath) || !System.IO.File.Exists(queuePath))
             {
@@ -709,7 +762,7 @@ namespace ETD.Api.Controllers
             if (ext != ".csv") return BadRequest("Only .csv files are supported for manual upload.");
 
             var baseDir = ResolveImportsBaseDir();
-            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: true);
+            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification, ensureExists: true);
             var scanDir = ResolveCognitiveOutputFolder(qualificationFolder, qualification.QualificationNumber, qualification.QualificationDescription, ensureExists: true);
             var manualDir = Path.Combine(scanDir, "ManualOverrides");
             Directory.CreateDirectory(manualDir);
@@ -764,7 +817,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return NotFound("Qualification not found.");
 
             var baseDir = ResolveImportsBaseDir();
-            var dir = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: false);
+            var dir = ResolveQualificationFolder(baseDir, qualification, ensureExists: false);
             var files = Directory.Exists(dir)
                 ? Directory.GetFiles(dir, "QC_*.*")
                     .Where(f => AllowedExt.Contains(Path.GetExtension(f)))
@@ -828,7 +881,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return NotFound("Qualification not found.");
 
             var baseDir = ResolveImportsBaseDir();
-            var dir = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: false);
+            var dir = ResolveQualificationFolder(baseDir, qualification, ensureExists: false);
             if (!Directory.Exists(dir))
             {
                 return Ok(new
@@ -874,7 +927,7 @@ namespace ETD.Api.Controllers
             if (qualification == null) return NotFound("Qualification not found.");
 
             var baseDir = ResolveImportsBaseDir();
-            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: true);
+            var qualificationFolder = ResolveQualificationFolder(baseDir, qualification, ensureExists: true);
             var workingDirectory = ResolveSansOutputFolder(qualificationFolder, ensureExists: true);
 
             var filePaths = new List<string>();
@@ -1002,7 +1055,7 @@ namespace ETD.Api.Controllers
         private async Task<CognitiveScanExecution> ExecuteCognitiveScanAsync(Qualification qualification, int? startPage)
         {
             var baseDir = ResolveImportsBaseDir();
-            var dir = ResolveQualificationFolder(baseDir, qualification.QualificationNumber, ensureExists: false);
+            var dir = ResolveQualificationFolder(baseDir, qualification, ensureExists: false);
             if (!Directory.Exists(dir))
             {
                 throw new InvalidOperationException($"Qualification folder not found: {dir}");
@@ -1761,12 +1814,12 @@ namespace ETD.Api.Controllers
             if (PhaseCodeRegex.IsMatch(phaseToken ?? string.Empty))
             {
                 score += 18;
-                signals.Add("Phase code matches expected KM module pattern.");
+                signals.Add("Phase code matches expected curriculum module pattern.");
             }
-            else if (Regex.IsMatch(phaseToken ?? string.Empty, @"\bKM-\d{2}\b", RegexOptions.IgnoreCase))
+            else if (Regex.IsMatch(phaseToken ?? string.Empty, @"\b(?:KM|PM|WM)-\d{2}\b", RegexOptions.IgnoreCase))
             {
                 score += 10;
-                signals.Add("Phase code contains KM token.");
+                signals.Add("Phase code contains a recognized curriculum module token.");
             }
             else
             {
@@ -1823,7 +1876,7 @@ namespace ETD.Api.Controllers
             if (SubjectCodeRegex.IsMatch(subjectCode ?? string.Empty))
             {
                 score += 22;
-                signals.Add("Subject code matches KM-KT pattern.");
+                signals.Add("Subject code matches a recognized curriculum subject pattern.");
             }
             else if (HasText(subjectCode))
             {
@@ -2136,9 +2189,68 @@ namespace ETD.Api.Controllers
             return qualification;
         }
 
+        private KnowledgeHierarchyService.StructureInfo EnsureQualificationLibraryStructure(Qualification qualification)
+        {
+            var qualificationCode = string.IsNullOrWhiteSpace(qualification.QualificationNumber)
+                ? qualification.Id.ToString(CultureInfo.InvariantCulture)
+                : qualification.QualificationNumber.Trim();
+            var qualificationDescription = string.IsNullOrWhiteSpace(qualification.QualificationDescription)
+                ? qualificationCode
+                : qualification.QualificationDescription.Trim();
+            return _knowledgeHierarchyService.EnsureQualificationStructure(qualificationCode, qualificationDescription);
+        }
+
+                        private static string MirrorSpecificationToCurriculumLibrary(
+            KnowledgeHierarchyService.StructureInfo structure,
+            string sourcePath,
+            string docType)
+        {
+            var ext = Path.GetExtension(sourcePath);
+            var prefix = string.Equals(docType, "assessment", StringComparison.OrdinalIgnoreCase)
+                ? "QC_AssessmentSpecification"
+                : "QC_CurriculumSpecification";
+            var destinationPath = Path.Combine(structure.CurriculumLibraryPath, $"{prefix}{ext}");
+
+            var fullSource = Path.GetFullPath(sourcePath);
+            var fullDest = Path.GetFullPath(destinationPath);
+
+            // If source and destination are the same file, we have already written it.
+            if (string.Equals(fullSource, fullDest, StringComparison.OrdinalIgnoreCase))
+            {
+                return destinationPath;
+            }
+
+            // If destination folder is same as source folder, we must be careful not to delete the source.
+            var sourceDir = Path.GetDirectoryName(fullSource);
+            var destDir = Path.GetDirectoryName(fullDest);
+
+            if (Directory.Exists(structure.CurriculumLibraryPath))
+            {
+                foreach (var existing in Directory.GetFiles(structure.CurriculumLibraryPath, $"{prefix}.*"))
+                {
+                    var fullExisting = Path.GetFullPath(existing);
+                    if (!string.Equals(fullExisting, fullSource, StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.IO.File.Delete(existing);
+                    }
+                }
+            }
+            else
+            {
+                Directory.CreateDirectory(structure.CurriculumLibraryPath);
+            }
+
+            if (!string.Equals(fullSource, fullDest, StringComparison.OrdinalIgnoreCase))
+            {
+                GitLfsPointerResolver.CopyResolvedContent(sourcePath, destinationPath);
+            }
+
+            return destinationPath;
+        }
+
         private string ResolveSharedQctoLibraryRootPath()
         {
-            return _knowledgeHierarchyService.GetHierarchyRootPath();
+            return ResolveImportsBaseDir();
         }
 
         private object BuildSharedQctoLibraryCatalog(int? qualificationId, string? qualificationCode, string? qualificationDescription)
@@ -2155,19 +2267,86 @@ namespace ETD.Api.Controllers
             var rows = new List<(string qualificationCode, string qualificationDescription, string docType, string fileName, string sourcePath, string relativePath, string sourceArea, DateTime lastWriteTimeUtc)>();
             if (Directory.Exists(libraryRoot))
             {
-                var searchPattern = string.IsNullOrWhiteSpace(normalizedCode)
-                    ? "QCTO_*.*"
-                    : $"QCTO_{normalizedCode}_*";
-                foreach (var path in Directory.EnumerateFiles(libraryRoot, searchPattern, SearchOption.AllDirectories))
+                foreach (var qualificationFolder in Directory.EnumerateDirectories(libraryRoot, "*", SearchOption.TopDirectoryOnly))
+                {
+                    var code = Path.GetFileName(qualificationFolder) ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(code))
+                    {
+                        continue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(normalizedCode) &&
+                        !string.Equals(code, normalizedCode, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    qualificationByCode.TryGetValue(code, out var qualification);
+                    var description = qualification?.QualificationDescription ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(description) &&
+                        !string.IsNullOrWhiteSpace(normalizedDescription) &&
+                        (string.IsNullOrWhiteSpace(normalizedCode) || string.Equals(code, normalizedCode, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        description = normalizedDescription;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(normalizedDescription) &&
+                        !string.IsNullOrWhiteSpace(description) &&
+                        !string.Equals(description, normalizedDescription, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    foreach (var path in Directory.EnumerateFiles(qualificationFolder, "QC_*.*", SearchOption.TopDirectoryOnly))
+                    {
+                        var ext = Path.GetExtension(path);
+                        if (!AllowedExt.Contains(ext))
+                        {
+                            continue;
+                        }
+
+                        var fileName = Path.GetFileName(path) ?? string.Empty;
+                        var docType = IsAssessmentFileName(fileName)
+                            ? "assessment"
+                            : IsCurriculumFileName(fileName)
+                                ? "curriculum"
+                                : string.Empty;
+                        if (string.IsNullOrWhiteSpace(docType))
+                        {
+                            continue;
+                        }
+
+                        rows.Add((
+                            qualificationCode: code,
+                            qualificationDescription: description,
+                            docType,
+                            fileName,
+                            sourcePath: path,
+                            relativePath: Path.GetRelativePath(libraryRoot, path),
+                            sourceArea: "qualification-folder",
+                            lastWriteTimeUtc: System.IO.File.GetLastWriteTimeUtc(path)));
+                    }
+                }
+
+                foreach (var path in Directory.EnumerateFiles(libraryRoot, "QCTO_*.*", SearchOption.AllDirectories))
                 {
                     var ext = Path.GetExtension(path);
-                    if (!AllowedExt.Contains(ext)) continue;
+                    if (!AllowedExt.Contains(ext))
+                    {
+                        continue;
+                    }
 
                     var fileName = Path.GetFileName(path) ?? string.Empty;
-                    if (string.IsNullOrWhiteSpace(fileName)) continue;
+                    if (string.IsNullOrWhiteSpace(fileName))
+                    {
+                        continue;
+                    }
 
                     var match = SharedQctoCodeRegex.Match(fileName);
-                    if (!match.Success) continue;
+                    if (!match.Success)
+                    {
+                        continue;
+                    }
 
                     var code = match.Groups["code"].Value.Trim();
                     if (!string.IsNullOrWhiteSpace(normalizedCode) &&
@@ -2178,7 +2357,15 @@ namespace ETD.Api.Controllers
 
                     qualificationByCode.TryGetValue(code, out var qualification);
                     var description = qualification?.QualificationDescription ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(description) &&
+                        !string.IsNullOrWhiteSpace(normalizedDescription) &&
+                        (string.IsNullOrWhiteSpace(normalizedCode) || string.Equals(code, normalizedCode, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        description = normalizedDescription;
+                    }
+
                     if (!string.IsNullOrWhiteSpace(normalizedDescription) &&
+                        !string.IsNullOrWhiteSpace(description) &&
                         !string.Equals(description, normalizedDescription, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
@@ -2191,7 +2378,7 @@ namespace ETD.Api.Controllers
                     var relativePath = Path.GetRelativePath(libraryRoot, path);
                     var sourceArea = relativePath.Replace('/', '\\').Contains(@"\archive\", StringComparison.OrdinalIgnoreCase)
                         ? "archive"
-                        : "inbox";
+                        : "shared-library";
 
                     rows.Add((
                         qualificationCode: code,
@@ -2250,19 +2437,22 @@ namespace ETD.Api.Controllers
             return EtdpPaths.GetImportsRoot();
         }
 
-        private static string ResolveQualificationFolder(string baseDir, string qualificationNumber, bool ensureExists)
+                                private static string ResolveQualificationFolder(string baseDir, Qualification qualification, bool ensureExists)
         {
-            var safeFolder = Regex.Replace(qualificationNumber ?? string.Empty, @"[^\w\- ]+", "").Trim().Replace(" ", "_");
+            var code = string.IsNullOrWhiteSpace(qualification.QualificationNumber)
+                ? $"Qualification_{qualification.Id}"
+                : qualification.QualificationNumber.Trim();
+            var safeFolder = Regex.Replace(code, @"[^\w\- ]+", "").Trim().Replace(" ", "_");
             var dir = Path.Combine(baseDir, safeFolder);
             if (ensureExists) Directory.CreateDirectory(dir);
             return dir;
         }
 
         private static bool IsCurriculumFileName(string? fileName)
-            => (fileName ?? string.Empty).StartsWith("QC_CurriculumSpecification", StringComparison.OrdinalIgnoreCase);
+            => string.Equals(Path.GetFileNameWithoutExtension(fileName ?? string.Empty), "QC_CurriculumSpecification", StringComparison.OrdinalIgnoreCase);
 
         private static bool IsAssessmentFileName(string? fileName)
-            => (fileName ?? string.Empty).StartsWith("QC_AssessmentSpecification", StringComparison.OrdinalIgnoreCase);
+            => string.Equals(Path.GetFileNameWithoutExtension(fileName ?? string.Empty), "QC_AssessmentSpecification", StringComparison.OrdinalIgnoreCase);
 
         private static string ResolveCognitiveOutputFolder(string qualificationFolder, string qualificationNumber, string qualificationDescription, bool ensureExists = true)
         {
@@ -2322,24 +2512,26 @@ namespace ETD.Api.Controllers
 
         private static async Task<string> ExtractTextForCognitiveScanAsync(string path, string ext, int startPage)
         {
+            var readablePath = await GitLfsPointerResolver.ResolveReadablePathAsync(path);
+
             if (ext == ".txt" || ext == ".md")
             {
-                return CleanExtractedText(await System.IO.File.ReadAllTextAsync(path));
+                return CleanExtractedText(await System.IO.File.ReadAllTextAsync(readablePath));
             }
 
             if (ext == ".docx")
             {
-                await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                await using var stream = new FileStream(readablePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 return await ExtractTextFromDocxStreamAsync(stream);
             }
 
             if (ext == ".pdf")
             {
                 var start = Math.Max(1, startPage);
-                var text = ExtractTextFromPdf(path, start);
+                var text = ExtractTextFromPdf(readablePath, start);
                 if (string.IsNullOrWhiteSpace(text) && start > 1)
                 {
-                    text = ExtractTextFromPdf(path, 1);
+                    text = ExtractTextFromPdf(readablePath, 1);
                 }
                 return CleanExtractedText(text);
             }
@@ -2611,6 +2803,8 @@ namespace ETD.Api.Controllers
             public int QualificationId { get; set; }
             public string DocType { get; set; } = string.Empty; // curriculum | assessment
             public IFormFile? File { get; set; }
+            public bool AutoStartPipeline { get; set; } = true;
+            public int? StartPage { get; set; }
         }
 
         public class ImportFromLibraryRequest
@@ -2667,6 +2861,8 @@ namespace ETD.Api.Controllers
             public int QualificationId { get; set; }
             public string EntityType { get; set; } = string.Empty; // phases | subjects | topics
             public IFormFile? File { get; set; }
+            public bool AutoStartPipeline { get; set; } = true;
+            public int? StartPage { get; set; }
         }
 
         public class QueueAutomationRequest
@@ -2678,3 +2874,12 @@ namespace ETD.Api.Controllers
         }
     }
 }
+
+
+
+
+
+
+
+
+

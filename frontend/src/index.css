@@ -260,6 +260,37 @@ button.primary-save:active,
   background: var(--brand-strong);
 }
 
+.qcto-frontpage {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  margin: 0 0 1.2rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+}
+
+.qcto-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 5.5rem;
+  height: 5.5rem;
+  border: 2px solid var(--brand);
+  border-radius: 50%;
+  color: var(--brand);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.qcto-frontpage h3,
+.qcto-frontpage p {
+  margin: 0.2rem 0;
+}
+
 .glossary-label-wrap {
   display: inline-flex;
   align-items: center;
@@ -346,5 +377,37 @@ label.glossary-auto-tagged::before {
   .mainpage-form-fields-vertical {
     grid-template-columns: 1fr;
     gap: 0.72rem;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .mainpage-root,
+  .page-container {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .button-row,
+  input,
+  select,
+  textarea,
+  button {
+    print-color-adjust: exact;
+  }
+
+  .qcto-frontpage {
+    min-height: 92vh;
+    align-content: center;
+    page-break-after: always;
+    border: 0;
+    border-radius: 0;
   }
 }

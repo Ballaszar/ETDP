@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useQualification } from '../context/QualificationContext';
 import DocxPreviewModal from '../components/DocxPreviewModal';
 import { fetchDocxPreview } from '../utils/docxPreview';
+import { downloadBlobResponse } from '../utils/learningMaterialCommon';
 
 const API = '/api';
 const REVIEW_PAGE_SIZE = 140;
+const ALL_SUBJECTS_VALUE = '__all__';
 
 const safeText = (v) => (v == null ? '' : String(v));
 const subjectIdOf = (s) => String(s?.id ?? s?.Id ?? '');
@@ -29,6 +31,8 @@ const LearnerGuidePage = () => {
   const [ttsFormat, setTtsFormat] = useState('mp3');
   const [ttsSpeed, setTtsSpeed] = useState(1);
   const [downloadingAudio, setDownloadingAudio] = useState(false);
+  const [downloadingGuide, setDownloadingGuide] = useState(false);
+  const [savingGuide, setSavingGuide] = useState(false);
   const [reviewRows, setReviewRows] = useState([]);
   const [visibleCount, setVisibleCount] = useState(20);
   const [filterText, setFilterText] = useState('');
@@ -38,7 +42,7 @@ const LearnerGuidePage = () => {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [subjects, setSubjects] = useState([]);
-  const [selectedSubjectId, setSelectedSubjectId] = useState('');
+  const [selectedSubjectId, setSelectedSubjectId] = useState(ALL_SUBJECTS_VALUE);
   const [checkingReadiness, setCheckingReadiness] = useState(false);
   const [readiness, setReadiness] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -68,9 +72,9 @@ const LearnerGuidePage = () => {
         if (!active) return;
         setSubjects(list);
         setSelectedSubjectId((prev) => {
+          if (prev === ALL_SUBJECTS_VALUE) return ALL_SUBJECTS_VALUE;
           if (prev && list.some((s) => subjectIdOf(s) === String(prev))) return String(prev);
-          const first = list.length > 0 ? subjectIdOf(list[0]) : '';
-          return String(first || '');
+          return list.length > 0 ? ALL_SUBJECTS_VALUE : '';
         });
       } catch {
         if (!active) return;
@@ -133,6 +137,8 @@ const LearnerGuidePage = () => {
     () => reviewRows.reduce((sum, row) => (row.isDirty ? sum + 1 : sum), 0),
     [reviewRows]
   );
+
+  const isAllSubjectsSelected = selectedSubjectId === ALL_SUBJECTS_VALUE;
 
   const setRowParaphrase = (indexInVisible, value) => {
     const row = visibleRows[indexInVisible];
@@ -252,12 +258,14 @@ const LearnerGuidePage = () => {
 
   const buildLearnerGuideDownloadUrl = () => {
     if (!selectedSubjectId) {
-      setError('Select a subject before downloading the learner guide.');
+      setError('No subject scope is available for learner guide export.');
       return '';
     }
     const params = new URLSearchParams();
     if (qid > 0) params.set('qualificationId', String(qid));
-    params.set('subjectId', String(selectedSubjectId));
+    if (!isAllSubjectsSelected) {
+      params.set('subjectId', String(selectedSubjectId));
+    }
     params.set('paraphrase', useParaphrase ? 'true' : 'false');
     params.set('useWorkflowCache', useParaphrase && useWorkflowCache ? 'true' : 'false');
     params.set('includeIllustrations', includeIllustrations ? 'true' : 'false');
@@ -266,15 +274,64 @@ const LearnerGuidePage = () => {
     return `${API}/LearnerGuide/download?${params.toString()}`;
   };
 
-  const handleDownloadLearnerGuide = () => {
+  const buildLearnerGuideSaveUrl = () => {
+    const downloadUrl = buildLearnerGuideDownloadUrl();
+    if (!downloadUrl) return '';
+    return downloadUrl.replace('/download?', '/save-to-workspace?');
+  };
+
+  const handleSaveLearnerGuide = async () => {
+    const url = buildLearnerGuideSaveUrl();
+    if (!url) return;
+    setSavingGuide(true);
+    setError('');
+    setStatus('');
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(await response.text().catch(() => `Save failed (${response.status})`));
+      }
+
+      const data = await response.json();
+      setStatus(`Saved ${data?.fileName || 'Learner Guide DOCX'} to ${data?.savedPath || data?.folderPath || 'the qualification workspace folder'}.`);
+    } catch (e) {
+      setError(`Learner guide DOCX save failed: ${e?.message || e}`);
+    } finally {
+      setSavingGuide(false);
+    }
+  };
+
+  const handleDownloadLearnerGuide = async () => {
     const url = buildLearnerGuideDownloadUrl();
     if (!url) return;
-    window.open(url, '_blank');
+    setDownloadingGuide(true);
+    setError('');
+    setStatus('');
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(await response.text().catch(() => `Download failed (${response.status})`));
+      }
+
+      await downloadBlobResponse(
+        response,
+        isAllSubjectsSelected ? 'LearnerGuide_Full.docx' : 'LearnerGuide.docx'
+      );
+      setStatus(
+        isAllSubjectsSelected
+          ? 'Learner guide DOCX download started for the full qualification.'
+          : 'Learner guide DOCX download started.'
+      );
+    } catch (e) {
+      setError(`Learner guide DOCX download failed: ${e?.message || e}`);
+    } finally {
+      setDownloadingGuide(false);
+    }
   };
 
   const buildLearnerGuideAudioUrl = () => {
-    if (!selectedSubjectId) {
-      setError('Select a subject before downloading learner guide audio.');
+    if (!selectedSubjectId || isAllSubjectsSelected) {
+      setError('Select a single subject before downloading learner guide audio.');
       return '';
     }
     const params = new URLSearchParams();
@@ -314,8 +371,8 @@ const LearnerGuidePage = () => {
     setPreviewHtml('');
     setPreviewWarnings([]);
     setPreviewZoom(1);
-    setPreviewTitle('Learner Guide Preview');
-    setPreviewFileName('LearnerGuide.docx');
+    setPreviewTitle(isAllSubjectsSelected ? 'Learner Guide Preview - Full Qualification' : 'Learner Guide Preview');
+    setPreviewFileName(isAllSubjectsSelected ? 'LearnerGuide_Full.docx' : 'LearnerGuide.docx');
 
     try {
       const preview = await fetchDocxPreview(url, 'LearnerGuide.docx');
@@ -333,8 +390,8 @@ const LearnerGuidePage = () => {
   };
 
   const checkReadiness = async () => {
-    if (!selectedSubjectId) {
-      setError('Select a subject before checking learner guide push status.');
+    if (!selectedSubjectId || isAllSubjectsSelected) {
+      setError('Select a single subject before checking learner guide export readiness.');
       return;
     }
 
@@ -362,7 +419,7 @@ const LearnerGuidePage = () => {
       );
     } catch (e) {
       setReadiness(null);
-      setError(`Failed to check learner guide push status: ${e?.message || e}`);
+      setError(`Failed to check learner guide export readiness: ${e?.message || e}`);
     } finally {
       setCheckingReadiness(false);
     }
@@ -374,6 +431,9 @@ const LearnerGuidePage = () => {
       <p style={{ marginTop: 4, color: '#4b6075' }}>
         Export follows strict flow order: Phase Sequence - Subject Code - Topic Order - Assessment Criteria - LPN.
       </p>
+      <p style={{ marginTop: 4, color: '#4b6075' }}>
+        Full qualification export is the default scope. Pick a single subject only when you need subject-specific readiness, preview, or audio.
+      </p>
 
       <div style={{ marginBottom: 10, color: '#3d566e' }}>
         <strong>Qualification Id:</strong> {qid > 0 ? qid : 'Not selected (backend default will be used)'}
@@ -381,7 +441,7 @@ const LearnerGuidePage = () => {
 
       <div style={{ marginBottom: 12 }}>
         <label>
-          <strong>Subject (required):</strong>
+          <strong>Guide Scope:</strong>
           <select
             className="mainpage-input"
             style={{ marginTop: 6, maxWidth: 640 }}
@@ -390,6 +450,9 @@ const LearnerGuidePage = () => {
             disabled={subjects.length === 0}
           >
             {subjects.length === 0 ? <option value="">No subjects found</option> : null}
+            {subjects.length > 0 ? (
+              <option value={ALL_SUBJECTS_VALUE}>All subjects in qualification</option>
+            ) : null}
             {subjects.map((s) => (
               <option key={subjectIdOf(s)} value={subjectIdOf(s)}>
                 {subjectLabel(s)}
@@ -505,15 +568,20 @@ const LearnerGuidePage = () => {
         <button onClick={saveReview} disabled={savingReview || dirtyCount === 0 || !useParaphrase}>
           {savingReview ? 'Saving...' : `3) Save Manual Edits (${dirtyCount})`}
         </button>
-        <button onClick={checkReadiness} disabled={checkingReadiness || !selectedSubjectId}>
-          {checkingReadiness ? 'Checking Push Status...' : '4) Check Push Status'}
+        <button onClick={checkReadiness} disabled={checkingReadiness || !selectedSubjectId || isAllSubjectsSelected}>
+          {checkingReadiness ? 'Checking Readiness...' : '4) Check Export Readiness'}
         </button>
         <button onClick={handlePreviewLearnerGuide} disabled={!selectedSubjectId}>
           5) Preview Learner Guide (On-screen)
         </button>
-        <button onClick={handleDownloadLearnerGuide}>6) Download Learner Guide (.docx)</button>
-        <button onClick={handleDownloadLearnerGuideAudio} disabled={!selectedSubjectId || downloadingAudio}>
-          {downloadingAudio ? 'Starting Audio Export...' : '7) Download Learner Guide Audio (.zip)'}
+        <button onClick={handleSaveLearnerGuide} disabled={!selectedSubjectId || savingGuide}>
+          {savingGuide ? 'Saving Learner Guide...' : '6) Save Learner Guide To Workspace'}
+        </button>
+        <button onClick={handleDownloadLearnerGuide} disabled={!selectedSubjectId || downloadingGuide}>
+          {downloadingGuide ? 'Downloading Learner Guide...' : '7) Download Learner Guide (.docx)'}
+        </button>
+        <button onClick={handleDownloadLearnerGuideAudio} disabled={!selectedSubjectId || isAllSubjectsSelected || downloadingAudio}>
+          {downloadingAudio ? 'Starting Audio Export...' : '8) Download Learner Guide Audio (.zip)'}
         </button>
       </div>
 
@@ -521,7 +589,7 @@ const LearnerGuidePage = () => {
       {error ? <div style={{ color: '#b00020', marginBottom: 8 }}>{error}</div> : null}
       {readiness ? (
         <div style={{ marginBottom: 14, border: '1px solid #d8dfeb', borderRadius: 8, padding: 10, background: '#f8fbff' }}>
-          <div><strong>Push Status:</strong> {readiness?.ready ? 'READY' : 'NOT READY'}</div>
+          <div><strong>Export Readiness:</strong> {readiness?.ready ? 'READY' : 'NOT READY'}</div>
           <div>
             Qualification {safeText(readiness?.qualificationNumber)} (id {safeText(readiness?.qualificationId)}) ·
             {' '}Subject {safeText(readiness?.subjectCode)} (id {safeText(readiness?.subjectId)})

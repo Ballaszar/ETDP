@@ -14,13 +14,17 @@ const API_UPLOAD_DEVELOPER_KNOWLEDGE = `${API_BASE}/Content/upload-developer-kno
 const API_SYNC_KNOWLEDGE_HIERARCHY = `${API_BASE}/Content/sync-knowledge-hierarchy`;
 const API_MIRA_CHARACTER = `${API_BASE}/Knowledge/mira-character`;
 const API_MIRA_ADVANCED_RULES = `${API_BASE}/Knowledge/mira-advanced-rules`;
+const API_LEARNING_MATERIAL_RULES = `${API_BASE}/Knowledge/learning-material-rules`;
 const API_SMI_TASK_SYNC = `${API_BASE}/Knowledge/smi-task-table/sync`;
 const API_SSC_LOG = `${API_BASE}/Knowledge/semantic-state-continuity-log`;
 const AGENT_NAME = 'Mira Your Lecturer';
+const QWEN_AGENT_NAME = 'Qwen Specialist';
+const MIRA_AVATAR_SRC = `${import.meta.env.BASE_URL}mira-face.png`;
 const MIRA_TTV_SEED_PREFIX = 'etdp:mira-ttv-seed:';
 const WORKFLOW_TRACKER_PREFIX = 'etdp:ai-workflow-tracker:';
 const AI_USER_ID_KEY = 'etdp:ai-user-id';
 const AI_SESSION_ID_KEY = 'etdp:ai-session-id';
+const normalizeAgentMode = (value) => (String(value || '').trim().toLowerCase() === 'qwen' ? 'qwen' : 'mira');
 const DEFAULT_INGESTION = {
   filesScanned: 0,
   created: 0,
@@ -49,6 +53,14 @@ const DEFAULT_MIRA_PROFILE = {
   signaturePhrases: ''
 };
 
+const DEFAULT_LEARNING_MATERIAL_RULES = {
+  disableRigidLessonTemplate: true,
+  sourceMaterialPriorityRules: '',
+  learnerGuideRules: '',
+  assessmentRules: '',
+  updatedAtUtc: ''
+};
+
 const normalizeMiraProfile = (raw) => ({
   profileName: String(raw?.profileName ?? raw?.ProfileName ?? AGENT_NAME).trim() || AGENT_NAME,
   purpose: String(raw?.purpose ?? raw?.Purpose ?? ''),
@@ -58,6 +70,14 @@ const normalizeMiraProfile = (raw) => ({
   iopKnowledgeCore: String(raw?.iopKnowledgeCore ?? raw?.IopKnowledgeCore ?? ''),
   deliveryStandards: String(raw?.deliveryStandards ?? raw?.DeliveryStandards ?? ''),
   signaturePhrases: String(raw?.signaturePhrases ?? raw?.SignaturePhrases ?? '')
+});
+
+const normalizeLearningMaterialRules = (raw) => ({
+  disableRigidLessonTemplate: Boolean(raw?.disableRigidLessonTemplate ?? raw?.DisableRigidLessonTemplate ?? true),
+  sourceMaterialPriorityRules: String(raw?.sourceMaterialPriorityRules ?? raw?.SourceMaterialPriorityRules ?? ''),
+  learnerGuideRules: String(raw?.learnerGuideRules ?? raw?.LearnerGuideRules ?? ''),
+  assessmentRules: String(raw?.assessmentRules ?? raw?.AssessmentRules ?? ''),
+  updatedAtUtc: String(raw?.updatedAtUtc ?? raw?.UpdatedAtUtc ?? '')
 });
 
 const toUnitMetric = (value) => {
@@ -508,43 +528,78 @@ const hasQualificationContext = ({ qualificationId, qualificationCode, qualifica
   return false;
 };
 
-const buildLocalMiraFallbackReply = (userText, qualificationLabel) => {
+const describeFallbackWorkflowNeed = (tracker) => {
+  const state = {
+    ...DEFAULT_TRACKER,
+    ...(tracker || {})
+  };
+
+  if (!(state.curriculumUploaded && state.assessmentUploaded)) {
+    return 'Before we move on, I still need both the curriculum and assessment specifications loaded.';
+  }
+  if (!state.queueBuilt) {
+    return 'The next safe step is to run the cognitive scan and build the review queue.';
+  }
+  if (!(state.localSourceUploaded && state.developerKnowledgeUploaded)) {
+    return 'I still need the local source and developer knowledge uploads before the hierarchy can be trusted.';
+  }
+  if (!state.knowledgeSynced) {
+    return 'The next safe step is to run the knowledge sync so ETDP can index the material properly.';
+  }
+
+  return 'The core setup looks ready. The next practical move is Lecturer Toolkit, then Content Builder, then exports.';
+};
+
+const buildLocalMiraFallbackReply = (userText, qualificationLabel, workflowTracker, options = {}) => {
   const text = String(userText || '').trim().toLowerCase();
   const greetingIntent = /^(hi|hello|hey|good\s(morning|afternoon|evening))\b/.test(text);
   const videoIntent = /\b(video|presentation|slides?)\b/.test(text) && /\b(app|mira|workflow|intro)\b/.test(text);
   const stepIntent = /\b(next step|what next|where do i start|start)\b/.test(text);
+  const workflowNeed = describeFallbackWorkflowNeed(workflowTracker);
+  const assistantName = String(options?.assistantName || AGENT_NAME).trim() || AGENT_NAME;
+  const assistantShortName = String(options?.assistantShortName || 'Mira').trim() || 'Mira';
+  const supportsPresentation = options?.supportsPresentation !== false;
 
   if (videoIntent) {
+    if (!supportsPresentation) {
+      return [
+        `${assistantShortName} focuses on subject matter and detailed explanations for ${qualificationLabel}.`,
+        'For presentation packs or video workflow automation, open Mira Qualia and use the "One-Click Mira Presentation" action.',
+        workflowNeed
+      ].join('\n');
+    }
+
     return [
-      `Yes, we can do that for ${qualificationLabel}.`,
+      `Yes, I can help with that for ${qualificationLabel}.`,
       'Use the "One-Click Mira Presentation" action in the Workflow Control Panel.',
-      'That downloads slide packs and opens Text-to-Video Editor with a starter storyboard ready to edit.'
+      'That downloads the slide pack and opens Text-to-Video Editor with a starter storyboard ready to edit.',
+      workflowNeed
     ].join('\n');
   }
 
   if (stepIntent) {
     return [
-      `Next step for ${qualificationLabel}:`,
-      '1) Upload Curriculum and Assessment specs.',
-      '2) Run Cognitive Scan + Queue.',
-      '3) Upload Local Source + Developer Knowledge.',
-      '4) Sync Knowledge Hierarchy.',
-      '5) Continue captures in Demographics -> Phases -> Subjects -> Topics.'
+      `Here is the next safe route for ${qualificationLabel}:`,
+      workflowNeed,
+      'Usual order: Curriculum + Assessment -> Cognitive Queue -> Local/Developer Knowledge -> Knowledge Sync -> Capture Pages -> Lecturer Toolkit -> Content Builder -> Exports.'
     ].join('\n');
   }
 
   if (greetingIntent) {
     return [
-      `Hi, I am ${AGENT_NAME}.`,
-      `I am ready to help you with ${qualificationLabel}.`,
-      'I can answer normal app questions and I can guide workflow order when you ask for "next step".'
+      `Hello, I am ${assistantName}.`,
+      `I am here to help you with ${qualificationLabel}.`,
+      'I can answer ordinary app questions, guide the workflow step by step, and warn you when a vital step is still missing.'
     ].join('\n');
   }
 
   return [
-    `I am here for ${qualificationLabel}.`,
-    'I can still explain app pages, exports, and workflow while AI backend recovers.',
-    'Ask for "app structure", "next step", or "Mira presentation video".'
+    `I am still here for ${qualificationLabel}.`,
+    workflowNeed,
+    'I can still explain app pages, exports, and workflow while the AI backend recovers.',
+    supportsPresentation
+      ? 'Ask for "app structure", "next step", or "Mira presentation video".'
+      : `Ask for "app structure", "next step", or a detailed ${assistantShortName.toLowerCase()} subject explanation.`
   ].join('\n');
 };
 
@@ -587,9 +642,45 @@ const downloadBlobResponse = async (response, fallbackName) => {
 function MiraAvatar({ talking = false, compact = false }) {
   return (
     <div className={`mira-avatar${talking ? ' talking' : ''}${compact ? ' compact' : ''}`} aria-hidden="true">
-      <span className="mira-eye mira-eye-left" />
-      <span className="mira-eye mira-eye-right" />
-      <span className="mira-mouth" />
+      <img className="mira-avatar-image" src={MIRA_AVATAR_SRC} alt="" loading="eager" decoding="async" />
+    </div>
+  );
+}
+
+function AgentAvatar({ agentMode = 'mira', talking = false, compact = false }) {
+  const resolvedAgentMode = normalizeAgentMode(agentMode);
+  if (resolvedAgentMode !== 'qwen') {
+    return <MiraAvatar talking={talking} compact={compact} />;
+  }
+
+  const size = compact ? 44 : 84;
+  const fontSize = compact ? 16 : 28;
+
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: size,
+        height: size,
+        minWidth: size,
+        borderRadius: compact ? 14 : 22,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: talking
+          ? 'linear-gradient(135deg, #eef7ff 0%, #d7ebff 100%)'
+          : 'linear-gradient(135deg, #f5fbff 0%, #e9f2ff 100%)',
+        border: '1px solid #b8cede',
+        boxShadow: talking ? '0 0 0 6px rgba(46, 111, 182, 0.10)' : '0 10px 24px rgba(31, 63, 91, 0.08)',
+        color: '#245787',
+        fontWeight: 800,
+        fontSize,
+        letterSpacing: '0.08em',
+        transition: 'box-shadow 160ms ease, transform 160ms ease',
+        transform: talking ? 'translateY(-1px)' : 'none'
+      }}
+    >
+      QW
     </div>
   );
 }
@@ -942,11 +1033,25 @@ function SyntheticPhenomenodynamicsPanel({ semanticState, semanticStateLog, hasQ
   );
 }
 
-export default function AIAgent() {
+export default function AIAgent({ agentMode = 'mira' }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { qualificationId } = useQualification() || { qualificationId: null };
-  const isDedicatedAIAgentRoute = location.pathname === '/ai-agent';
+  const resolvedAgentMode = normalizeAgentMode(agentMode);
+  const isQwenMode = resolvedAgentMode === 'qwen';
+  const assistantName = isQwenMode ? QWEN_AGENT_NAME : AGENT_NAME;
+  const assistantShortName = isQwenMode ? 'Qwen' : 'Mira';
+  const assistantSubtitle = isQwenMode
+    ? 'Specialist subject-matter analyst, curriculum interpreter, and detailed teaching support'
+    : 'Friendly workflow guide, lecturer companion, and ETDP operator assistant';
+  const instructionsHeading = isQwenMode ? 'Qwen Qualia' : 'Mira Qualia';
+  const currentQualiaRoute = isQwenMode ? '/qualia/qwen' : '/qualia/mira';
+  const currentPlaygroundRoute = isQwenMode ? '/playground/qwen' : '/playground/mira';
+  const alternateQualiaRoute = isQwenMode ? '/qualia/mira' : '/qualia/qwen';
+  const alternatePlaygroundRoute = isQwenMode ? '/playground/mira' : '/playground/qwen';
+  const alternateAssistantShortName = isQwenMode ? 'Mira' : 'Qwen';
+  const canChatWithoutQualification = isQwenMode;
+  const isDedicatedAIAgentRoute = location.pathname === '/ai-agent' || location.pathname.startsWith('/qualia/');
   const [collapsed, setCollapsed] = useState(() => !isDedicatedAIAgentRoute);
 
   // Helper function to manage dashboard class
@@ -966,6 +1071,24 @@ export default function AIAgent() {
     manageDashboardClass(!collapsed);
     return () => manageDashboardClass(false);
   }, [collapsed]);
+
+  useEffect(() => {
+    if (isDedicatedAIAgentRoute) {
+      setCollapsed(false);
+    }
+  }, [isDedicatedAIAgentRoute]);
+
+  useEffect(() => {
+    const clearHiddenDocumentState = (node) => {
+      if (!(node instanceof HTMLElement)) return;
+      if (node.style.display === 'none') node.style.display = '';
+      if (node.style.visibility === 'hidden') node.style.visibility = '';
+      if (node.style.opacity === '0') node.style.opacity = '';
+    };
+
+    clearHiddenDocumentState(document.documentElement);
+    clearHiddenDocumentState(document.body);
+  }, [collapsed, isDedicatedAIAgentRoute]);
 
   const [chat, setChat] = useState('');
   const [messages, setMessages] = useState([]);
@@ -990,8 +1113,14 @@ export default function AIAgent() {
   const [miraProfile, setMiraProfile] = useState(DEFAULT_MIRA_PROFILE);
   const [miraAddendum, setMiraAddendum] = useState('');
   const [miraConfigBusy, setMiraConfigBusy] = useState(false);
+  const [miraConfigExpanded, setMiraConfigExpanded] = useState(false);
   const [miraConfigStatus, setMiraConfigStatus] = useState('');
   const [miraConfigError, setMiraConfigError] = useState('');
+  const [learningMaterialRules, setLearningMaterialRules] = useState(DEFAULT_LEARNING_MATERIAL_RULES);
+  const [learningMaterialRulesBusy, setLearningMaterialRulesBusy] = useState(false);
+  const [learningMaterialRulesExpanded, setLearningMaterialRulesExpanded] = useState(false);
+  const [learningMaterialRulesStatus, setLearningMaterialRulesStatus] = useState('');
+  const [learningMaterialRulesError, setLearningMaterialRulesError] = useState('');
   const [semanticState, setSemanticState] = useState(null);
   const [semanticStateLog, setSemanticStateLog] = useState([]);
 
@@ -1010,12 +1139,28 @@ export default function AIAgent() {
     if (qid <= 0) return '';
     return `${WORKFLOW_TRACKER_PREFIX}${qid}`;
   }, [qualificationId]);
+  const qualificationScopeActive = hasQualificationContext({ qualificationId, qualificationCode, qualificationDescription });
+  const activeQualificationLabel = useMemo(() => {
+    const fallback = isQwenMode ? 'global subject-matter mode' : 'your selected qualification';
+    return String(qualificationDescription || qualificationCode || fallback).trim();
+  }, [qualificationCode, qualificationDescription, isQwenMode]);
 
   const workflowIntroText = useMemo(() => {
-    const qualificationLabel = String(qualificationDescription || qualificationCode || 'your selected qualification').trim();
+    if (isQwenMode) {
+      return [
+        qualificationScopeActive
+          ? `Hello, I am ${assistantName} for ${activeQualificationLabel}.`
+          : `Hello, I am ${assistantName} in global subject-matter mode.`,
+        'I focus on knowledge taxonomy, subject matter detail, and fully explained chapter content.',
+        'Use me when you want subjects, topics, and assessment criteria expanded into detailed learner-facing explanations written directly to you.',
+        'I can work from the selected qualification when it is active, or use global specialist context when no qualification is selected.',
+        'Use Mira when you want workflow sequencing, ETDP page guidance, or presentation/video automation.'
+      ].join('\n');
+    }
+
     return [
-      `Hello, I am ${AGENT_NAME} for ${qualificationLabel}.`,
-      'I can answer normal app questions and also guide workflow steps when needed.',
+      `Hello, I am ${assistantName} for ${activeQualificationLabel}.`,
+      'I can answer normal app questions, guide the workflow in the correct order, and warn you when a vital step is still missing.',
       'Core app structure:',
       'Main Menu -> Qualification -> Demographics -> Phases -> Subjects -> Topics -> Lecturer Toolkit -> Content Builder -> Lesson Plan Review -> Learning Material Dashboard.',
       'Workflow quick actions available in this panel:',
@@ -1026,10 +1171,19 @@ export default function AIAgent() {
       '5) Complete Demographics -> Phases -> Subjects -> Outcomes/Topics.',
       '6) In Lecturer Toolkit, upload lesson content file (.xlsx or .csv) or capture rows manually (use Replace Existing when re-importing the same qualification).',
       '7) Use Content Builder and then Learning Material exports.',
-      'Ask "app structure" for a page map, or ask "next step" for guided sequencing.'
+      'Ask "app structure" for a page map, ask "next step" for guided sequencing, or ask me to check what is still missing.'
     ].join('\n');
-  }, [qualificationCode, qualificationDescription]);
+  }, [activeQualificationLabel, assistantName, isQwenMode, qualificationScopeActive]);
   const miraPurposePreview = useMemo(() => buildPurposePreview(miraProfile.purpose), [miraProfile.purpose]);
+  const learningMaterialRulesPreview = useMemo(() => buildPurposePreview(
+    learningMaterialRules.learnerGuideRules
+      || learningMaterialRules.sourceMaterialPriorityRules
+      || learningMaterialRules.assessmentRules
+  ), [
+    learningMaterialRules.learnerGuideRules,
+    learningMaterialRules.sourceMaterialPriorityRules,
+    learningMaterialRules.assessmentRules
+  ]);
   const currentLibraryMatch = useMemo(() => {
     const matches = Array.isArray(sharedQctoLibrary?.matches) ? sharedQctoLibrary.matches : [];
     if (matches.length === 0) return null;
@@ -1045,8 +1199,11 @@ export default function AIAgent() {
       ? currentLibraryMatch.entries.filter((entry) => String(entry?.docType || '').toLowerCase() === 'assessment')
       : []
   ), [currentLibraryMatch]);
-  const qualificationScopeActive = hasQualificationContext({ qualificationId, qualificationCode, qualificationDescription });
   const syntheticBellAvailable = Boolean(semanticState || semanticStateLog.length > 0);
+  const showAdvancedMiraWorkspace = false;
+  const scopeSummaryLabel = qualificationScopeActive
+    ? [qualificationCode, qualificationDescription].filter(Boolean).join(' - ')
+    : (canChatWithoutQualification ? 'Global subject-matter mode' : 'Select a qualification on Main Menu');
 
   const scrollToSyntheticPhenomenodynamics = () => {
     if (syntheticPanelRef.current) {
@@ -1268,13 +1425,15 @@ export default function AIAgent() {
 
     (async () => {
       try {
-        const [profileRes, rulesRes] = await Promise.all([
+        const [profileRes, rulesRes, learningMaterialRulesRes] = await Promise.all([
           fetch(API_MIRA_CHARACTER, { signal: controller.signal }),
-          fetch(API_MIRA_ADVANCED_RULES, { signal: controller.signal })
+          fetch(API_MIRA_ADVANCED_RULES, { signal: controller.signal }),
+          fetch(API_LEARNING_MATERIAL_RULES, { signal: controller.signal })
         ]);
-        const [profileData, rulesData] = await Promise.all([
+        const [profileData, rulesData, learningMaterialRulesData] = await Promise.all([
           parseJsonSafe(profileRes),
-          parseJsonSafe(rulesRes)
+          parseJsonSafe(rulesRes),
+          parseJsonSafe(learningMaterialRulesRes)
         ]);
         if (!active) return;
 
@@ -1283,6 +1442,9 @@ export default function AIAgent() {
         }
         if (rulesRes.ok) {
           setMiraAddendum(extractMiraAddendum(rulesData));
+        }
+        if (learningMaterialRulesRes.ok) {
+          setLearningMaterialRules(normalizeLearningMaterialRules(learningMaterialRulesData));
         }
 
         const loadErrors = [
@@ -1293,9 +1455,18 @@ export default function AIAgent() {
         if (loadErrors.length > 0) {
           setMiraConfigError(loadErrors.join(' '));
         }
+
+        if (!learningMaterialRulesRes.ok) {
+          setLearningMaterialRulesError(
+            learningMaterialRulesData?.message
+              || learningMaterialRulesData?.error
+              || `Failed to load learning material rules (${learningMaterialRulesRes.status}).`
+          );
+        }
       } catch (err) {
         if (isAbortLikeError(err) || controller.signal.aborted || !active) return;
         setMiraConfigError(`Failed to load Mira purpose/addendum: ${err?.message || err}`);
+        setLearningMaterialRulesError(`Failed to load learning material rules: ${err?.message || err}`);
       }
     })();
 
@@ -1550,8 +1721,8 @@ export default function AIAgent() {
     if (qid <= 0) return;
 
     await executeWorkflowAction(5, async () => {
-      setWorkflowStatus('Generating qualification slide package for Mira...');
-      const slidesRes = await fetch(`${API_BASE}/Content/export-slides-batch-download`, {
+      setWorkflowStatus('Saving qualification slide package for Mira...');
+      const slidesRes = await fetch(`${API_BASE}/Content/export-slides-batch-save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ qualificationId: qid })
@@ -1562,7 +1733,7 @@ export default function AIAgent() {
         throw new Error(errText || slidesRes.statusText || `Slides export failed (${slidesRes.status}).`);
       }
 
-      await downloadBlobResponse(slidesRes, `mira-slides-${qid}.zip`);
+      const slidesData = await slidesRes.json().catch(() => ({}));
 
       const qualificationLabel = String(qualificationDescription || qualificationCode || `Qualification ${qid}`).trim();
       const miraSeed = {
@@ -1586,7 +1757,7 @@ export default function AIAgent() {
         // ignore localStorage write failures
       }
 
-      setWorkflowStatus('Slides downloaded. Opening Text-to-Video Editor with Mira starter storyboard...');
+      setWorkflowStatus(`Slides saved to ${slidesData?.savedPath || slidesData?.folderPath || 'the qualification SlideShows folder'}. Opening Text-to-Video Editor with Mira starter storyboard...`);
       navigate('/text-to-video-editor', { state: { qualificationId: qid, miraSeed, autoGenerate: true } });
     });
   };
@@ -1631,11 +1802,39 @@ export default function AIAgent() {
 
       setMiraProfile(normalizeMiraProfile(profileData));
       setMiraAddendum(extractMiraAddendum(rulesData));
+      setMiraConfigExpanded(false);
       setMiraConfigStatus('Mira purpose and addendum saved.');
     } catch (err) {
       setMiraConfigError(err?.message || 'Failed to save Mira purpose and addendum.');
     } finally {
       setMiraConfigBusy(false);
+    }
+  };
+
+  const saveLearningMaterialRules = async () => {
+    if (learningMaterialRulesBusy) return;
+
+    setLearningMaterialRulesBusy(true);
+    setLearningMaterialRulesStatus('');
+    setLearningMaterialRulesError('');
+    try {
+      const res = await fetch(API_LEARNING_MATERIAL_RULES, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(learningMaterialRules)
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.message || data?.error || `Failed to save learning material rules (${res.status}).`);
+      }
+
+      setLearningMaterialRules(normalizeLearningMaterialRules(data));
+      setLearningMaterialRulesExpanded(false);
+      setLearningMaterialRulesStatus('Learning material rules saved.');
+    } catch (err) {
+      setLearningMaterialRulesError(err?.message || 'Failed to save learning material rules.');
+    } finally {
+      setLearningMaterialRulesBusy(false);
     }
   };
 
@@ -1699,24 +1898,210 @@ export default function AIAgent() {
     return 'In Progress';
   };
 
-  const handleSend = async () => {
-    const trimmed = chat.trim();
+  const miraPresence = useMemo(() => {
+    if (!qualificationScopeActive) {
+      return {
+        tone: 'idle',
+        title: 'Select a qualification and I will take it from there.',
+        subtitle: 'Once a qualification is active, I can keep the workflow in order and flag missing prerequisites before you continue.'
+      };
+    }
+
+    if (!step1Done) {
+      return {
+        tone: 'warning',
+        title: 'I can already see a vital blocker in the setup.',
+        subtitle: 'Please finish both compulsory Quality Council specifications before you move deeper into the workflow.'
+      };
+    }
+
+    if (!step2Done) {
+      return {
+        tone: 'warning',
+        title: 'The cognitive queue still needs to be built.',
+        subtitle: 'That review queue is the next safe step before more knowledge uploads or exports.'
+      };
+    }
+
+    if (!step3Done) {
+      return {
+        tone: 'warning',
+        title: 'I still need the local and developer knowledge uploads.',
+        subtitle: 'Once both are loaded, I can trust the knowledge sync and downstream content work much more.'
+      };
+    }
+
+    if (!step4Done) {
+      return {
+        tone: 'progress',
+        title: 'The core files are here; the hierarchy sync is the final setup gate.',
+        subtitle: 'Run the OCR and knowledge index sync next, then we can move safely to Lecturer Toolkit and content generation.'
+      };
+    }
+
+    return {
+      tone: 'ready',
+      title: 'The core Mira workflow is in a healthy state.',
+      subtitle: 'You can move into Lecturer Toolkit, Content Builder, learning-material exports, and the presentation/video route.'
+    };
+  }, [qualificationScopeActive, step1Done, step2Done, step3Done, step4Done]);
+
+  const vitalWorkflowWarnings = useMemo(() => {
+    const warnings = [];
+
+    if (!qualificationScopeActive) {
+      warnings.push({
+        id: 'qualification-missing',
+        tone: 'danger',
+        title: 'Qualification context is missing',
+        detail: 'Mira cannot track the correct workflow or qualification-specific files until a qualification is selected on Main Menu.',
+        actionLabel: 'Open Main Menu',
+        action: 'select-qualification'
+      });
+      return warnings;
+    }
+
+    if (!step1Done) {
+      warnings.push({
+        id: 'specs-missing',
+        tone: 'danger',
+        title: 'Compulsory specifications are still incomplete',
+        detail: 'Both the curriculum specification and the assessment specification must be present before the queue build is trustworthy.',
+        actionLabel: 'Stay Here for Uploads',
+        action: 'focus-panel'
+      });
+    }
+
+    if (step1Done && !step2Done) {
+      warnings.push({
+        id: 'queue-missing',
+        tone: 'danger',
+        title: 'Cognitive review queue has not been built yet',
+        detail: 'Do not move into knowledge sync or downstream content work yet. Build the review queue first.',
+        actionLabel: workflowBusy ? 'Queue Busy...' : 'Run Queue Now',
+        action: 'run-queue'
+      });
+    }
+
+    if (step2Done && !step3Done) {
+      warnings.push({
+        id: 'knowledge-missing',
+        tone: 'warning',
+        title: 'Knowledge uploads are still incomplete',
+        detail: 'Local source and developer knowledge should both be uploaded before the hierarchy sync, otherwise Mira will work with thinner context.',
+        actionLabel: 'Stay Here for Uploads',
+        action: 'focus-panel'
+      });
+    }
+
+    if (step3Done && !step4Done) {
+      warnings.push({
+        id: 'sync-missing',
+        tone: 'warning',
+        title: 'Knowledge hierarchy sync is still pending',
+        detail: 'The OCR and indexing sync should finish before Lecturer Toolkit, Content Builder, or exports are treated as stable.',
+        actionLabel: workflowBusy ? 'Sync Busy...' : 'Run Sync Now',
+        action: 'run-sync'
+      });
+    }
+
+    if (step4Done) {
+      warnings.push({
+        id: 'ready-next',
+        tone: 'ready',
+        title: 'Core ingestion is complete',
+        detail: 'The next practical route is Lecturer Toolkit, then Content Builder, then the Learning Material Dashboard.',
+        actionLabel: 'Open Lecturer Toolkit',
+        action: 'open-lecturer-toolkit'
+      });
+    }
+
+    return warnings;
+  }, [qualificationScopeActive, step1Done, step2Done, step3Done, step4Done, workflowBusy]);
+
+  const quickPromptSuggestions = useMemo(() => {
+    if (!qualificationScopeActive) {
+      return [
+        'Explain the ETDP app structure.',
+        'What qualification should I select first?',
+        'Show me the workflow order.'
+      ];
+    }
+
+    const prompts = [
+      'What is my next safe step?',
+      'Check my missing workflow steps.',
+      'Explain the ETDP app structure.',
+      'Prepare a Mira presentation video plan.'
+    ];
+
+    if (step4Done) {
+      return [
+        'What comes after the core setup is complete?',
+        'Open the presentation video route for this qualification.',
+        'Explain the ETDP app structure.',
+        'Check my export workflow.'
+      ];
+    }
+
+    return prompts;
+  }, [qualificationScopeActive, step4Done]);
+
+  const focusWorkflowPanel = () => {
+    setCollapsed(false);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  };
+
+  const handleVitalWorkflowAction = async (action) => {
+    if (workflowBusy && (action === 'run-queue' || action === 'run-sync')) return;
+
+    if (action === 'select-qualification') {
+      navigate('/main-menu');
+      return;
+    }
+
+    if (action === 'focus-panel') {
+      focusWorkflowPanel();
+      return;
+    }
+
+    if (action === 'run-queue') {
+      await buildMappingReviewQueue();
+      return;
+    }
+
+    if (action === 'run-sync') {
+      await syncKnowledgeHierarchy();
+      return;
+    }
+
+    if (action === 'open-lecturer-toolkit') {
+      navigate('/lecturer-toolkit');
+    }
+  };
+
+  const handleSend = async (overridePrompt = null) => {
+    const promptOverride = typeof overridePrompt === 'string' ? overridePrompt : null;
+    const trimmed = String(promptOverride ?? chat).trim();
     if (!trimmed || loading) return;
 
     setMessages(prev => [...prev, { text: trimmed, from: 'user' }]);
     setChat('');
     setError('');
 
-    if (!hasQualificationContext({ qualificationId, qualificationCode, qualificationDescription })) {
+    if (!hasQualificationContext({ qualificationId, qualificationCode, qualificationDescription }) && !canChatWithoutQualification) {
       setMessages(prev => [
         ...prev,
         {
           text: [
-            `Hi, I am ${AGENT_NAME}.`,
+            `Hello, I am ${assistantName}.`,
             'Please select a qualification first on Main Menu, then ask again.',
-            'Once selected, I can guide steps and build the Mira presentation video pack.'
+            'Once that is active, I can guide the steps properly and warn you if something important is still missing.'
           ].join('\n'),
-          from: 'ai'
+          from: 'ai',
+          assistant: assistantName
         }
       ]);
       return;
@@ -1737,34 +2122,43 @@ export default function AIAgent() {
           qualificationCode,
           qualificationDescription,
           userId: chatUserId,
-          sessionId: chatSessionId
+          sessionId: chatSessionId,
+          agentMode: resolvedAgentMode,
+          allowGlobalContext: canChatWithoutQualification
         })
       });
       const data = await parseJsonSafe(res);
 
       if (!res.ok) {
         const errMsg = String(data?.reply || data?.message || res.statusText || `Error ${res.status}`).trim();
-        const qualificationLabel = qualificationDescription || qualificationCode || 'your selected qualification';
-        const fallback = buildLocalMiraFallbackReply(trimmed, qualificationLabel);
+        const fallback = buildLocalMiraFallbackReply(trimmed, activeQualificationLabel, workflowTracker, {
+          assistantName,
+          assistantShortName,
+          supportsPresentation: !isQwenMode
+        });
         const friendly = /QualificationId or QualificationCode is required/i.test(errMsg)
           ? 'Please select a qualification on Main Menu, then retry.'
           : errMsg;
-        setMessages(prev => [...prev, { text: `${fallback}\n\n[Connection note] ${friendly}`, from: 'ai' }]);
+        setMessages(prev => [...prev, { text: `${fallback}\n\n[Connection note] ${friendly}`, from: 'ai', assistant: assistantName }]);
         setError(friendly);
         return;
       }
 
-      const reply = data?.reply?.trim() || 'I could not generate a reply. Please try again.';
+      const reply = data?.reply?.trim() || (isQwenMode ? 'Qwen could not generate a reply. Please try again.' : 'I could not generate a reply. Please try again.');
+      const replyAssistant = String(data?.assistant || assistantName).trim() || assistantName;
       setSemanticState(normalizeSemanticState(data?.semanticState));
       setSemanticStateLog(normalizeSemanticStateLogCollection(data?.semanticStateLog));
-      setMessages(prev => [...prev, { text: reply, from: 'ai' }]);
+      setMessages(prev => [...prev, { text: reply, from: 'ai', assistant: replyAssistant }]);
     } catch (err) {
-      const qualificationLabel = qualificationDescription || qualificationCode || 'your selected qualification';
-      const fallback = buildLocalMiraFallbackReply(trimmed, qualificationLabel);
+      const fallback = buildLocalMiraFallbackReply(trimmed, activeQualificationLabel, workflowTracker, {
+        assistantName,
+        assistantShortName,
+        supportsPresentation: !isQwenMode
+      });
       const errMsg = isAbortLikeError(err)
-        ? 'Mira response timed out. Please retry.'
+        ? `${assistantShortName} response timed out. Please retry.`
         : (err?.message || 'Failed to reach the AI. Check backend is running and that Moderator/APIM or OPENAI_API_KEY is configured.');
-      setMessages(prev => [...prev, { text: `${fallback}\n\n[Connection note] ${errMsg}`, from: 'ai' }]);
+      setMessages(prev => [...prev, { text: `${fallback}\n\n[Connection note] ${errMsg}`, from: 'ai', assistant: assistantName }]);
       setError(errMsg);
     } finally {
       window.clearTimeout(timeoutId);
@@ -1774,46 +2168,24 @@ export default function AIAgent() {
 
   return (
     <div className={`ai-agent ${collapsed ? 'collapsed' : 'expanded'}`}>
-      {collapsed ? (
-        // Collapsed state - minimal indicator
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          height: '100%',
-          color: '#2b3d52',
-          fontSize: '0.88rem',
-          border: '1px dashed #ccc',
-          borderRadius: '8px',
-          background: '#f8fbff',
-          padding: '8px 10px',
-          gap: '8px'
-        }}>
+      <div className="ai-agent-collapsed-shell" hidden={!collapsed} aria-hidden={!collapsed}>
+        <div className="mira-collapsed-shell">
           <div className="mira-collapsed-ident">
-            <MiraAvatar compact />
+            <AgentAvatar agentMode={resolvedAgentMode} compact />
             <div className="mira-collapsed-text">
-              <strong>{AGENT_NAME}</strong>
-              <span>Workflow Assistant</span>
+              <strong>{assistantName}</strong>
+              <span>{isQwenMode ? 'Specialist Assistant' : 'Workflow Assistant'}</span>
             </div>
           </div>
           <button
             onClick={() => setCollapsed(false)}
-            style={{
-              background: '#1e7a4a',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '4px 8px',
-              fontSize: '0.8rem',
-              cursor: 'pointer'
-            }}
+            className="mira-collapsed-open"
           >
             Open
           </button>
         </div>
-      ) : (
-        // Expanded state - full interface
-        <>
+      </div>
+      <div className="ai-agent-expanded-shell" hidden={collapsed} aria-hidden={collapsed}>
           <button
             onClick={() => setCollapsed(true)}
             style={{ float: 'right', background: '#b2e6ff', color: '#23395d', border: 'none', borderRadius: '4px', padding: '0.3rem 0.7rem', marginBottom: '1rem', fontWeight: 'bold' }}
@@ -1821,13 +2193,107 @@ export default function AIAgent() {
             Minimize
           </button>
           <div className="mira-header">
-            <MiraAvatar talking={loading} />
+            <AgentAvatar agentMode={resolvedAgentMode} talking={loading} />
             <div>
-              <h3 style={{ color: '#1e7a4a', margin: 0 }}>{AGENT_NAME}</h3>
-              <div className="mira-header-subtitle">{loading ? 'Listening and preparing your response...' : 'App Guide and Workflow Assistant'}</div>
+              <h3 style={{ color: isQwenMode ? '#245787' : '#1e7a4a', margin: 0 }}>{assistantName}</h3>
+              <div className="mira-header-subtitle">{loading ? `${assistantShortName} is preparing your response...` : assistantSubtitle}</div>
             </div>
           </div>
-          <div style={{ background: syntheticBellAvailable ? 'linear-gradient(180deg, #f4fff7 0%, #eef8ff 100%)' : '#f5faff', border: syntheticBellAvailable ? '1px solid #b9dcc7' : '1px solid #c6d8ec', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+          <div style={{ background: '#f5faff', border: '1px solid #c6d8ec', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+            <div style={{ fontWeight: 'bold', color: '#23395d', marginBottom: 6 }}>{instructionsHeading}</div>
+            <div style={{ color: '#36506b', fontSize: 13, whiteSpace: 'pre-wrap' }}>
+              {workflowIntroText}
+            </div>
+          </div>
+          <div style={{ background: '#ffffff', border: '1px solid #d5e4ef', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+            <div style={{ color: '#1f3f5b', fontWeight: 700, marginBottom: 6 }}>Active Scope</div>
+            <div style={{ color: '#36506b', marginBottom: 10 }}>
+              <strong>{scopeSummaryLabel}</strong>
+              <div style={{ marginTop: 4 }}>
+                {isQwenMode
+                  ? 'Qwen can answer in global subject-matter mode when no qualification is selected.'
+                  : 'Mira keeps the workflow safest when a qualification is selected first.'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => navigate(currentQualiaRoute)}
+                disabled={location.pathname === currentQualiaRoute || (!isQwenMode && location.pathname === '/ai-agent')}
+                style={{ border: '1px solid #b8cede', borderRadius: 6, background: '#edf6ff', color: '#1f3f5b', padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                {`${assistantShortName} Qualia`}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(currentPlaygroundRoute)}
+                style={{ border: '1px solid #b8cede', borderRadius: 6, background: '#ffffff', color: '#1f3f5b', padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                {`Open ${assistantShortName} Playground`}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(alternateQualiaRoute)}
+                style={{ border: '1px solid #b8cede', borderRadius: 6, background: '#ffffff', color: '#1f3f5b', padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                {`${alternateAssistantShortName} Qualia`}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(alternatePlaygroundRoute)}
+                style={{ border: '1px solid #b8cede', borderRadius: 6, background: '#ffffff', color: '#1f3f5b', padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                {`${alternateAssistantShortName} Playground`}
+              </button>
+            </div>
+          </div>
+          <div
+            className={`mira-presence-card ${miraPresence.tone}`}
+            style={{ display: showAdvancedMiraWorkspace ? undefined : 'none' }}
+          >
+            <div className="mira-presence-title">{miraPresence.title}</div>
+            <div className="mira-presence-text">{miraPresence.subtitle}</div>
+            <div className="mira-presence-pills">
+              <span className="mira-presence-pill">{`Qualification: ${qualificationCode || 'Not selected'}`}</span>
+              <span className="mira-presence-pill">{`Queue: ${step2Done ? 'Ready' : 'Pending'}`}</span>
+              <span className="mira-presence-pill">{`Knowledge Sync: ${step4Done ? 'Done' : 'Pending'}`}</span>
+            </div>
+          </div>
+          <div className="mira-quick-prompts" style={{ display: showAdvancedMiraWorkspace ? undefined : 'none' }}>
+            {quickPromptSuggestions.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                className="mira-quick-prompt"
+                disabled={loading}
+                onClick={() => { void handleSend(prompt); }}
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+          {vitalWorkflowWarnings.length > 0 ? (
+            <div className="mira-warning-section" style={{ display: showAdvancedMiraWorkspace ? undefined : 'none' }}>
+              <div className="mira-warning-heading">Vital Workflow Alerts</div>
+              <div className="mira-warning-list">
+                {vitalWorkflowWarnings.map((warning) => (
+                  <div key={warning.id} className={`mira-warning-card ${warning.tone}`}>
+                    <div className="mira-warning-card-title">{warning.title}</div>
+                    <div className="mira-warning-card-text">{warning.detail}</div>
+                    <button
+                      type="button"
+                      className="mira-warning-card-action"
+                      disabled={workflowBusy && (warning.action === 'run-queue' || warning.action === 'run-sync')}
+                      onClick={() => { void handleVitalWorkflowAction(warning.action); }}
+                    >
+                      {warning.actionLabel}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div style={{ background: syntheticBellAvailable ? 'linear-gradient(180deg, #f4fff7 0%, #eef8ff 100%)' : '#f5faff', border: syntheticBellAvailable ? '1px solid #b9dcc7' : '1px solid #c6d8ec', borderRadius: 8, padding: 10, marginBottom: 10, display: showAdvancedMiraWorkspace ? undefined : 'none' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 700, color: '#1f3f5b', marginBottom: 2 }}>Synthetic Phenomenodynamics</div>
@@ -1841,12 +2307,19 @@ export default function AIAgent() {
                 {!isDedicatedAIAgentRoute ? (
                   <button
                     type="button"
-                    onClick={() => navigate('/ai-agent')}
+                    onClick={() => navigate(currentQualiaRoute)}
                     style={{ border: '1px solid #b8cede', borderRadius: 6, background: '#ffffff', color: '#1f3f5b', padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }}
                   >
-                    Open Full Mira Panel
+                    {`Open Full ${assistantShortName} Qualia`}
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => navigate('/agent-governance')}
+                  style={{ border: '1px solid #c9b46a', borderRadius: 6, background: '#fff8dd', color: '#5e4b0f', padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Open Governance Playground
+                </button>
                 <button
                   type="button"
                   onClick={scrollToSyntheticPhenomenodynamics}
@@ -1858,7 +2331,7 @@ export default function AIAgent() {
             </div>
           </div>
 
-          <div style={{ background: '#f5faff', border: '1px solid #c6d8ec', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+          <div style={{ background: '#f5faff', border: '1px solid #c6d8ec', borderRadius: 8, padding: 10, marginBottom: 10, display: showAdvancedMiraWorkspace ? undefined : 'none' }}>
             <div style={{ fontWeight: 'bold', color: '#23395d', marginBottom: 4 }}>Workflow Control Panel</div>
             <div style={{ color: '#36506b', marginBottom: 8, fontSize: 13 }}>
               Qualification: <strong>{qualificationCode || 'Not selected'}</strong> {qualificationDescription ? `| ${qualificationDescription}` : ''}
@@ -1869,38 +2342,66 @@ export default function AIAgent() {
             <div style={{ background: '#ffffff', border: '1px solid #d5e4ef', borderRadius: 8, padding: 8, marginBottom: 10, color: '#1f3f5b', fontSize: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <strong>Mira Purpose and Addendum</strong>
-                <button
-                  type="button"
-                  onClick={saveMiraPurposeAndAddendum}
-                  disabled={miraConfigBusy}
-                  style={{ border: '1px solid #a8c5de', borderRadius: 6, background: '#edf6ff', color: '#1f3f5b', padding: '4px 10px', fontWeight: 700, cursor: miraConfigBusy ? 'not-allowed' : 'pointer' }}
-                >
-                  {miraConfigBusy ? 'Saving...' : 'Save Purpose + Addendum'}
-                </button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {miraConfigExpanded ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={saveMiraPurposeAndAddendum}
+                        disabled={miraConfigBusy}
+                        style={{ border: '1px solid #a8c5de', borderRadius: 6, background: '#edf6ff', color: '#1f3f5b', padding: '4px 10px', fontWeight: 700, cursor: miraConfigBusy ? 'not-allowed' : 'pointer' }}
+                      >
+                        {miraConfigBusy ? 'Saving...' : 'Save Purpose + Addendum'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMiraConfigExpanded(false)}
+                        disabled={miraConfigBusy}
+                        style={{ border: '1px solid #c7d6e2', borderRadius: 6, background: '#ffffff', color: '#36506b', padding: '4px 10px', fontWeight: 700, cursor: miraConfigBusy ? 'not-allowed' : 'pointer' }}
+                      >
+                        Hide Editor
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setMiraConfigExpanded(true)}
+                      style={{ border: '1px solid #a8c5de', borderRadius: 6, background: '#edf6ff', color: '#1f3f5b', padding: '4px 10px', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Open Editor
+                    </button>
+                  )}
+                </div>
               </div>
               <div style={{ marginTop: 6 }}>
                 Purpose preview: {miraPurposePreview}
               </div>
-              <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
-                <label style={{ display: 'grid', gap: 4 }}>
-                  <span style={{ fontWeight: 700 }}>Purpose</span>
-                  <textarea
-                    value={miraProfile.purpose}
-                    onChange={(e) => setMiraProfile((prev) => ({ ...prev, purpose: e.target.value }))}
-                    rows={7}
-                    style={{ width: '100%', border: '1px solid #b8cede', borderRadius: 6, padding: 8, resize: 'vertical', fontFamily: 'inherit' }}
-                  />
-                </label>
-                <label style={{ display: 'grid', gap: 4 }}>
-                  <span style={{ fontWeight: 700 }}>Addendum</span>
-                  <textarea
-                    value={miraAddendum}
-                    onChange={(e) => setMiraAddendum(e.target.value)}
-                    rows={8}
-                    style={{ width: '100%', border: '1px solid #b8cede', borderRadius: 6, padding: 8, resize: 'vertical', fontFamily: 'inherit' }}
-                  />
-                </label>
-              </div>
+              {miraConfigExpanded ? (
+                <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+                  <label style={{ display: 'grid', gap: 4 }}>
+                    <span style={{ fontWeight: 700 }}>Purpose</span>
+                    <textarea
+                      value={miraProfile.purpose}
+                      onChange={(e) => setMiraProfile((prev) => ({ ...prev, purpose: e.target.value }))}
+                      rows={7}
+                      style={{ width: '100%', border: '1px solid #b8cede', borderRadius: 6, padding: 8, resize: 'vertical', fontFamily: 'inherit' }}
+                    />
+                  </label>
+                  <label style={{ display: 'grid', gap: 4 }}>
+                    <span style={{ fontWeight: 700 }}>Addendum</span>
+                    <textarea
+                      value={miraAddendum}
+                      onChange={(e) => setMiraAddendum(e.target.value)}
+                      rows={8}
+                      style={{ width: '100%', border: '1px solid #b8cede', borderRadius: 6, padding: 8, resize: 'vertical', fontFamily: 'inherit' }}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div style={{ marginTop: 8, background: '#f8fbff', border: '1px solid #d5e4ef', borderRadius: 6, padding: 8, color: '#36506b' }}>
+                  The editor is hidden so Mira's workspace stays clear. Use Open Editor whenever you want to update her purpose or addendum again.
+                </div>
+              )}
               {miraConfigStatus ? (
                 <div style={{ marginTop: 8, background: '#e7f7ec', color: '#196b34', border: '1px solid #b4e1c3', borderRadius: 6, padding: 8 }}>
                   {miraConfigStatus}
@@ -1913,6 +2414,103 @@ export default function AIAgent() {
               ) : null}
               <div style={{ marginTop: 6 }}>
                 Saved values are loaded from the Knowledge API and persisted into the canonical `Requests` files used by Mira, while the ETDP workflow tracker and continuity archive are synchronized through SQLite.
+              </div>
+            </div>
+            <div style={{ background: '#ffffff', border: '1px solid #d5e4ef', borderRadius: 8, padding: 8, marginBottom: 10, color: '#1f3f5b', fontSize: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <strong>Learning Material Rules</strong>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {learningMaterialRulesExpanded ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={saveLearningMaterialRules}
+                        disabled={learningMaterialRulesBusy}
+                        style={{ border: '1px solid #a8c5de', borderRadius: 6, background: '#edf6ff', color: '#1f3f5b', padding: '4px 10px', fontWeight: 700, cursor: learningMaterialRulesBusy ? 'not-allowed' : 'pointer' }}
+                      >
+                        {learningMaterialRulesBusy ? 'Saving...' : 'Save Learning Rules'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLearningMaterialRulesExpanded(false)}
+                        disabled={learningMaterialRulesBusy}
+                        style={{ border: '1px solid #c7d6e2', borderRadius: 6, background: '#ffffff', color: '#36506b', padding: '4px 10px', fontWeight: 700, cursor: learningMaterialRulesBusy ? 'not-allowed' : 'pointer' }}
+                      >
+                        Hide Editor
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setLearningMaterialRulesExpanded(true)}
+                      style={{ border: '1px solid #a8c5de', borderRadius: 6, background: '#edf6ff', color: '#1f3f5b', padding: '4px 10px', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Open Editor
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                Learner/assessment preview: {learningMaterialRulesPreview}
+              </div>
+              <div style={{ marginTop: 6 }}>
+                Rigid lesson template: <strong>{learningMaterialRules.disableRigidLessonTemplate ? 'Off by default' : 'Allowed'}</strong>
+              </div>
+              {learningMaterialRulesExpanded ? (
+                <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      type="checkbox"
+                      checked={learningMaterialRules.disableRigidLessonTemplate}
+                      onChange={(e) => setLearningMaterialRules((prev) => ({ ...prev, disableRigidLessonTemplate: e.target.checked }))}
+                    />
+                    <span style={{ fontWeight: 700 }}>Disable rigid lecturer-style lesson template headings</span>
+                  </label>
+                  <label style={{ display: 'grid', gap: 4 }}>
+                    <span style={{ fontWeight: 700 }}>Source Material Priority</span>
+                    <textarea
+                      value={learningMaterialRules.sourceMaterialPriorityRules}
+                      onChange={(e) => setLearningMaterialRules((prev) => ({ ...prev, sourceMaterialPriorityRules: e.target.value }))}
+                      rows={5}
+                      style={{ width: '100%', border: '1px solid #b8cede', borderRadius: 6, padding: 8, resize: 'vertical', fontFamily: 'inherit' }}
+                    />
+                  </label>
+                  <label style={{ display: 'grid', gap: 4 }}>
+                    <span style={{ fontWeight: 700 }}>Learner Guide Rules</span>
+                    <textarea
+                      value={learningMaterialRules.learnerGuideRules}
+                      onChange={(e) => setLearningMaterialRules((prev) => ({ ...prev, learnerGuideRules: e.target.value }))}
+                      rows={8}
+                      style={{ width: '100%', border: '1px solid #b8cede', borderRadius: 6, padding: 8, resize: 'vertical', fontFamily: 'inherit' }}
+                    />
+                  </label>
+                  <label style={{ display: 'grid', gap: 4 }}>
+                    <span style={{ fontWeight: 700 }}>Assessment Rules</span>
+                    <textarea
+                      value={learningMaterialRules.assessmentRules}
+                      onChange={(e) => setLearningMaterialRules((prev) => ({ ...prev, assessmentRules: e.target.value }))}
+                      rows={8}
+                      style={{ width: '100%', border: '1px solid #b8cede', borderRadius: 6, padding: 8, resize: 'vertical', fontFamily: 'inherit' }}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div style={{ marginTop: 8, background: '#f8fbff', border: '1px solid #d5e4ef', borderRadius: 6, padding: 8, color: '#36506b' }}>
+                  Use Open Editor to tell Mira exactly how learner guides and assessments must be written, in your own words.
+                </div>
+              )}
+              {learningMaterialRulesStatus ? (
+                <div style={{ marginTop: 8, background: '#e7f7ec', color: '#196b34', border: '1px solid #b4e1c3', borderRadius: 6, padding: 8 }}>
+                  {learningMaterialRulesStatus}
+                </div>
+              ) : null}
+              {learningMaterialRulesError ? (
+                <div style={{ marginTop: 8, background: '#ffe1e1', color: '#8e2020', border: '1px solid #f2b4b4', borderRadius: 6, padding: 8 }}>
+                  {learningMaterialRulesError}
+                </div>
+              ) : null}
+              <div style={{ marginTop: 6 }}>
+                These rules are saved into `Requests/learning-material-authoring-rules.json` and are used for Mira chat guidance, learner-guide paraphrasing, and future auto-generated lesson-content drafts.
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -2139,7 +2737,9 @@ export default function AIAgent() {
           </div>
 
           <p style={{ fontWeight: 'bold', marginBottom: 8 }}>
-            Ask anything normally, or ask for "next step" to get guided workflow order.
+            {isQwenMode
+              ? 'Use the prompt window below and Qwen will build a detailed specialist response in the conversation window.'
+              : 'Use the prompt window below and Mira will keep the conversation in the response window.'}
           </p>
           {error && (
             <div style={{ background: '#ffd2d2', color: '#a00', padding: 8, borderRadius: 6, marginBottom: 8, fontSize: 14 }}>
@@ -2149,7 +2749,11 @@ export default function AIAgent() {
           <div style={{ background: '#fff', borderRadius: 8, padding: 10, marginBottom: 10, minHeight: 120, maxHeight: 280, overflowY: 'auto' }}>
             <div style={{ fontWeight: 'bold', color: '#23395d', marginBottom: 6 }}>Chat</div>
             {messages.length === 0 ? (
-              <div style={{ color: '#888' }}>Type your question below...</div>
+              <div style={{ color: '#888' }}>
+                {isQwenMode
+                  ? 'Ask for subject matter expansion, chapter detail, topic explanations, or a deeper teaching narrative.'
+                  : 'Ask a question, ask for the next safe step, or let Mira check what is still missing.'}
+              </div>
             ) : (
               messages.map((msg, idx) => (
                 <div
@@ -2164,16 +2768,18 @@ export default function AIAgent() {
                     wordBreak: 'break-word'
                   }}
                 >
-                  <strong>{msg.from === 'user' ? 'You' : 'Mira'}:</strong> {msg.text}
+                  <strong>{msg.from === 'user' ? 'You' : (msg.assistant || assistantShortName)}:</strong> {msg.text}
                 </div>
               ))
             )}
             {loading && (
-              <div style={{ color: '#666', fontStyle: 'italic' }}>Mira is thinking...</div>
+              <div style={{ color: '#666', fontStyle: 'italic' }}>
+                {isQwenMode ? 'Qwen is building a detailed specialist answer...' : 'Mira is thinking through the next safe answer...'}
+              </div>
             )}
             <div ref={chatEndRef} />
           </div>
-          <div style={{ background: '#f8fbff', border: '1px solid #d5e4ef', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+          <div style={{ background: '#f8fbff', border: '1px solid #d5e4ef', borderRadius: 8, padding: 10, marginBottom: 10, display: showAdvancedMiraWorkspace ? undefined : 'none' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#1f3f5b', fontWeight: 700, marginBottom: 6 }}>
               <span>Knowledge Ingestion</span>
               <span>{`${ingestionProgressPct}%`}</span>
@@ -2194,7 +2800,7 @@ export default function AIAgent() {
             ) : null}
           </div>
           {semanticState ? (
-            <div style={{ background: '#f8fbff', border: '1px solid #d5e4ef', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+            <div style={{ background: '#f8fbff', border: '1px solid #d5e4ef', borderRadius: 8, padding: 10, marginBottom: 10, display: showAdvancedMiraWorkspace ? undefined : 'none' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6, color: '#1f3f5b' }}>
                 <strong>Semantic State Continuity</strong>
                 <span style={{ fontSize: 12, color: '#4b6780' }}>{semanticState.variant || 'ssc-v1-real-state'}</span>
@@ -2227,14 +2833,14 @@ export default function AIAgent() {
               ) : null}
             </div>
           ) : null}
-          <div ref={syntheticPanelRef}>
+          <div ref={syntheticPanelRef} style={{ display: showAdvancedMiraWorkspace ? undefined : 'none' }}>
             <SyntheticPhenomenodynamicsPanel
               semanticState={semanticState}
               semanticStateLog={semanticStateLog}
               hasQualificationScope={qualificationScopeActive}
             />
           </div>
-          <div style={{ background: '#f8fbff', border: '1px solid #d5e4ef', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+          <div style={{ background: '#f8fbff', border: '1px solid #d5e4ef', borderRadius: 8, padding: 10, marginBottom: 10, display: showAdvancedMiraWorkspace ? undefined : 'none' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1f3f5b' }}>
               <strong>SEMANTIC STATE CONTINUITY</strong>
               <span style={{ fontSize: 12, color: '#4b6780' }}>Prompt influence log</span>
@@ -2294,6 +2900,9 @@ export default function AIAgent() {
                     <div style={{ marginBottom: 4, fontSize: 12, color: '#36506b', whiteSpace: 'pre-wrap' }}>
                       {`Prompt: ${entry.promptPreview || 'No prompt preview logged.'}`}
                     </div>
+                    <div style={{ marginBottom: 4, fontSize: 12, color: '#36506b', whiteSpace: 'pre-wrap' }}>
+                      {`Reply: ${entry.replyPreview || 'No reply preview logged yet.'}`}
+                    </div>
                     {entry.cognitiveInterpretation ? (
                       <div style={{ marginBottom: 4, fontSize: 12, color: '#36506b', whiteSpace: 'pre-wrap' }}>
                         {`Interpretation: ${entry.cognitiveInterpretation}`}
@@ -2341,21 +2950,24 @@ export default function AIAgent() {
               type="text"
               value={chat}
               onChange={e => setChat(e.target.value)}
-              placeholder={qualificationDescription ? `Ask Mira about ${qualificationDescription}...` : 'Ask Mira about your qualification...'}
+              placeholder={qualificationDescription
+                ? `Talk to ${assistantShortName} about ${qualificationDescription}...`
+                : (isQwenMode
+                  ? 'Talk to Qwen about subject matter, curriculum detail, or teaching content...'
+                  : 'Talk to Mira about your qualification...')}
               style={{ flex: 1, borderRadius: 6, border: '1px solid #b2e6ff', padding: 8 }}
-              onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
+              onKeyDown={e => { if (e.key === 'Enter') void handleSend(); }}
               disabled={loading}
             />
             <button
-              onClick={handleSend}
+              onClick={() => { void handleSend(); }}
               disabled={loading || !chat.trim()}
               style={{ background: '#1e7a4a', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer' }}
             >
-              {loading ? '...' : 'Send'}
+              {loading ? '...' : `Ask ${assistantShortName}`}
             </button>
           </div>
-        </>
-      )}
+      </div>
     </div>
   );
 }

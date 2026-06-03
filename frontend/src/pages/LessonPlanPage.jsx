@@ -1,7 +1,5 @@
 
-
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQualification } from '../context/QualificationContext';
 import * as XLSX from 'xlsx';
 
@@ -32,13 +30,22 @@ const LessonPlanPage = () => {
   const [lessonPlans, setLessonPlans] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
+  const { qualificationId } = useQualification() || { qualificationId: null };
+  const activeQualificationId = Number(qualificationId || localStorage.getItem('qualificationId') || 0);
+
+  const loadLessonPlans = async () => {
+    if (activeQualificationId <= 0) {
+      setLessonPlans([]);
+      return;
+    }
+    const res = await fetch(`${apiUrl}/byQualification?qualificationId=${activeQualificationId}`);
+    const body = res.ok ? await res.json().catch(() => []) : [];
+    setLessonPlans(Array.isArray(body) ? body : []);
+  };
 
   useEffect(() => {
-    fetch(apiUrl)
-      .then(res => res.json())
-      .then(setLessonPlans)
-      .catch(e => setError('Failed to load lesson plans: ' + e.message));
-  }, []);
+    loadLessonPlans().catch(e => setError('Failed to load lesson plans: ' + e.message));
+  }, [activeQualificationId]);
 
   const handleChange = e => {
     const { name, value } = e.target;
@@ -58,7 +65,7 @@ const LessonPlanPage = () => {
     });
     setForm(initialState);
     setEditingId(null);
-    fetch(apiUrl).then(res => res.json()).then(setLessonPlans);
+    loadLessonPlans().catch(e => setError('Failed to reload lesson plans: ' + e.message));
   };
 
   const handleEdit = lp => {
@@ -68,7 +75,7 @@ const LessonPlanPage = () => {
 
   const handleDelete = async id => {
     await fetch(`${apiUrl}/${id}`, { method: 'DELETE' });
-    fetch(apiUrl).then(res => res.json()).then(setLessonPlans);
+    loadLessonPlans().catch(e => setError('Failed to reload lesson plans: ' + e.message));
   };
 
   // Excel template columns
@@ -124,6 +131,11 @@ const LessonPlanPage = () => {
   return (
     <div className="mainpage-root">
       <h2 className="mainpage-title">Lesson Plan</h2>
+      {activeQualificationId <= 0 && (
+        <div style={{ background: '#fff6d8', border: '1px solid #e5c966', borderRadius: 8, padding: 12, color: '#694b00', marginBottom: 16 }}>
+          Select a qualification first. Lesson plan pages stay qualification-scoped so content from another qualification does not bleed into this view.
+        </div>
+      )}
 
       {/* Excel Upload Section */}
       <div style={{ background: '#fff', borderRadius: 8, padding: '1.2rem 1.5rem', marginBottom: 24, boxShadow: '0 2px 8px #23395d11' }}>

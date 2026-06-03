@@ -75,7 +75,7 @@ const MainPage = () => {
     // Map form -> backend DTO
     const toDto = (form) => ({
         QualificationNumber: form.qualificationNumber || "",
-        QualificationDescription: form.description || form.name || "",
+        QualificationDescription: form.name || "",
         CesmField: String(form.cesmField || "").trim(),
         NqfLevel: form.level || "",
         Credits: form.credits || "",

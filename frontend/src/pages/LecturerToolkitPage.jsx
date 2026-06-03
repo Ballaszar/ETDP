@@ -109,8 +109,12 @@ export default function LecturerToolkitPage() {
     setEditingId(null);
   };
 
-  const reloadEntries = async () => {
-    const data = await fetch(API_TOOLKIT).then(r => r.json()).catch((err) => {
+  const reloadEntries = async (requestedQualificationId = null) => {
+    const scopedQualificationId = Number(requestedQualificationId || qualificationId || form.qualificationsId || 0);
+    const params = new URLSearchParams();
+    if (scopedQualificationId > 0) params.set('qualificationId', String(scopedQualificationId));
+    const endpoint = params.toString() ? `${API_TOOLKIT}?${params.toString()}` : API_TOOLKIT;
+    const data = await fetch(endpoint).then(r => r.json()).catch((err) => {
       addError(`[Toolkit] Failed to load entries: ${err?.message || 'error'}`);
       return [];
     });
@@ -122,8 +126,8 @@ export default function LecturerToolkitPage() {
   };
 
   useEffect(() => {
-    reloadEntries();
-  }, []);
+    reloadEntries(qualificationId);
+  }, [qualificationId]);
 
   useEffect(() => {
     resetForm();
@@ -358,12 +362,13 @@ export default function LecturerToolkitPage() {
   const activeQualificationDescription =
     String(qualificationInfo?.qualificationDescription ?? qualificationInfo?.QualificationDescription ?? '').trim();
 
-  const activeQualificationId = Number(form.qualificationsId || qualificationId || 0);
-  const latest = (
-    activeQualificationId > 0
-      ? entries.filter((row) => Number(row?.qualificationsId || 0) === activeQualificationId)
-      : entries
-  ).slice(-1)[0] || null;
+  const activeQualificationId = Number(qualificationId || form.qualificationsId || 0);
+  const activeEntries = activeQualificationId > 0
+    ? entries.filter((row) => Number(row?.qualificationsId || 0) === activeQualificationId)
+    : entries;
+  const latest = [...activeEntries].reverse().find((row) =>
+    String(row?.lessonPlanContent || '').trim().length > 0
+  ) || activeEntries[activeEntries.length - 1] || null;
   const openEngineForEntry = (entryOrId) => {
     const targetEntry = typeof entryOrId === 'object' && entryOrId
       ? entryOrId
@@ -386,9 +391,9 @@ export default function LecturerToolkitPage() {
 
   return (
     <div className="page-container">
-      <h2>Lecturer Toolkit</h2>
-      <p>Capture, import, and manage toolkit entries using the canonical lesson plan source.</p>
-      <p className="lt-flow-note">Workflow: Lesson Plan.csv -&gt; Lecturer Toolkit -&gt; Learning Schedule -&gt; Engine</p>
+      <h2>Lesson Plan Content</h2>
+      <p>Capture, import, and manage schedule-ready lesson-plan LPN rows from manual edits or Qwen evidence mapping.</p>
+      <p className="lt-flow-note">Workflow: Subject matter upload -&gt; Qwen lesson-plan draft LPNs -&gt; Lecturer Toolkit review -&gt; Learning Schedule -&gt; Engine</p>
 
       {errors.length > 0 && (
         <div className="lt-alert">
@@ -414,7 +419,7 @@ export default function LecturerToolkitPage() {
       <div className="lt-card">
         <div className="lt-actions">
           <label className="lt-upload">
-            Upload Lesson Plan File:
+            Upload Lesson Plan Content File:
             <input type="file" accept=".xlsx,.csv" onChange={handleUploadExcel} disabled={uploading || automating} />
           </label>
           <label className="lt-replace-toggle">
@@ -426,16 +431,16 @@ export default function LecturerToolkitPage() {
             />
             Replace existing rows for selected qualification
           </label>
-          <button type="button" onClick={() => window.open(`${API_ROOT}/Templates/LessonPlan`, '_blank')}>Download Lesson Plan CSV Template</button>
-          <button type="button" onClick={importCsv} disabled={uploading || automating}>Import Canonical Lesson Plan</button>
+          <button type="button" onClick={() => window.open(`${API_ROOT}/Templates/LessonPlan`, '_blank')}>Download Lesson Plan Content CSV Template</button>
+          <button type="button" onClick={importCsv} disabled={uploading || automating}>Import Canonical Lesson Plan Content</button>
           <button type="button" onClick={automateLearningSchedule} disabled={uploading || automating}>
-            {automating ? 'Rebuilding...' : 'Rebuild Learning Schedule'}
+            {automating ? 'Rebuilding...' : 'Rebuild Learning Schedule From LPN Rows'}
           </button>
           {savedEntryId ? <button type="button" onClick={() => openEngineForEntry(savedEntryId)}>Open Saved in Engine</button> : null}
         </div>
-        <div className="lt-flow-note">Source of truth: Lesson Plan.csv or Lesson Plan.xlsx. Do not import LecturerToolkit.csv here.</div>
+        <div className="lt-flow-note">Source of truth: the latest uploaded Lesson Plan.csv or Lesson Plan.xlsx, or Qwen draft rows generated from imported subject matter. Do not import LecturerToolkit.csv here.</div>
         {replaceExistingOnImport ? (
-          <div className="lt-flow-note">Replace Existing mode validates the lesson plan first and only replaces the selected qualification when every uploaded row maps cleanly.</div>
+          <div className="lt-flow-note">Replace Existing mode now prefers the selected qualification's existing subject and LPN rows so Lesson Plan Content can overwrite the current toolkit content cleanly.</div>
         ) : null}
         {uploading || automating ? <div>Processing...</div> : null}
         {uploadError ? <div className="lt-error">{uploadError}</div> : null}
@@ -470,7 +475,7 @@ export default function LecturerToolkitPage() {
       </form>
 
       <div className="lt-card">
-        <div className="lt-table-title">Automated Learning Schedule ({entries.length})</div>
+        <div className="lt-table-title">Schedule-Ready LPN Rows ({activeEntries.length})</div>
         <div className="lt-table-wrap">
           <table className="table">
             <thead>
@@ -486,7 +491,7 @@ export default function LecturerToolkitPage() {
               </tr>
             </thead>
             <tbody>
-              {entries.map(r => (
+              {activeEntries.map(r => (
                 <tr key={r.id}>
                   <td>{r.id}</td>
                   <td>{r.qualificationsId || '-'}</td>
@@ -502,7 +507,7 @@ export default function LecturerToolkitPage() {
                   </td>
                 </tr>
               ))}
-              {entries.length === 0 ? (
+              {activeEntries.length === 0 ? (
                 <tr><td colSpan={8}>No entries yet.</td></tr>
               ) : null}
             </tbody>

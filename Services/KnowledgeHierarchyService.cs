@@ -26,6 +26,7 @@ namespace ETD.Api.Services
         private readonly ApplicationDbContext _context;
         private readonly ILogger<KnowledgeHierarchyService> _logger;
         private readonly OcrExtractionService _ocrExtractionService;
+        private readonly PdfVisualExtractionService _pdfVisualExtractionService;
         private static readonly HttpClient _stirlingHttp = new HttpClient();
 
         private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -42,6 +43,26 @@ namespace ETD.Api.Services
         private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
             ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".svg"
+        };
+
+        private static readonly string[] LocalSubjectMatterAliasFolders =
+        {
+            "subject_matter",
+            "subject matter",
+            "subjectmatter",
+            "local_source_upload",
+            "local source upload",
+            "localsourceupload"
+        };
+
+        private static readonly string[] DeveloperKnowledgeAliasFolders =
+        {
+            "developer_knowledge_base",
+            "developer knowledge base",
+            "developerknowledgebase",
+            "developer_kb",
+            "developer kb",
+            "dev_knowledge"
         };
 
         private static readonly HashSet<string> CoverageStopWords = new(StringComparer.OrdinalIgnoreCase)
@@ -141,6 +162,7 @@ namespace ETD.Api.Services
             public string QualificationCode { get; set; } = string.Empty;
             public string QualificationDescription { get; set; } = string.Empty;
             public string QualificationRootPath { get; set; } = string.Empty;
+            public string CurriculumLibraryPath { get; set; } = string.Empty;
             public string LocalInboxPath { get; set; } = string.Empty;
             public string LocalArchivePath { get; set; } = string.Empty;
             public string DeveloperInboxPath { get; set; } = string.Empty;
@@ -149,10 +171,56 @@ namespace ETD.Api.Services
             public string UploadReadmePath { get; set; } = string.Empty;
         }
 
+        public sealed class AgentKnowledgeStructureInfo
+        {
+            public string Scope { get; set; } = string.Empty;
+            public string DisplayName { get; set; } = string.Empty;
+            public string SourceType { get; set; } = string.Empty;
+            public string ScopeRootPath { get; set; } = string.Empty;
+            public string InboxPath { get; set; } = string.Empty;
+            public string ArchivePath { get; set; } = string.Empty;
+            public string DuplicatePath { get; set; } = string.Empty;
+            public string ReadmePath { get; set; } = string.Empty;
+        }
+
+        public sealed class AgentKnowledgeSyncOptions
+        {
+            public string? Scope { get; set; }
+            public bool IncludeSharedKnowledge { get; set; } = true;
+            public int MaxFilesPerInbox { get; set; } = 1000;
+            public bool RebuildReadme { get; set; } = true;
+        }
+
+        public sealed class AgentKnowledgeSyncDetail
+        {
+            public string Scope { get; set; } = string.Empty;
+            public string DisplayName { get; set; } = string.Empty;
+            public string SourceType { get; set; } = string.Empty;
+            public string FileName { get; set; } = string.Empty;
+            public string Status { get; set; } = string.Empty;
+            public string? Reason { get; set; }
+            public int? KnowledgeNumber { get; set; }
+            public string? ArchivedPath { get; set; }
+        }
+
+        public sealed class AgentKnowledgeSyncResult
+        {
+            public string RootPath { get; set; } = string.Empty;
+            public string ReadmePath { get; set; } = string.Empty;
+            public int ScopesScanned { get; set; }
+            public int FilesScanned { get; set; }
+            public int Created { get; set; }
+            public int Skipped { get; set; }
+            public int Failed { get; set; }
+            public List<AgentKnowledgeSyncDetail> Details { get; set; } = new();
+        }
+
         private sealed class QualificationFolderInfo
         {
             public string Path { get; set; } = string.Empty;
             public string FolderName { get; set; } = string.Empty;
+            public string RawQualificationCode { get; set; } = string.Empty;
+            public string RawQualificationDescription { get; set; } = string.Empty;
             public string QualificationCode { get; set; } = string.Empty;
             public string QualificationDescription { get; set; } = string.Empty;
             public int FileCount { get; set; }
@@ -205,11 +273,13 @@ namespace ETD.Api.Services
         public KnowledgeHierarchyService(
             ApplicationDbContext context,
             ILogger<KnowledgeHierarchyService> logger,
-            OcrExtractionService ocrExtractionService)
+            OcrExtractionService ocrExtractionService,
+            PdfVisualExtractionService pdfVisualExtractionService)
         {
             _context = context;
             _logger = logger;
             _ocrExtractionService = ocrExtractionService;
+            _pdfVisualExtractionService = pdfVisualExtractionService;
         }
 
         public string GetHierarchyRootPath()
@@ -217,9 +287,58 @@ namespace ETD.Api.Services
             return Path.Combine(AiRuntime.GetLocalLibraryPath(), "KnowledgeHierarchy");
         }
 
+        public string GetCurriculumLibraryRootPath()
+        {
+            return EtdpPaths.GetImportsRoot();
+        }
+
         public string GetUploadReadmePath()
         {
             return Path.Combine(GetHierarchyRootPath(), "upload.readme.md");
+        }
+
+        public string GetAgentKnowledgeRootPath()
+        {
+            return Path.Combine(AiRuntime.GetLocalLibraryPath(), "AgentKnowledge");
+        }
+
+        public string GetAgentKnowledgeReadmePath()
+        {
+            return Path.Combine(GetAgentKnowledgeRootPath(), "readme.md");
+        }
+
+        public string EnsureAgentKnowledgeReadme()
+        {
+            var root = GetAgentKnowledgeRootPath();
+            Directory.CreateDirectory(root);
+
+            var path = GetAgentKnowledgeReadmePath();
+            var content = BuildAgentKnowledgeReadme(root);
+            try
+            {
+                if (File.Exists(path))
+                {
+                    var existingContent = File.ReadAllText(path, Encoding.UTF8);
+                    if (string.Equals(existingContent, content, StringComparison.Ordinal))
+                    {
+                        return path;
+                    }
+                }
+
+                File.WriteAllText(path, content, Encoding.UTF8);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (File.Exists(path))
+                {
+                    _logger.LogWarning(ex, "Unable to refresh AgentKnowledge readme at {Path}; continuing with existing file.", path);
+                    return path;
+                }
+
+                _logger.LogWarning(ex, "Unable to create AgentKnowledge readme at {Path}; continuing without rewriting it.", path);
+            }
+
+            return path;
         }
 
         public string EnsureUploadReadme()
@@ -229,8 +348,69 @@ namespace ETD.Api.Services
 
             var path = GetUploadReadmePath();
             var content = BuildUploadReadme(root);
-            File.WriteAllText(path, content, Encoding.UTF8);
+            try
+            {
+                if (File.Exists(path))
+                {
+                    var existingContent = File.ReadAllText(path, Encoding.UTF8);
+                    if (string.Equals(existingContent, content, StringComparison.Ordinal))
+                    {
+                        return path;
+                    }
+                }
+
+                File.WriteAllText(path, content, Encoding.UTF8);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (File.Exists(path))
+                {
+                    _logger.LogWarning(ex, "Unable to refresh KnowledgeHierarchy upload readme at {Path}; continuing with existing file.", path);
+                    return path;
+                }
+
+                _logger.LogWarning(ex, "Unable to create KnowledgeHierarchy upload readme at {Path}; continuing without rewriting it.", path);
+            }
             return path;
+        }
+
+        public Dictionary<string, AgentKnowledgeStructureInfo> EnsureAgentKnowledgeStructures()
+        {
+            var scopes = new[] { "shared", "mira", "qwen" };
+            return scopes.ToDictionary(
+                scope => scope,
+                scope => EnsureAgentKnowledgeStructure(scope),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        public AgentKnowledgeStructureInfo EnsureAgentKnowledgeStructure(string? scope)
+        {
+            var normalizedScope = NormalizeAgentKnowledgeScope(scope);
+            var displayName = GetAgentKnowledgeScopeDisplayName(normalizedScope);
+            var folderName = GetAgentKnowledgeScopeFolderName(normalizedScope);
+            var root = GetAgentKnowledgeRootPath();
+            Directory.CreateDirectory(root);
+
+            var scopeRoot = Path.Combine(root, folderName);
+            var inboxPath = Path.Combine(scopeRoot, "inbox");
+            var archivePath = Path.Combine(scopeRoot, "archive");
+            var duplicatePath = Path.Combine(scopeRoot, "duplicates");
+
+            Directory.CreateDirectory(inboxPath);
+            Directory.CreateDirectory(archivePath);
+            Directory.CreateDirectory(duplicatePath);
+
+            return new AgentKnowledgeStructureInfo
+            {
+                Scope = normalizedScope,
+                DisplayName = displayName,
+                SourceType = GetAgentKnowledgeSourceType(normalizedScope),
+                ScopeRootPath = scopeRoot,
+                InboxPath = inboxPath,
+                ArchivePath = archivePath,
+                DuplicatePath = duplicatePath,
+                ReadmePath = EnsureAgentKnowledgeReadme()
+            };
         }
 
         public int EnsureStructuresForKnownQualifications()
@@ -258,8 +438,9 @@ namespace ETD.Api.Services
 
         public StructureInfo EnsureQualificationStructure(string qualificationCode, string qualificationDescription)
         {
-            var code = string.IsNullOrWhiteSpace(qualificationCode) ? "UNASSIGNED" : qualificationCode.Trim();
-            var description = string.IsNullOrWhiteSpace(qualificationDescription) ? "Unassigned Qualification" : qualificationDescription.Trim();
+            var resolvedIdentity = ResolveQualificationIdentity(qualificationCode, qualificationDescription);
+            var code = string.IsNullOrWhiteSpace(resolvedIdentity.qualificationCode) ? "UNASSIGNED" : resolvedIdentity.qualificationCode.Trim();
+            var description = string.IsNullOrWhiteSpace(resolvedIdentity.qualificationDescription) ? "Unassigned Qualification" : resolvedIdentity.qualificationDescription.Trim();
             var safeCode = MakeSafeFilePart(code, "UNASSIGNED");
             var safeDescription = MakeSafeFilePart(description, "Unassigned_Qualification");
 
@@ -267,17 +448,21 @@ namespace ETD.Api.Services
             Directory.CreateDirectory(root);
 
             var qualificationRoot = ResolvePreferredQualificationRoot(root, safeCode, safeDescription);
+            var legacyCurriculumLibrary = Path.Combine(qualificationRoot, "curriculum_library");
+            var curriculumLibrary = ResolveQualificationCurriculumLibraryPath(safeCode);
             var localInbox = Path.Combine(qualificationRoot, "local_source_upload", "inbox");
             var localArchive = Path.Combine(qualificationRoot, "local_source_upload", "archive");
             var developerInbox = Path.Combine(qualificationRoot, "developer_knowledge_base", "inbox");
             var developerArchive = Path.Combine(qualificationRoot, "developer_knowledge_base", "archive");
             var developerReports = Path.Combine(qualificationRoot, "developer_knowledge_base", "reports");
 
+            Directory.CreateDirectory(curriculumLibrary);
             Directory.CreateDirectory(localInbox);
             Directory.CreateDirectory(localArchive);
             Directory.CreateDirectory(developerInbox);
             Directory.CreateDirectory(developerArchive);
             Directory.CreateDirectory(developerReports);
+            BackfillLegacyCurriculumLibrary(legacyCurriculumLibrary, curriculumLibrary);
 
             var readmePath = EnsureUploadReadme();
             return new StructureInfo
@@ -285,6 +470,7 @@ namespace ETD.Api.Services
                 QualificationCode = safeCode,
                 QualificationDescription = description,
                 QualificationRootPath = qualificationRoot,
+                CurriculumLibraryPath = curriculumLibrary,
                 LocalInboxPath = localInbox,
                 LocalArchivePath = localArchive,
                 DeveloperInboxPath = developerInbox,
@@ -292,6 +478,195 @@ namespace ETD.Api.Services
                 DeveloperReportsPath = developerReports,
                 UploadReadmePath = readmePath
             };
+        }
+
+        public AgentKnowledgeSyncResult SyncAgentKnowledge(AgentKnowledgeSyncOptions? options = null)
+        {
+            var opts = options ?? new AgentKnowledgeSyncOptions();
+            var result = new AgentKnowledgeSyncResult
+            {
+                RootPath = GetAgentKnowledgeRootPath(),
+                ReadmePath = opts.RebuildReadme ? EnsureAgentKnowledgeReadme() : GetAgentKnowledgeReadmePath()
+            };
+
+            var root = result.RootPath;
+            Directory.CreateDirectory(root);
+
+            var normalizedScope = NormalizeAgentKnowledgeScope(opts.Scope, "all");
+            var scopes = new List<string>();
+            if (string.Equals(normalizedScope, "all", StringComparison.OrdinalIgnoreCase))
+            {
+                scopes.AddRange(new[] { "shared", "mira", "qwen" });
+            }
+            else
+            {
+                if (opts.IncludeSharedKnowledge && !string.Equals(normalizedScope, "shared", StringComparison.OrdinalIgnoreCase))
+                {
+                    scopes.Add("shared");
+                }
+
+                scopes.Add(normalizedScope);
+            }
+
+            var orderedScopes = scopes
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(scope => NormalizeAgentKnowledgeScope(scope))
+                .ToList();
+            var maxFilesPerInbox = opts.MaxFilesPerInbox <= 0 ? 1000 : Math.Min(opts.MaxFilesPerInbox, 10000);
+            var nextKnowledgeNumbers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var scope in orderedScopes)
+            {
+                var structure = EnsureAgentKnowledgeStructure(scope);
+                result.ScopesScanned++;
+
+                var files = Directory.GetFiles(structure.InboxPath, "*", SearchOption.TopDirectoryOnly)
+                    .Where(path => SupportedExtensions.Contains(Path.GetExtension(path)))
+                    .Where(path => !IsImageSidecarFile(path))
+                    .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .Take(maxFilesPerInbox)
+                    .ToList();
+
+                foreach (var filePath in files)
+                {
+                    result.FilesScanned++;
+                    var now = DateTime.UtcNow;
+                    var originalName = Path.GetFileName(filePath);
+                    var ext = Path.GetExtension(filePath).ToLowerInvariant();
+                    var sidecars = ImageExtensions.Contains(ext)
+                        ? FindImageSidecarPaths(filePath)
+                        : new List<string>();
+                    var parsedKnowledgeNumber = ParseKnowledgeNumber(originalName);
+                    var cacheKey = $"global|{structure.SourceType}";
+                    var next = GetNextKnowledgeNumber(cacheKey, string.Empty, structure.SourceType, nextKnowledgeNumbers);
+                    var knowledgeNumber = parsedKnowledgeNumber ?? next;
+                    if (!parsedKnowledgeNumber.HasValue)
+                    {
+                        nextKnowledgeNumbers[cacheKey] = knowledgeNumber + 1;
+                    }
+                    else
+                    {
+                        nextKnowledgeNumbers[cacheKey] = Math.Max(next, knowledgeNumber + 1);
+                    }
+
+                    var knowledgeUrl = BuildAgentKnowledgeUrl(scope, knowledgeNumber, originalName);
+                    var duplicateInDatabase = _context.SourceMaterials.Any(s =>
+                        string.IsNullOrWhiteSpace(s.QualificationCode) &&
+                        (s.KnowledgeSourceType ?? string.Empty) == structure.SourceType &&
+                        (s.Url ?? string.Empty) == knowledgeUrl);
+
+                    if (duplicateInDatabase)
+                    {
+                        var duplicateDestination = EnsureUniquePath(Path.Combine(structure.DuplicatePath, $"{now:yyyyMMddHHmmss}_{originalName}"));
+                        File.Move(filePath, duplicateDestination, true);
+                        foreach (var sidecar in sidecars)
+                        {
+                            try
+                            {
+                                var sidecarDuplicate = EnsureUniquePath(Path.Combine(structure.DuplicatePath, $"{now:yyyyMMddHHmmss}_{Path.GetFileName(sidecar)}"));
+                                File.Move(sidecar, sidecarDuplicate, true);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to move agent knowledge sidecar '{SidecarPath}' to duplicate folder.", sidecar);
+                            }
+                        }
+
+                        result.Skipped++;
+                        result.Details.Add(new AgentKnowledgeSyncDetail
+                        {
+                            Scope = scope,
+                            DisplayName = structure.DisplayName,
+                            SourceType = structure.SourceType,
+                            FileName = originalName,
+                            Status = "skipped",
+                            Reason = "already_indexed",
+                            KnowledgeNumber = knowledgeNumber,
+                            ArchivedPath = duplicateDestination
+                        });
+                        continue;
+                    }
+
+                    var safeStem = MakeSafeFilePart(Path.GetFileNameWithoutExtension(originalName), $"agent_{scope}_{knowledgeNumber:D4}");
+                    var archivedName = $"AGENT-KB-{knowledgeNumber:D4}_{now:yyyyMMddHHmmss}_{safeStem}{ext}";
+                    var archivedPath = EnsureUniquePath(Path.Combine(structure.ArchivePath, archivedName));
+                    var archivedSidecars = new List<string>();
+                    foreach (var sidecar in sidecars)
+                    {
+                        try
+                        {
+                            var sidecarArchive = EnsureUniquePath(Path.Combine(structure.ArchivePath, $"{now:yyyyMMddHHmmss}_{Path.GetFileName(sidecar)}"));
+                            File.Move(sidecar, sidecarArchive, true);
+                            archivedSidecars.Add(sidecarArchive);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to move agent knowledge sidecar '{SidecarPath}' to archive.", sidecar);
+                        }
+                    }
+
+                    File.Move(filePath, archivedPath, true);
+
+                    try
+                    {
+                        var extractedText = ExtractTextFromFile(archivedPath, ext, archivedSidecars);
+                        var material = new SourceMaterial
+                        {
+                            Title = $"[Agent KB {knowledgeNumber:D4}] {structure.DisplayName} :: {originalName}",
+                            FileName = Path.GetFileName(archivedPath),
+                            FilePath = archivedPath,
+                            FileType = ext.TrimStart('.'),
+                            Url = knowledgeUrl,
+                            QualificationCode = null,
+                            QualificationDescription = null,
+                            SubjectDescription = $"AgentKnowledge:{structure.DisplayName}",
+                            TopicDescription = $"AgentKnowledgeNumber:{knowledgeNumber:D4}",
+                            AssessmentCriteriaDescription = $"UploadedAtUtc:{now:O};Source:{originalName};AgentScope:{scope}",
+                            ExtractedText = extractedText,
+                            KnowledgeSourceType = structure.SourceType,
+                            KnowledgeNumber = knowledgeNumber,
+                            KnowledgeLabel = $"{structure.DisplayName} Agent Knowledge {knowledgeNumber}: {originalName}",
+                            KnowledgeRootPath = structure.ScopeRootPath,
+                            KnowledgeUploadedAtUtc = now
+                        };
+                        _context.SourceMaterials.Add(material);
+                        result.Created++;
+                        result.Details.Add(new AgentKnowledgeSyncDetail
+                        {
+                            Scope = scope,
+                            DisplayName = structure.DisplayName,
+                            SourceType = structure.SourceType,
+                            FileName = originalName,
+                            Status = "created",
+                            KnowledgeNumber = knowledgeNumber,
+                            ArchivedPath = archivedPath
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Failed++;
+                        result.Details.Add(new AgentKnowledgeSyncDetail
+                        {
+                            Scope = scope,
+                            DisplayName = structure.DisplayName,
+                            SourceType = structure.SourceType,
+                            FileName = originalName,
+                            Status = "failed",
+                            Reason = ex.Message,
+                            KnowledgeNumber = knowledgeNumber,
+                            ArchivedPath = archivedPath
+                        });
+                        _logger.LogWarning(ex, "Failed to index agent knowledge file '{FilePath}'", archivedPath);
+                    }
+                }
+            }
+
+            if (result.Created > 0)
+            {
+                _context.SaveChanges();
+            }
+
+            return result;
         }
 
         public ConsolidationResult ConsolidateLegacyQualificationFolders(ConsolidationOptions? options = null)
@@ -318,12 +693,15 @@ namespace ETD.Api.Services
                 {
                     var folderName = Path.GetFileName(path) ?? string.Empty;
                     var parts = SplitQualificationFolderName(folderName);
+                    var resolved = ResolveQualificationIdentity(parts.qualificationCode, parts.qualificationDescription);
                     return new QualificationFolderInfo
                     {
                         Path = path,
                         FolderName = folderName,
-                        QualificationCode = parts.qualificationCode,
-                        QualificationDescription = parts.qualificationDescription,
+                        RawQualificationCode = parts.qualificationCode,
+                        RawQualificationDescription = parts.qualificationDescription,
+                        QualificationCode = resolved.qualificationCode,
+                        QualificationDescription = resolved.qualificationDescription,
                         FileCount = GetDirectoryFileCount(path)
                     };
                 })
@@ -363,12 +741,14 @@ namespace ETD.Api.Services
                     var updatedCount = 0;
                     movedCount += ConsolidateLegacySourceType(
                         qualificationCode,
+                        preferred.QualificationDescription,
                         "local_source_upload",
                         legacy.Path,
                         preferred.Path,
                         ref updatedCount);
                     movedCount += ConsolidateLegacySourceType(
                         qualificationCode,
+                        preferred.QualificationDescription,
                         "developer_knowledge_base",
                         legacy.Path,
                         preferred.Path,
@@ -451,12 +831,15 @@ namespace ETD.Api.Services
                 {
                     var folderName = Path.GetFileName(path) ?? string.Empty;
                     var parts = SplitQualificationFolderName(folderName);
+                    var resolved = ResolveQualificationIdentity(parts.qualificationCode, parts.qualificationDescription);
                     return new QualificationFolderInfo
                     {
                         Path = path,
                         FolderName = folderName,
-                        QualificationCode = parts.qualificationCode,
-                        QualificationDescription = parts.qualificationDescription,
+                        RawQualificationCode = parts.qualificationCode,
+                        RawQualificationDescription = parts.qualificationDescription,
+                        QualificationCode = resolved.qualificationCode,
+                        QualificationDescription = resolved.qualificationDescription,
                         FileCount = GetDirectoryFileCount(path)
                     };
                 })
@@ -471,13 +854,15 @@ namespace ETD.Api.Services
 
             foreach (var folder in qualificationRoots)
             {
-                var qualificationRoot = folder.Path;
                 var qualificationCode = folder.QualificationCode;
                 var qualificationDescription = ResolveQualificationDescription(qualificationCode, folder.QualificationDescription);
                 if (string.IsNullOrWhiteSpace(qualificationDescription))
                 {
                     qualificationDescription = folder.QualificationDescription;
                 }
+                var structure = EnsureQualificationStructure(qualificationCode, qualificationDescription);
+                var qualificationRoot = structure.QualificationRootPath;
+                MirrorCurriculumLibraryKnowledgeAliases(structure, maxFilesPerInbox);
                 var qualificationKey = $"{qualificationCode}|{NormalizeForMatch(qualificationDescription)}";
 
                 var hasCodeFilter = !string.IsNullOrWhiteSpace(qualificationCodeFilter);
@@ -631,6 +1016,19 @@ namespace ETD.Api.Services
                         try
                         {
                             var extractedText = ExtractTextFromFile(archivedPath, ext, archivedSidecars);
+                            var derivedVisuals = ext == ".pdf"
+                                ? ExtractDerivedPdfVisuals(
+                                    archivedPath,
+                                    originalName,
+                                    qualificationCode,
+                                    qualificationDescription,
+                                    sourceType,
+                                    sourceRoot,
+                                    knowledgeUrl,
+                                    key,
+                                    nextKnowledgeNumbers)
+                                : new DerivedPdfVisualResult();
+                            extractedText = AppendPdfVisualSummary(extractedText, derivedVisuals.SummaryText);
                             var material = new SourceMaterial
                             {
                                 Title = $"[KB {knowledgeNumber:D4}] {qualificationCode} - {qualificationDescription} :: {originalName}",
@@ -651,6 +1049,25 @@ namespace ETD.Api.Services
                                 KnowledgeUploadedAtUtc = now
                             };
                             _context.SourceMaterials.Add(material);
+                            if (derivedVisuals.Materials.Count > 0)
+                            {
+                                _context.SourceMaterials.AddRange(derivedVisuals.Materials);
+                                result.Created += derivedVisuals.Materials.Count;
+                                foreach (var visualMaterial in derivedVisuals.Materials)
+                                {
+                                    result.Details.Add(new SyncDetail
+                                    {
+                                        QualificationCode = qualificationCode,
+                                        QualificationDescription = qualificationDescription,
+                                        SourceType = sourceType,
+                                        FileName = visualMaterial.FileName,
+                                        Status = "created",
+                                        Reason = "pdf_visual_extracted",
+                                        KnowledgeNumber = visualMaterial.KnowledgeNumber,
+                                        ArchivedPath = visualMaterial.FilePath
+                                    });
+                                }
+                            }
                             result.Created++;
                             if (string.Equals(sourceType, "developer_knowledge_base", StringComparison.OrdinalIgnoreCase) &&
                                 developerRunStats.TryGetValue(qualificationKey, out var statsForCreated))
@@ -1207,25 +1624,76 @@ namespace ETD.Api.Services
             return next;
         }
 
-        private string ResolveQualificationDescription(string qualificationCode, string fallbackDescription)
+        private (string qualificationCode, string qualificationDescription) ResolveQualificationIdentity(string qualificationCode, string qualificationDescription)
         {
-            if (!string.IsNullOrWhiteSpace(qualificationCode))
+            var rawCode = (qualificationCode ?? string.Empty).Trim();
+            var rawDescription = (qualificationDescription ?? string.Empty).Replace("_", " ").Trim();
+            var qualifications = _context.Qualifications
+                .AsNoTracking()
+                .ToList();
+
+            Qualification? match = null;
+            if (!string.IsNullOrWhiteSpace(rawCode))
             {
-                var qualification = _context.Qualifications
-                    .AsNoTracking()
-                    .FirstOrDefault(q => q.QualificationNumber == qualificationCode);
-                if (qualification != null && !string.IsNullOrWhiteSpace(qualification.QualificationDescription))
+                match = qualifications.FirstOrDefault(q =>
+                    string.Equals((q.QualificationNumber ?? string.Empty).Trim(), rawCode, StringComparison.OrdinalIgnoreCase));
+
+                if (match == null)
                 {
-                    return qualification.QualificationDescription.Trim();
+                    var codePrefix = ExtractQualificationCodePrefix(rawCode);
+                    if (!string.IsNullOrWhiteSpace(codePrefix) &&
+                        !string.Equals(codePrefix, rawCode, StringComparison.OrdinalIgnoreCase))
+                    {
+                        match = qualifications.FirstOrDefault(q =>
+                            string.Equals((q.QualificationNumber ?? string.Empty).Trim(), codePrefix, StringComparison.OrdinalIgnoreCase));
+                    }
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(fallbackDescription))
+            if (match == null && !string.IsNullOrWhiteSpace(rawDescription))
             {
-                return fallbackDescription.Replace("_", " ").Trim();
+                var normalizedDescription = NormalizeQualificationIdentityText(rawDescription);
+                match = qualifications.FirstOrDefault(q =>
+                    string.Equals(
+                        NormalizeQualificationIdentityText(q.QualificationDescription),
+                        normalizedDescription,
+                        StringComparison.Ordinal));
+
+                if (match == null)
+                {
+                    match = qualifications.FirstOrDefault(q =>
+                    {
+                        var candidate = NormalizeQualificationIdentityText(q.QualificationDescription);
+                        return ContainsLoose(candidate, normalizedDescription) || ContainsLoose(normalizedDescription, candidate);
+                    });
+                }
             }
 
-            return qualificationCode;
+            var resolvedCode = !string.IsNullOrWhiteSpace(match?.QualificationNumber)
+                ? match!.QualificationNumber.Trim()
+                : ExtractQualificationCodePrefix(rawCode);
+            if (string.IsNullOrWhiteSpace(resolvedCode))
+            {
+                resolvedCode = rawCode;
+            }
+
+            var resolvedDescription = !string.IsNullOrWhiteSpace(match?.QualificationDescription)
+                ? match!.QualificationDescription.Trim()
+                : rawDescription;
+            if (string.IsNullOrWhiteSpace(resolvedDescription))
+            {
+                resolvedDescription = resolvedCode;
+            }
+
+            return (resolvedCode, resolvedDescription);
+        }
+
+        private string ResolveQualificationDescription(string qualificationCode, string fallbackDescription)
+        {
+            var resolved = ResolveQualificationIdentity(qualificationCode, fallbackDescription);
+            return string.IsNullOrWhiteSpace(resolved.qualificationDescription)
+                ? qualificationCode
+                : resolved.qualificationDescription;
         }
 
         private static (string qualificationCode, string qualificationDescription) SplitQualificationFolderName(string folderName)
@@ -1246,9 +1714,85 @@ namespace ETD.Api.Services
             return (code, description);
         }
 
+        private static string ExtractQualificationCodePrefix(string? qualificationCode)
+        {
+            var raw = (qualificationCode ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
+            var numericPrefix = Regex.Match(raw, @"^\d{3,}");
+            if (numericPrefix.Success)
+            {
+                return numericPrefix.Value;
+            }
+
+            return raw
+                .Split(new[] { '-', '_', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault() ?? raw;
+        }
+
+        private static string NormalizeQualificationIdentityText(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+
+            var normalized = Regex.Replace(value.Trim().ToLowerInvariant(), @"[^a-z0-9]+", " ");
+            return Regex.Replace(normalized, @"\s+", " ").Trim();
+        }
+
         private static string BuildKnowledgeUrl(string qualificationCode, string sourceType, int knowledgeNumber, string originalName)
         {
             return $"knowledge://{Uri.EscapeDataString(qualificationCode)}/{Uri.EscapeDataString(sourceType)}/kb-{knowledgeNumber:D4}/{Uri.EscapeDataString(originalName)}";
+        }
+
+        private static string BuildAgentKnowledgeUrl(string scope, int knowledgeNumber, string originalName)
+        {
+            var normalizedScope = NormalizeAgentKnowledgeScope(scope);
+            return $"knowledge://agent/{Uri.EscapeDataString(normalizedScope)}/kb-{knowledgeNumber:D4}/{Uri.EscapeDataString(originalName)}";
+        }
+
+        private static string NormalizeAgentKnowledgeScope(string? scope, string fallback = "shared")
+        {
+            var value = (scope ?? string.Empty).Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(value)) return fallback;
+            return value switch
+            {
+                "common" => "shared",
+                "global" => "shared",
+                "all" => "all",
+                "mira" => "mira",
+                "qwen" => "qwen",
+                "shared" => "shared",
+                _ => fallback
+            };
+        }
+
+        private static string GetAgentKnowledgeScopeDisplayName(string scope)
+        {
+            return NormalizeAgentKnowledgeScope(scope) switch
+            {
+                "mira" => "Mira",
+                "qwen" => "Qwen",
+                _ => "Shared"
+            };
+        }
+
+        private static string GetAgentKnowledgeScopeFolderName(string scope)
+        {
+            return NormalizeAgentKnowledgeScope(scope) switch
+            {
+                "mira" => "Mira",
+                "qwen" => "Qwen",
+                _ => "Shared"
+            };
+        }
+
+        private static string GetAgentKnowledgeSourceType(string scope)
+        {
+            return NormalizeAgentKnowledgeScope(scope) switch
+            {
+                "mira" => "agent_mira",
+                "qwen" => "agent_qwen",
+                _ => "agent_shared"
+            };
         }
 
         private static string EnsureUniquePath(string path)
@@ -1306,6 +1850,7 @@ namespace ETD.Api.Services
 
         private int ConsolidateLegacySourceType(
             string qualificationCode,
+            string qualificationDescription,
             string sourceType,
             string legacyQualificationRoot,
             string preferredQualificationRoot,
@@ -1341,8 +1886,14 @@ namespace ETD.Api.Services
             }
 
             var materials = _context.SourceMaterials
-                .Where(s => (s.QualificationCode ?? string.Empty) == qualificationCode &&
-                            (s.KnowledgeSourceType ?? string.Empty) == sourceType)
+                .Where(s => (s.KnowledgeSourceType ?? string.Empty) == sourceType)
+                .ToList()
+                .Where(s =>
+                    IsPathUnder(s.FilePath ?? string.Empty, legacySourceRoot) ||
+                    IsPathUnder(s.FilePath ?? string.Empty, preferredSourceRoot) ||
+                    string.Equals(s.KnowledgeRootPath ?? string.Empty, legacySourceRoot, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(s.KnowledgeRootPath ?? string.Empty, preferredSourceRoot, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(s.QualificationCode ?? string.Empty, qualificationCode, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             foreach (var material in materials)
@@ -1385,6 +1936,19 @@ namespace ETD.Api.Services
                         material.KnowledgeRootPath = preferredSourceRoot;
                         changed = true;
                     }
+                }
+
+                if (!string.Equals(material.QualificationCode ?? string.Empty, qualificationCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    material.QualificationCode = qualificationCode;
+                    changed = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(qualificationDescription) &&
+                    !string.Equals(material.QualificationDescription ?? string.Empty, qualificationDescription, StringComparison.OrdinalIgnoreCase))
+                {
+                    material.QualificationDescription = qualificationDescription;
+                    changed = true;
                 }
 
                 if (changed)
@@ -1711,6 +2275,127 @@ namespace ETD.Api.Services
             return CleanExtractedText(sb.ToString());
         }
 
+        private sealed class DerivedPdfVisualResult
+        {
+            public List<SourceMaterial> Materials { get; } = new();
+            public string SummaryText { get; set; } = string.Empty;
+        }
+
+        private DerivedPdfVisualResult ExtractDerivedPdfVisuals(
+            string archivedPdfPath,
+            string originalName,
+            string qualificationCode,
+            string qualificationDescription,
+            string sourceType,
+            string sourceRoot,
+            string parentKnowledgeUrl,
+            string cacheKey,
+            IDictionary<string, int> nextKnowledgeNumbers)
+        {
+            var result = new DerivedPdfVisualResult();
+            try
+            {
+                var outputFolderName = MakeSafeFilePart(Path.GetFileNameWithoutExtension(archivedPdfPath), "pdf_visuals");
+                var outputDirectory = Path.Combine(sourceRoot, "visual_archive", outputFolderName);
+                var extracted = _pdfVisualExtractionService.ExtractAndPersist(archivedPdfPath, new PdfVisualExtractionService.PersistOptions
+                {
+                    OutputDirectory = outputDirectory,
+                    OutputNamePrefix = "visual",
+                    SourceDocumentName = originalName
+                });
+                result.SummaryText = extracted.SummaryText;
+
+                foreach (var visual in extracted.Visuals)
+                {
+                    var visualKnowledgeNumber = GetNextKnowledgeNumber(cacheKey, qualificationCode, sourceType, nextKnowledgeNumbers);
+                    nextKnowledgeNumbers[cacheKey] = visualKnowledgeNumber + 1;
+
+                    var visualFileName = Path.GetFileName(visual.FilePath);
+                    var imageExt = Path.GetExtension(visual.FilePath);
+                    var imageText = ExtractTextFromImageFile(visual.FilePath, FindImageSidecarPaths(visual.FilePath));
+                    imageText = _ocrExtractionService.EnhanceExtractedText(visual.FilePath, imageExt, imageText);
+
+                    result.Materials.Add(new SourceMaterial
+                    {
+                        Title = BuildDerivedPdfVisualTitle(originalName, visual.Caption, visual.PageNumber, visualKnowledgeNumber),
+                        FileName = visualFileName,
+                        FilePath = visual.FilePath,
+                        FileType = visual.FileType,
+                        Url = BuildKnowledgeUrl(qualificationCode, sourceType, visualKnowledgeNumber, visualFileName),
+                        QualificationCode = qualificationCode,
+                        QualificationDescription = qualificationDescription,
+                        SubjectDescription = $"KnowledgeBase:{sourceType}",
+                        TopicDescription = $"KnowledgeNumber:{visualKnowledgeNumber:D4};DerivedVisualPage:{visual.PageNumber}",
+                        AssessmentCriteriaDescription = BuildDerivedPdfVisualAssessmentNote(
+                            originalName,
+                            archivedPdfPath,
+                            parentKnowledgeUrl,
+                            visual.PageNumber,
+                            visual.PlaceholderTag,
+                            visual.Caption),
+                        ExtractedText = imageText,
+                        KnowledgeSourceType = sourceType,
+                        KnowledgeNumber = visualKnowledgeNumber,
+                        KnowledgeLabel = BuildDerivedPdfVisualLabel(originalName, visual.PageNumber, visualKnowledgeNumber),
+                        KnowledgeRootPath = sourceRoot,
+                        KnowledgeUploadedAtUtc = DateTime.UtcNow
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "PDF visual extraction failed for knowledge source '{PdfPath}'", archivedPdfPath);
+            }
+
+            return result;
+        }
+
+        private static string AppendPdfVisualSummary(string extractedText, string summaryText)
+        {
+            if (string.IsNullOrWhiteSpace(summaryText))
+            {
+                return extractedText;
+            }
+
+            if (string.IsNullOrWhiteSpace(extractedText))
+            {
+                return CleanExtractedText(summaryText);
+            }
+
+            return CleanExtractedText($"{extractedText}\n\n[PDF_VISUAL_REFERENCES]\n{summaryText}");
+        }
+
+        private static string BuildDerivedPdfVisualTitle(string originalName, string caption, int pageNumber, int knowledgeNumber)
+        {
+            var preferredCaption = string.IsNullOrWhiteSpace(caption)
+                ? $"Visual from {Path.GetFileNameWithoutExtension(originalName)}"
+                : caption.Trim();
+            return LimitMetadataValue($"{preferredCaption} (page {pageNumber})", 240);
+        }
+
+        private static string BuildDerivedPdfVisualLabel(string originalName, int pageNumber, int knowledgeNumber)
+        {
+            return $"Knowledge Base {knowledgeNumber}: Visual from {originalName} page {pageNumber}";
+        }
+
+        private static string BuildDerivedPdfVisualAssessmentNote(
+            string originalName,
+            string archivedPdfPath,
+            string parentKnowledgeUrl,
+            int pageNumber,
+            string placeholderTag,
+            string caption)
+        {
+            return $"DerivedFromSource:{originalName};DerivedFromPath:{archivedPdfPath};DerivedFromUrl:{parentKnowledgeUrl};Page:{pageNumber};Placeholder:{placeholderTag};Caption:{LimitMetadataValue(caption, 180)}";
+        }
+
+        private static string LimitMetadataValue(string? value, int maxLen)
+        {
+            var cleaned = Regex.Replace(value ?? string.Empty, @"\s+", " ").Trim();
+            if (cleaned.Length <= maxLen) return cleaned;
+            return cleaned.Substring(0, maxLen).Trim();
+        }
+
         private static string TryExtractTextFromPdfViaStirling(string filePath)
         {
             var enabledRaw = (Environment.GetEnvironmentVariable("PDF_PREPROCESS_ENGINE") ?? string.Empty).Trim();
@@ -1780,8 +2465,48 @@ namespace ETD.Api.Services
             return source.Contains(needle, StringComparison.Ordinal);
         }
 
+        private static string BuildAgentKnowledgeReadme(string rootPath)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("# ETDP Agent Knowledge Structure");
+            sb.AppendLine();
+            sb.AppendLine("This structure stores compulsory non-curriculum subject matter for Mira and Qwen.");
+            sb.AppendLine("Use it for cross-disciplinary scientific, technical, pedagogical, or operational knowledge that should not be tied to a specific qualification.");
+            sb.AppendLine();
+            sb.AppendLine("Root path:");
+            sb.AppendLine($"`{rootPath}`");
+            sb.AppendLine();
+            sb.AppendLine("## Folder Hierarchy");
+            sb.AppendLine();
+            sb.AppendLine("AgentKnowledge/");
+            sb.AppendLine("  Shared/");
+            sb.AppendLine("    inbox/       (knowledge both Mira and Qwen must digest)");
+            sb.AppendLine("    archive/     (indexed files moved here automatically)");
+            sb.AppendLine("    duplicates/  (duplicates moved here automatically)");
+            sb.AppendLine("  Mira/");
+            sb.AppendLine("    inbox/       (Mira-only compulsory knowledge)");
+            sb.AppendLine("    archive/");
+            sb.AppendLine("    duplicates/");
+            sb.AppendLine("  Qwen/");
+            sb.AppendLine("    inbox/       (Qwen-only compulsory knowledge)");
+            sb.AppendLine("    archive/");
+            sb.AppendLine("    duplicates/");
+            sb.AppendLine();
+            sb.AppendLine("## Digest Rules");
+            sb.AppendLine();
+            sb.AppendLine("- Mira always digests `Shared` plus `Mira`.");
+            sb.AppendLine("- Qwen always digests `Shared` plus `Qwen`.");
+            sb.AppendLine("- These folders are not part of `Imports\\\\KnowledgeHierarchy` and are not treated as qualification knowledge taxonomy.");
+            sb.AppendLine("- These folders are not part of `Imports\\\\<QualificationCode>` and are not treated as curriculum or assessment-spec uploads.");
+            sb.AppendLine("- Indexed files are stored in `SourceMaterials` with global agent source types (`agent_shared`, `agent_mira`, `agent_qwen`).");
+            sb.AppendLine();
+            sb.AppendLine($"Last generated (UTC): {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
+            return sb.ToString();
+        }
+
         private static string BuildUploadReadme(string rootPath)
         {
+            var curriculumRoot = EtdpPaths.GetImportsRoot();
             var sb = new StringBuilder();
             sb.AppendLine("# ETDP Knowledge Upload Structure");
             sb.AppendLine();
@@ -1833,6 +2558,9 @@ namespace ETD.Api.Services
             sb.AppendLine();
             sb.AppendLine("## Notes");
             sb.AppendLine();
+            sb.AppendLine($"- Curriculum Specification and Assessment Specification documents stay outside `KnowledgeHierarchy`. Store them under `{Path.Combine(curriculumRoot, "<QualificationCode>")}` using `QC_CurriculumSpecification.*` and `QC_AssessmentSpecification.*`.");
+            sb.AppendLine($"- For qualification subject matter, you can drop files directly under `{Path.Combine(curriculumRoot, "<QualificationCode>", "subject_matter")}` or `{Path.Combine(curriculumRoot, "<QualificationCode>", "local_source_upload")}`. ETDP mirrors those folders into `KnowledgeHierarchy/.../local_source_upload/inbox` during sync.");
+            sb.AppendLine($"- For structured helper files, developer notes, generated CSVs, or curated support material, use `{Path.Combine(curriculumRoot, "<QualificationCode>", "developer_knowledge_base")}` or `{Path.Combine(curriculumRoot, "<QualificationCode>", "developer_kb")}`. ETDP mirrors those into `KnowledgeHierarchy/.../developer_knowledge_base/inbox` during sync.");
             sb.AppendLine("- Supported file types: `.txt`, `.md`, `.docx`, `.pdf`, `.pptx`, `.csv`, `.json`, `.jsonl`, `.xml`, `.yml`, `.yaml`, `.html`, `.htm`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tif`, `.tiff`, `.svg`.");
             sb.AppendLine("- Files are moved out of `inbox` after processing to avoid duplicate re-indexing.");
             sb.AppendLine("- Folder scaffolding uses `QualificationCode` as the stable key and reuses an existing code folder to avoid duplicates.");
@@ -1840,10 +2568,190 @@ namespace ETD.Api.Services
             sb.AppendLine("- OCR is built-in for scanned images and low-text PDFs using local Tesseract.");
             sb.AppendLine("- OCR environment keys: optional `OCR_ENGINE`, `OCR_PDF_MODE`, `TESSERACT_PATH`, `TESSERACT_LANG`, `TESSERACT_PSM`.");
             sb.AppendLine("- Developer knowledge sync generates timestamped coverage reports in `developer_knowledge_base/reports` with topic mapping and missing-topic lists.");
+            sb.AppendLine("- `CognitiveScan/PipelineJobs` is a job archive, not the primary watched drop-zone. ETDP now promotes curated pipeline extracts into the qualification alias folders above so chat can ingest them on the next sync.");
             sb.AppendLine("- Legacy duplicate qualification folders are automatically consolidated into one canonical folder per `QualificationCode`.");
             sb.AppendLine();
             sb.AppendLine($"Last generated (UTC): {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
             return sb.ToString().TrimEnd();
+        }
+
+        private string ResolveQualificationCurriculumLibraryPath(string qualificationCode)
+        {
+            var safeFolder = Regex.Replace(qualificationCode ?? string.Empty, @"[^\w\- ]+", string.Empty).Trim().Replace(" ", "_");
+            if (string.IsNullOrWhiteSpace(safeFolder))
+            {
+                safeFolder = "UNASSIGNED";
+            }
+
+            var curriculumRoot = GetCurriculumLibraryRootPath();
+            Directory.CreateDirectory(curriculumRoot);
+            return Path.Combine(curriculumRoot, safeFolder);
+        }
+
+        private static void BackfillLegacyCurriculumLibrary(string legacyPath, string destinationPath)
+        {
+            if (string.IsNullOrWhiteSpace(legacyPath) ||
+                string.IsNullOrWhiteSpace(destinationPath) ||
+                !Directory.Exists(legacyPath))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(destinationPath);
+            foreach (var sourcePath in Directory.EnumerateFiles(legacyPath, "QC_*.*", SearchOption.TopDirectoryOnly))
+            {
+                var destinationFile = Path.Combine(destinationPath, Path.GetFileName(sourcePath));
+                if (File.Exists(destinationFile))
+                {
+                    continue;
+                }
+
+                File.Copy(sourcePath, destinationFile, overwrite: false);
+            }
+        }
+
+        private int MirrorCurriculumLibraryKnowledgeAliases(StructureInfo structure, int maxFilesPerInbox)
+        {
+            if (structure == null || string.IsNullOrWhiteSpace(structure.CurriculumLibraryPath) || !Directory.Exists(structure.CurriculumLibraryPath))
+            {
+                return 0;
+            }
+
+            var mirrored = 0;
+            mirrored += MirrorQualificationFilesIntoInbox(
+                structure.QualificationCode,
+                "local_source_upload",
+                Directory.EnumerateFiles(structure.CurriculumLibraryPath, "*", SearchOption.TopDirectoryOnly)
+                    .Where(path => SupportedExtensions.Contains(Path.GetExtension(path)))
+                    .Where(path => !IsImageSidecarFile(path))
+                    .Where(path => !Path.GetFileName(path).StartsWith("QC_", StringComparison.OrdinalIgnoreCase))
+                    .Take(maxFilesPerInbox),
+                structure.LocalInboxPath);
+
+            mirrored += MirrorAliasFolderGroup(structure, LocalSubjectMatterAliasFolders, structure.LocalInboxPath, "local_source_upload", maxFilesPerInbox);
+            mirrored += MirrorAliasFolderGroup(structure, DeveloperKnowledgeAliasFolders, structure.DeveloperInboxPath, "developer_knowledge_base", maxFilesPerInbox);
+            return mirrored;
+        }
+
+        private int MirrorAliasFolderGroup(
+            StructureInfo structure,
+            IReadOnlyList<string> aliases,
+            string targetInboxPath,
+            string sourceType,
+            int maxFilesPerInbox)
+        {
+            var seenDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var mirrored = 0;
+
+            foreach (var alias in aliases)
+            {
+                var aliasPath = Path.Combine(structure.CurriculumLibraryPath, alias);
+                if (!Directory.Exists(aliasPath) || !seenDirectories.Add(aliasPath))
+                {
+                    continue;
+                }
+
+                var sourceDirectories = new List<string> { aliasPath };
+                var nestedInbox = Path.Combine(aliasPath, "inbox");
+                if (Directory.Exists(nestedInbox))
+                {
+                    sourceDirectories.Insert(0, nestedInbox);
+                }
+
+                foreach (var sourceDirectory in sourceDirectories.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    var files = Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories)
+                        .Where(path => SupportedExtensions.Contains(Path.GetExtension(path)))
+                        .Where(path => !IsImageSidecarFile(path))
+                        .Take(maxFilesPerInbox)
+                        .ToList();
+
+                    mirrored += MirrorQualificationFilesIntoInbox(
+                        structure.QualificationCode,
+                        sourceType,
+                        files,
+                        targetInboxPath);
+                }
+            }
+
+            return mirrored;
+        }
+
+        private int MirrorQualificationFilesIntoInbox(
+            string qualificationCode,
+            string sourceType,
+            IEnumerable<string> sourcePaths,
+            string targetInboxPath)
+        {
+            if (string.IsNullOrWhiteSpace(targetInboxPath))
+            {
+                return 0;
+            }
+
+            Directory.CreateDirectory(targetInboxPath);
+            var mirrored = 0;
+
+            foreach (var sourcePath in sourcePaths.Where(File.Exists))
+            {
+                var originalName = Path.GetFileName(sourcePath);
+                if (string.IsNullOrWhiteSpace(originalName))
+                {
+                    continue;
+                }
+
+                if (IsKnowledgeFileAlreadyManaged(qualificationCode, sourceType, originalName, targetInboxPath))
+                {
+                    continue;
+                }
+
+                var destinationPath = Path.Combine(targetInboxPath, originalName);
+                if (!string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Copy(sourcePath, destinationPath, overwrite: false);
+                }
+
+                mirrored++;
+            }
+
+            return mirrored;
+        }
+
+        private bool IsKnowledgeFileAlreadyManaged(
+            string qualificationCode,
+            string sourceType,
+            string originalName,
+            string targetInboxPath)
+        {
+            if (string.IsNullOrWhiteSpace(originalName))
+            {
+                return true;
+            }
+
+            var inboxMatch = Path.Combine(targetInboxPath, originalName);
+            if (File.Exists(inboxMatch))
+            {
+                return true;
+            }
+
+            var sourceMarker = $"Source:{originalName}";
+            var normalizedQualificationCode = (qualificationCode ?? string.Empty).Trim().ToLowerInvariant();
+            var normalizedSourceType = (sourceType ?? string.Empty).Trim().ToLowerInvariant();
+
+            var candidates = _context.SourceMaterials
+                .AsNoTracking()
+                .Where(material =>
+                    (material.QualificationCode ?? string.Empty).ToLower() == normalizedQualificationCode &&
+                    (material.KnowledgeSourceType ?? string.Empty).ToLower() == normalizedSourceType)
+                .Select(material => new
+                {
+                    material.AssessmentCriteriaDescription,
+                    material.Title
+                })
+                .ToList();
+
+            return candidates.Any(material =>
+                (material.AssessmentCriteriaDescription ?? string.Empty).Contains(sourceMarker, StringComparison.OrdinalIgnoreCase) ||
+                (material.Title ?? string.Empty).Contains(originalName, StringComparison.OrdinalIgnoreCase));
         }
     }
 }

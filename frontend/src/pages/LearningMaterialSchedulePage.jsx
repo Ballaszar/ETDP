@@ -6,7 +6,6 @@ import {
   API,
   ensureQualificationId,
   getLearningMaterialParamsWithFallback,
-  openUrl,
   subjectIdOf,
   subjectCodeOf,
   subjectDescriptionOf,
@@ -125,24 +124,51 @@ export default function LearningMaterialSchedulePage() {
   };
 
   const exportCsv = async () => {
-    await ensureSubjectRangeAudited({ qualificationId: qid, subjectFromId, subjectToId });
-    const p = buildParams();
-    openUrl(`${API}/LearningSchedule/download?${p.toString()}`);
+    setBusy(true);
+    setError('');
+    setStatus('');
+    try {
+      await ensureSubjectRangeAudited({ qualificationId: qid, subjectFromId, subjectToId });
+      const p = buildParams();
+      const res = await fetch(`${API}/LearningSchedule/save?${p.toString()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setStatus(`Saved ${data?.fileName || 'learning schedule CSV'} to ${data?.savedPath || data?.folderPath || 'the qualification workspace folder'}.`);
+    } catch (e) {
+      setError(`Learning schedule CSV save failed: ${e?.message || e}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const exportDocx = async () => {
-    await ensureSubjectRangeAudited({ qualificationId: qid, subjectFromId, subjectToId });
-    const p = buildParams();
-    openUrl(`${API}/LearningSchedule/download-docx?${p.toString()}`);
+    setBusy(true);
+    setError('');
+    setStatus('');
+    try {
+      await ensureSubjectRangeAudited({ qualificationId: qid, subjectFromId, subjectToId });
+      const p = buildParams();
+      const res = await fetch(`${API}/LearningSchedule/save-docx?${p.toString()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setStatus(`Saved ${data?.fileName || 'learning schedule DOCX'} to ${data?.savedPath || data?.folderPath || 'the qualification workspace folder'}.`);
+    } catch (e) {
+      setError(`Learning schedule DOCX save failed: ${e?.message || e}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <>
       <div className="mainpage-root">
         <h2 className="mainpage-title">Learning Schedule Page</h2>
-        <p>Preview, edit source content, and save learning schedule exports in a dedicated page.</p>
+        <p>Preview and save learning schedule exports generated from mapped lesson-plan LPN rows for the selected qualification.</p>
 
         <div className="form-section">
+          <div style={{ marginBottom: 10, color: '#355' }}>
+            Schedule order: subject matter is mapped into lesson-plan LPN rows first, and the learning schedule is then rebuilt from those rows.
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(220px, 1fr))', gap: 10 }}>
             <label>
               Qualification Id
@@ -199,7 +225,7 @@ export default function LearningMaterialSchedulePage() {
           </div>
           <div className="button-row">
             <button type="button" onClick={() => navigate('/lecturer-toolkit', { state: qid > 0 ? { qualificationId: qid } : undefined })}>
-              Edit Learning Schedule Source (Lesson Plan)
+              Open Lesson Plan Content (LPN Source)
             </button>
             <button type="button" onClick={previewSchedule} disabled={busy}>
               {busy ? 'Loading Preview...' : 'Preview Learning Schedule'}

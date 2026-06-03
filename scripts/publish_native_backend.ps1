@@ -85,7 +85,7 @@ try {
         "--self-contained", "true",
         "-o", $publishRoot,
         "-p:PublishSingleFile=false",
-        "-p:PublishReadyToRun=true",
+        "-p:PublishReadyToRun=false",
         "-p:RestoreIgnoreFailedSources=true"
     )
 
@@ -105,3 +105,4 @@ try {
 
 Write-Host "Native backend publish completed."
 Write-Host "Publish output: $publishRoot"
+

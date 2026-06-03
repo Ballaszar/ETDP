@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import './Dashboard.css';
 import AIAgent from './AIAgent';
-import { GraduationCap, Users, Library, BookCopy, Lightbulb, ListChecks, Wrench, LineChart, Home, List, ClipboardList, FileText, BookOpen, Download, Video, Link as LinkIcon, Cpu } from 'lucide-react';
+import { GraduationCap, Users, Library, BookCopy, Lightbulb, ListChecks, Wrench, LineChart, Home, List, ClipboardList, FileText, BookOpen, Download, Video, Link as LinkIcon, BrainCircuit } from 'lucide-react';
 import { useQualification } from '../context/QualificationContext';
 
 const workflowSteps = [
@@ -14,17 +14,15 @@ const workflowSteps = [
     { step: 6, title: "Subjects", description: "Add subjects aligned to each curriculum phase.", path: "/subjects", icon: <BookCopy size={32} className="workflow-icon" /> },
     { step: 7, title: "Topics", description: "Break subjects into structured learning topics.", path: "/topics", icon: <Lightbulb size={32} className="workflow-icon" /> },
     { step: 8, title: "Library Manager", description: "Upload and manage local source material.", path: "/library", icon: <Library size={32} className="workflow-icon" /> },
-    { step: 9, title: "Lecturer Toolkit", description: "Prepare LPN entries and toolkit metadata for assembly.", path: "/lecturer-toolkit", icon: <Wrench size={32} className="workflow-icon" /> },
-    { step: 10, title: "Engine", description: "Assemble lesson content from sources into LPNs.", path: "/lecturer-toolkit", icon: <ListChecks size={32} className="workflow-icon" /> },
+    { step: 9, title: "Lesson Plan Content", description: "Prepare or import schedule-ready LPN rows from subject matter and Qwen drafts.", path: "/lecturer-toolkit", icon: <Wrench size={32} className="workflow-icon" /> },
+    { step: 10, title: "Learning Schedule", description: "Rebuild the learning schedule from mapped LPN rows.", path: "/learning-material/schedule", icon: <ListChecks size={32} className="workflow-icon" /> },
     { step: 11, title: "Lesson Plan Review", description: "Review all LPN lesson rows and completion status before export.", path: "/lesson-plan-review", icon: <FileText size={32} className="workflow-icon" /> },
     { step: 12, title: "Learning Material", description: "Preview-first dashboard for grouped learning material exports.", path: "/learning-material", icon: <Download size={32} className="workflow-icon" /> },
     { step: 13, title: "Project Rollout Plan", description: "Set rollout date window, preview semester flow, and export roll out plan output.", path: "/project-rollout-plan", icon: <ClipboardList size={32} className="workflow-icon" /> },
     { step: 14, title: "Graphs", description: "Visualize qualification structure and curriculum flow.", path: "/graphs", icon: <LineChart size={32} className="workflow-icon" /> },
     { step: 15, title: "Learner Progress Report", description: "Capture learner progress ratings and print moderated reports.", path: "/learner-progress-report", icon: <BookOpen size={32} className="workflow-icon" /> },
     { step: 16, title: "Text-to-Video Editor", description: "Generate and edit storyboard scenes from curriculum topics.", path: "/text-to-video-editor", icon: <Video size={32} className="workflow-icon" /> },
-    { step: 17, title: "Repo Integration Hub", description: "Run HunyuanVideo, LTX-Video, paper2slides, slide-deck-ai, electric-book, ms-swift, Open-Sora, ViMax, langchain, and mem0 from one page.", path: "/repo-integration-hub", icon: <Cpu size={32} className="workflow-icon" /> },
-    { step: 18, title: "Electric Book Export", description: "Map ETDP subject/topic data into Electric Book folders and trigger output/export.", path: "/electric-book-export", icon: <BookOpen size={32} className="workflow-icon" /> },
-    { step: 19, title: "Lecturer Assistance", description: "Launch lecturer tools and browse YouTube/Open Source links by subject.", path: "/lecturer-assistance", icon: <LinkIcon size={32} className="workflow-icon" /> }
+    { step: 17, title: "Lecturer Assistance", description: "Launch lecturer tools and browse YouTube/Open Source links by subject.", path: "/lecturer-assistance", icon: <LinkIcon size={32} className="workflow-icon" /> }
 ];
 
 const menuItems = [
@@ -39,22 +37,26 @@ const menuItems = [
     { label: 'Learner Progress Report', path: '/learner-progress-report', icon: <BookOpen size={18} /> },
     { label: 'Automation Jobs', path: '/automation-jobs', icon: <Wrench size={18} /> },
     { label: 'System Diagnostics', path: '/system-diagnostics', icon: <LineChart size={18} /> },
+    { label: 'Training', path: '/playground/training', icon: <BrainCircuit size={18} /> },
     { label: 'User Guide', path: '/user-guide', icon: <BookOpen size={18} /> },
+    { label: 'Agent Governance', path: '/agent-governance', icon: <Wrench size={18} /> },
+    { label: 'Mira Qualia', path: '/qualia/mira', icon: <BookOpen size={18} /> },
+    { label: 'Qwen Qualia', path: '/qualia/qwen', icon: <BookOpen size={18} /> },
+    { label: 'Mira Playground', path: '/playground/mira', icon: <Wrench size={18} /> },
+    { label: 'Qwen Playground', path: '/playground/qwen', icon: <Wrench size={18} /> },
     { label: 'Library Manager', path: '/library', icon: <Library size={18} /> },
     { label: 'Curriculum Phases', path: '/phases', icon: <Library size={18} /> },
     { label: 'Subjects', path: '/subjects', icon: <BookCopy size={18} /> },
     { label: 'Subjects List', path: '/subjects-list', icon: <List size={18} /> },
     { label: 'Topics', path: '/topics', icon: <Lightbulb size={18} /> },
     { label: 'Topics List', path: '/topics-list', icon: <List size={18} /> },
-    { label: 'Lecturer Toolkit', path: '/lecturer-toolkit', icon: <Wrench size={18} /> },
-    { label: 'Engine', path: '/lecturer-toolkit', icon: <ListChecks size={18} /> },
+    { label: 'Lesson Plan Content', path: '/lecturer-toolkit', icon: <Wrench size={18} /> },
+    { label: 'Learning Schedule', path: '/learning-material/schedule', icon: <ListChecks size={18} /> },
     { label: 'Lesson Plan Review', path: '/lesson-plan-review', icon: <FileText size={18} /> },
     { label: 'Learner Guide Export', path: '/learner-guide-export', icon: <BookOpen size={18} /> },
     { label: 'Workbook Export', path: '/workbook-export', icon: <BookOpen size={18} /> },
     { label: 'PowerPoint Slides Export', path: '/powerpoint-slides-export', icon: <FileText size={18} /> },
-    { label: 'Electric Book Export', path: '/electric-book-export', icon: <BookOpen size={18} /> },
     { label: 'Text-to-Video Editor', path: '/text-to-video-editor', icon: <Video size={18} /> },
-    { label: 'Repo Integration Hub', path: '/repo-integration-hub', icon: <Cpu size={18} /> },
     { label: 'Lecturer Assistance', path: '/lecturer-assistance', icon: <LinkIcon size={18} /> },
     { label: 'Project Rollout Plan', path: '/project-rollout-plan', icon: <ClipboardList size={18} /> },
     { label: 'Assessment Compliance', path: '/assessment-compliance', icon: <ClipboardList size={18} /> },
@@ -236,13 +238,24 @@ function ImportAllButton() {
 }
 const Dashboard = () => {
     const location = useLocation();
+    const navigate = useNavigate();
     const { qualificationId } = useQualification() || { qualificationId: null };
     const qualificationNavState =
         Number(qualificationId || 0) > 0 ? { qualificationId: Number(qualificationId) } : undefined;
+    const lecturerEmail = String(localStorage.getItem('lecturerEmail') || '').trim();
+
+    const handleSignOut = () => {
+        localStorage.removeItem('activationToken');
+        localStorage.removeItem('activationExpiresAtUtc');
+        localStorage.removeItem('lecturerEmail');
+        navigate('/activation', { replace: true });
+    };
 
     // FIXED: Only "/" is the dashboard root
     const isDashboardRoot = location.pathname === "/";
-    const isAIAgentRoute = location.pathname === "/ai-agent";
+    const isAIAgentRoute = location.pathname === "/ai-agent"
+        || location.pathname.startsWith("/qualia/")
+        || location.pathname.startsWith("/playground/");
 
     return (
         <div className="dashboard-root">
@@ -266,6 +279,12 @@ const Dashboard = () => {
                 <header className="dashboard-header">
                     <h1>Education and Training Learning Program Design System</h1>
                     <div className="button-row import-actions">
+                        {lecturerEmail ? (
+                            <span style={{ alignSelf: 'center', color: '#35506b', fontWeight: 600 }}>
+                                {lecturerEmail}
+                            </span>
+                        ) : null}
+                        <button type="button" onClick={handleSignOut}>Sign Out</button>
                         <ImportAllButton />
                     </div>
                 </header>

@@ -10,6 +10,9 @@ namespace ETD.Api.Utils
         private static readonly Regex MultiSpace = new(@"\s+", RegexOptions.Compiled);
         private static readonly Regex AdministrativeReference = new(@"\b(?:assessment\s+criteria?|assessment\s+criterion|topic\s*code|lpn\s*[-:]?\s*\d+)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex AdministrativeCode = new(@"\b(?:AC|KG)\s*[-:]?\s*\d+[A-Za-z]?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex CurriculumEcho = new(@"\b(?:lesson\s+plan\s+content|topic\s+content|curriculum(?:\s+content|\s+map)?|assessment\s+alignment)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex EvidenceNoiseHeading = new(@"^(?:overview|key\s+concepts|core\s+technical\s+understanding|detailed\s+technical\s+content|procedure\s+and\s+application|safety\s+and\s+quality\s+checks|common\s+faults?(?:\s*/\s*errors)?|worked\s+example|summary|citations?|bibliography|references)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex FilePathLike = new(@"(?:[A-Za-z]:\\|\.pdf\b|\.pptx\b|\.docx\b|\.xlsx\b|##\s*Page\b|https?://)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex ConversationalLeadIn = new(@"^\s*do\s+you\s+think\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -66,7 +69,7 @@ namespace ETD.Api.Utils
         {
             var text = (value ?? string.Empty).Trim();
             if (text.Length == 0) return false;
-            return AdministrativeReference.IsMatch(text) || AdministrativeCode.IsMatch(text);
+            return AdministrativeReference.IsMatch(text) || AdministrativeCode.IsMatch(text) || CurriculumEcho.IsMatch(text);
         }
 
         public static string SanitizeQuestionText(string? value)
@@ -121,8 +124,6 @@ namespace ETD.Api.Utils
             foreach (var raw in new[]
             {
                 item.TopicDescription,
-                item.LessonPlanDescription,
-                item.AssessmentCriteriaDescription,
                 item.LessonPlanContent,
                 item.EvidenceText
             })
@@ -135,6 +136,18 @@ namespace ETD.Api.Utils
                 return cleaned;
             }
             return "this lesson";
+        }
+
+        public static string BuildTopicQuestionLabel(LessonEvidenceItem item)
+        {
+            var topic = SanitizeQuestionText(item.TopicDescription);
+            if (!string.IsNullOrWhiteSpace(topic))
+            {
+                return topic.Trim().TrimEnd('.', '!', '?');
+            }
+
+            var context = BuildLearnerContextLabel(item);
+            return string.IsNullOrWhiteSpace(context) ? "this topic" : context.Trim().TrimEnd('.', '!', '?');
         }
 
         public static List<LessonEvidenceItem> BuildOrderedLessonEvidence(ApplicationDbContext context, int subjectId)
@@ -248,7 +261,7 @@ namespace ETD.Api.Utils
                             var lessonDesc = string.IsNullOrWhiteSpace(te.LessonPlanDescription)
                                 ? $"Lesson for {topic.TopicDescription}"
                                 : te.LessonPlanDescription.Trim();
-                            var lessonContent = te.LessonPlanContent ?? string.Empty;
+                            var lessonContent = SanitizeLessonEvidenceText(te.LessonPlanContent);
                             var evidence = BuildEvidenceText(
                                 materials,
                                 subject.SubjectDescription,
@@ -283,7 +296,7 @@ namespace ETD.Api.Utils
                             var lessonDesc = string.IsNullOrWhiteSpace(lp.Title)
                                 ? $"Lesson for {topic.TopicDescription}"
                                 : lp.Title.Trim();
-                            var lessonContent = lp.Content ?? string.Empty;
+                            var lessonContent = SanitizeLessonEvidenceText(lp.Content);
                             var evidence = BuildEvidenceText(
                                 materials,
                                 subject.SubjectDescription,
@@ -375,14 +388,14 @@ namespace ETD.Api.Utils
             var falseKeys = string.Join("; ", Enumerable.Range(0, optionCount)
                 .Where(i => i != correctIndex)
                 .Select(i => $"{OptionLabel(i)}=False"));
-            var context = BuildLearnerContextLabel(item);
+            var topicLabel = BuildTopicQuestionLabel(item);
 
             return new GeneratedQuestion
             {
                 Number = number,
                 Type = "TrueFalse",
                 Prompt = NormalizeQuestionStem(
-                    $"Read each statement about {context}. Mark each statement as True or False. Only one statement is True.",
+                    $"Which statements are True or False relating to {topicLabel}? Only one statement is True.",
                     "Read each statement and mark it as True or False. Only one statement is True."),
                 Options = options,
                 CorrectAnswer = $"{correctLabel}=True; {falseKeys}",
@@ -390,7 +403,7 @@ namespace ETD.Api.Utils
                 TopicDescription = item.TopicDescription,
                 LessonPlanLabel = item.LessonPlanLabel,
                 AssessmentCriteriaDescription = item.AssessmentCriteriaDescription,
-                Rationale = "One statement is correct; remaining statements are plausible misconceptions.",
+                Rationale = $"One statement matches {topicLabel}; the remaining statements contradict that same content.",
                 Marks = marks,
                 BundleKey = item.BundleKey
             };
@@ -400,18 +413,35 @@ namespace ETD.Api.Utils
         {
             var facts = ExtractLessonPlanFacts(item);
             var statements = BuildLessonPlanContentStatements(item);
-            var primaryFact = facts.FirstOrDefault();
+            var questionSeed = Math.Max(1, Math.Abs(number));
+            var factIndex = facts.Count > 0
+                ? (questionSeed - 1) % facts.Count
+                : 0;
+            var statementIndex = statements.Count > 0
+                ? (questionSeed - 1) % statements.Count
+                : 0;
+            var primaryFact = facts.Count > 0
+                ? facts[factIndex]
+                : null;
             var factualStatement = primaryFact != null
                 ? primaryFact.Statement
-                : statements[0];
-            var polaritySeed = item.AssessmentCriteriaId > 0 ? item.AssessmentCriteriaId : number;
-            var shouldBeTrue = Math.Abs(polaritySeed) % 2 == 1;
+                : statements[statementIndex];
+            var shouldBeTrue = questionSeed % 2 == 1;
+            var falseAlternativeIndex = facts.Count > 1
+                ? (questionSeed - 1) % (facts.Count - 1)
+                : 0;
             var renderedStatement = shouldBeTrue
                 ? factualStatement
                 : primaryFact != null
-                    ? BuildFalseFactStatement(primaryFact, facts)
-                    : BuildBinaryFalseStatement(item, factualStatement, statements.Skip(1).ToList());
+                    ? BuildFalseFactStatement(primaryFact, facts, falseAlternativeIndex)
+                    : BuildBinaryFalseStatement(
+                        item,
+                        factualStatement,
+                        statements
+                            .Where((_, index) => index != statementIndex)
+                            .ToList());
             var context = BuildLearnerContextLabel(item);
+            var topicLabel = BuildTopicQuestionLabel(item);
             var fallbackStatement = NormalizeQuestionStatement(
                 $"Safe and accurate practice is required during {context}.",
                 "Safe and accurate practice is required during this lesson.");
@@ -428,8 +458,8 @@ namespace ETD.Api.Utils
                 LessonPlanLabel = item.LessonPlanLabel,
                 AssessmentCriteriaDescription = item.AssessmentCriteriaDescription,
                 Rationale = shouldBeTrue
-                    ? "The statement is taken directly from the lesson plan content."
-                    : "The statement was deliberately altered so that it conflicts with the lesson plan content or required practice.",
+                    ? $"The statement is taken directly from {topicLabel}."
+                    : $"The statement was deliberately altered so that it conflicts with {topicLabel}.",
                 Marks = Math.Max(1, marks),
                 BundleKey = item.BundleKey
             };
@@ -438,72 +468,45 @@ namespace ETD.Api.Utils
         public static GeneratedQuestion BuildMultipleChoiceQuestion(LessonEvidenceItem item, int number, int marks = 2)
         {
             var facts = ExtractLessonPlanFacts(item);
-            var primaryFact = facts.FirstOrDefault();
-            if (primaryFact != null)
-            {
-                var correct = NormalizeOptionValue(primaryFact.Value, "the correct answer");
-                var distractors = BuildFactMcqDistractors(primaryFact, facts);
-                var optionCount = 4;
-                var correctIndex = Math.Abs(number) % optionCount;
-                var options = new List<string>(optionCount);
-                for (var i = 0; i < optionCount; i++)
-                {
-                    if (i == correctIndex)
-                    {
-                        options.Add(correct);
-                    }
-                    else
-                    {
-                        options.Add(distractors[i < correctIndex ? i : i - 1]);
-                    }
-                }
-
-                return new GeneratedQuestion
-                {
-                    Number = number,
-                    Type = "MultipleChoice",
-                    Prompt = NormalizeQuestionStem(
-                        BuildFactMcqPrompt(primaryFact),
-                        "Choose the correct answer from the lesson plan content."),
-                    Options = options,
-                    CorrectAnswer = OptionLabel(correctIndex),
-                    TopicCode = item.TopicCode,
-                    TopicDescription = item.TopicDescription,
-                    LessonPlanLabel = item.LessonPlanLabel,
-                    AssessmentCriteriaDescription = item.AssessmentCriteriaDescription,
-                    Rationale = "The correct answer is taken from the first lesson plan content fact; the remaining options are simple distractors.",
-                    Marks = marks,
-                    BundleKey = item.BundleKey
-                };
-            }
-
             var statements = BuildLessonPlanContentStatements(item);
-            var fallbackCorrect = statements[0];
-            var fallbackDistractors = BuildDistractors(item, fallbackCorrect, statements.Skip(1).ToList());
+            var primaryFact = facts.FirstOrDefault();
+            var correctStatement = primaryFact != null
+                ? primaryFact.Statement
+                : statements[0];
+            var distractors = primaryFact != null
+                ? BuildFactBasedDistractors(item, primaryFact, facts, correctStatement)
+                : BuildDistractors(item, correctStatement, statements.Skip(1).ToList());
 
-            var fallbackCorrectIndex = Math.Abs(number) % 4;
-            var shuffled = new List<string>();
+            var correctIndex = Math.Abs(number) % 4;
+            var options = new List<string>();
             for (var i = 0; i < 4; i++)
             {
-                if (i == fallbackCorrectIndex) shuffled.Add(fallbackCorrect);
-                else shuffled.Add(fallbackDistractors[(i < fallbackCorrectIndex ? i : i - 1)]);
+                if (i == correctIndex)
+                {
+                    options.Add(correctStatement);
+                }
+                else
+                {
+                    options.Add(distractors[i < correctIndex ? i : i - 1]);
+                }
             }
 
-            var label = ((char)('A' + fallbackCorrectIndex)).ToString();
+            var label = ((char)('A' + correctIndex)).ToString();
+            var topicLabel = BuildTopicQuestionLabel(item);
             return new GeneratedQuestion
             {
                 Number = number,
                 Type = "MultipleChoice",
                 Prompt = NormalizeQuestionStem(
-                    "Which statement matches the lesson plan content?",
-                    "Which statement matches the lesson plan content?"),
-                Options = shuffled,
+                    $"Which option best reflects correct practice for {topicLabel}?",
+                    "Which option best reflects correct practice for this lesson?"),
+                Options = options,
                 CorrectAnswer = label,
                 TopicCode = item.TopicCode,
                 TopicDescription = item.TopicDescription,
                 LessonPlanLabel = item.LessonPlanLabel,
                 AssessmentCriteriaDescription = item.AssessmentCriteriaDescription,
-                Rationale = "One best answer is keyed and distractors represent common misconceptions.",
+                Rationale = $"One statement matches {topicLabel} and the remaining statements contradict that same content.",
                 Marks = marks,
                 BundleKey = item.BundleKey
             };
@@ -591,18 +594,34 @@ namespace ETD.Api.Utils
             AddStatements(item.LessonPlanContent, maxStatements: 8);
             if (statements.Count == 0)
             {
-                AddStatements(item.LessonPlanDescription, maxStatements: 4);
+                var content = SanitizeQuestionText(item.LessonPlanContent);
+                if (!string.IsNullOrWhiteSpace(content))
+                {
+                    statements.Add(NormalizeQuestionStatement(content, content));
+                }
             }
             if (statements.Count == 0)
             {
-                AddStatements(item.AssessmentCriteriaDescription, maxStatements: 2);
+                foreach (var fallback in new[]
+                {
+                    item.LessonPlanDescription,
+                    item.TopicDescription,
+                    item.AssessmentCriteriaDescription,
+                    item.EvidenceText
+                })
+                {
+                    var cleaned = SanitizeQuestionText(fallback);
+                    if (string.IsNullOrWhiteSpace(cleaned)) continue;
+                    if (ContainsQuestionAdministrativeReference(cleaned)) continue;
+                    statements.Add(NormalizeQuestionStatement(cleaned));
+                    break;
+                }
             }
             if (statements.Count == 0)
             {
-                var context = BuildLearnerContextLabel(item);
                 statements.Add(NormalizeQuestionStatement(
-                    $"Safe and accurate practice is required during {context}.",
-                    "Safe and accurate practice is required during this lesson."));
+                    $"Learners apply safe and accurate practice during {BuildTopicQuestionLabel(item)}.",
+                    "Learners apply safe and accurate practice during this lesson."));
             }
 
             return statements;
@@ -689,14 +708,6 @@ namespace ETD.Api.Utils
             }
 
             AddFactsFromSource(item.LessonPlanContent);
-            if (facts.Count == 0)
-            {
-                AddFactsFromSource(item.LessonPlanDescription);
-            }
-            if (facts.Count == 0)
-            {
-                AddFactsFromSource(item.AssessmentCriteriaDescription);
-            }
 
             return facts;
         }
@@ -727,7 +738,16 @@ namespace ETD.Api.Utils
 
             while (distractors.Count < 3)
             {
-                AddDistinctOption(distractors, "The statement can be ignored without affecting the task.");
+                foreach (var candidate in BuildContentBoundFalseStatements(correctStatement))
+                {
+                    AddDistinctOption(distractors, candidate);
+                    if (distractors.Count >= 3) break;
+                }
+
+                if (distractors.Count >= 3) break;
+                AddDistinctOption(distractors, BuildContextualNearMissStatement(item, correctStatement));
+                if (distractors.Count >= 3) break;
+                break;
             }
 
             return distractors;
@@ -747,7 +767,7 @@ namespace ETD.Api.Utils
                 return mutated;
             }
 
-            return NormalizeQuestionStatement($"It is incorrect to say that {fact.Subject} {fact.Verb} {fact.Value}");
+            return NormalizeQuestionStatement($"A common shortcut is acceptable when working with {TrimForSentence(fact.Subject)}.");
         }
 
         private static List<string> BuildFactAlternativeValues(LessonPlanFact fact, List<LessonPlanFact> facts)
@@ -827,7 +847,7 @@ namespace ETD.Api.Utils
                 "warning" => new List<string> { "mandatory", "prohibition", "emergency information" },
                 "emergency" => new List<string> { "warning", "mandatory", "prohibition" },
                 "emergency information" => new List<string> { "warning", "mandatory", "prohibition" },
-                _ => new List<string> { "optional", "unsafe", "incorrect" }
+                _ => new List<string>()
             };
         }
 
@@ -903,10 +923,7 @@ namespace ETD.Api.Utils
                 return NormalizeQuestionStatement(distractor);
             }
 
-            var context = BuildLearnerContextLabel(item);
-            return NormalizeQuestionStatement(
-                $"Important safety or quality checks may be skipped during {context}.",
-                "Important safety or quality checks may be skipped during this lesson.");
+            return BuildContextualNearMissStatement(item, factualStatement);
         }
 
         private static List<string> BuildDistractors(LessonEvidenceItem item, string correct, List<string> candidates)
@@ -914,30 +931,86 @@ namespace ETD.Api.Utils
             var list = new List<string>();
             foreach (var c in candidates)
             {
-                var d = NormalizeQuestionStatement(MakeFalseStatement(c));
-                if (!string.Equals(d, correct, StringComparison.OrdinalIgnoreCase))
+                foreach (var d in BuildContentBoundFalseStatements(c))
                 {
-                    AddDistinctOption(list, d);
+                    if (!string.Equals(d, correct, StringComparison.OrdinalIgnoreCase))
+                    {
+                        AddDistinctOption(list, d);
+                    }
+                    if (list.Count >= 3) break;
                 }
+
                 if (list.Count >= 3) break;
             }
 
-            var fallbackAttempts = 0;
-            while (list.Count < 3 && fallbackAttempts < 12)
+            if (list.Count < 3)
             {
-                fallbackAttempts++;
-                AddDistinctOption(list, list.Count switch
+                foreach (var d in BuildContentBoundFalseStatements(correct))
                 {
-                    0 => NormalizeQuestionStatement("Safety checks may be skipped when a task appears routine."),
-                    1 => NormalizeQuestionStatement("Precision can be estimated by eye when production pressure is high."),
-                    _ => NormalizeQuestionStatement("Documenting faults is optional if the final output appears usable.")
-                });
+                    AddDistinctOption(list, d);
+                    if (list.Count >= 3) break;
+                }
             }
+
             while (list.Count < 3)
             {
-                list.Add(NormalizeQuestionStatement("Peer approval alone is enough to confirm quality."));
+                AddDistinctOption(list, BuildContextualNearMissStatement(item, correct));
+                if (list.Count >= 3) break;
+
+                foreach (var statement in BuildLessonPlanContentStatements(item))
+                {
+                    foreach (var d in BuildContentBoundFalseStatements(statement))
+                    {
+                        AddDistinctOption(list, d);
+                        if (list.Count >= 3) break;
+                    }
+
+                    if (list.Count >= 3) break;
+                }
+
+                if (list.Count >= 3) break;
+                break;
             }
             return list;
+        }
+
+        private static List<string> BuildContentBoundFalseStatements(string? input)
+        {
+            var source = NormalizeQuestionStatement(input);
+            var options = new List<string>();
+            if (string.IsNullOrWhiteSpace(source)) return options;
+
+            var mutated = NormalizeQuestionStatement(MakeFalseStatement(source));
+            if (!string.IsNullOrWhiteSpace(mutated) &&
+                !string.Equals(mutated, source, StringComparison.OrdinalIgnoreCase) &&
+                !ContainsQuestionAdministrativeReference(mutated))
+            {
+                options.Add(mutated);
+            }
+
+            return options;
+        }
+
+        private static string BuildContextualNearMissStatement(LessonEvidenceItem item, string factualStatement)
+        {
+            var mutated = NormalizeQuestionStatement(MakeFalseStatement(factualStatement));
+            if (!string.IsNullOrWhiteSpace(mutated) &&
+                !string.Equals(mutated, factualStatement, StringComparison.OrdinalIgnoreCase) &&
+                !ContainsQuestionAdministrativeReference(mutated))
+            {
+                return mutated;
+            }
+
+            var context = BuildTopicQuestionLabel(item);
+            var source = TrimForSentence(factualStatement);
+            if (!string.IsNullOrWhiteSpace(context) &&
+                !string.Equals(context, "this topic", StringComparison.OrdinalIgnoreCase) &&
+                !source.Contains(context, StringComparison.OrdinalIgnoreCase))
+            {
+                return NormalizeQuestionStatement($"During {context}, a common shortcut is acceptable when it saves time.");
+            }
+
+            return NormalizeQuestionStatement($"A shortcut is acceptable when completing {source}.");
         }
 
         private static string BuildEvidenceText(
@@ -950,7 +1023,7 @@ namespace ETD.Api.Utils
             var bits = new List<string>();
             if (!string.IsNullOrWhiteSpace(lessonContent))
             {
-                bits.Add(lessonContent);
+                bits.Add(SanitizeLessonEvidenceText(lessonContent));
             }
 
             var keywords = ExtractKeywords($"{subjectDescription} {topicDescription} {criteriaDescription}");
@@ -1001,7 +1074,7 @@ namespace ETD.Api.Utils
 
         private static List<string> ExtractSentences(string? text)
         {
-            var cleaned = MultiSpace.Replace(text ?? string.Empty, " ").Trim();
+            var cleaned = SanitizeLessonEvidenceText(text);
             if (cleaned.Length == 0) return new List<string>();
 
             var raw = SentenceSplit.Split(cleaned);
@@ -1012,10 +1085,36 @@ namespace ETD.Api.Utils
                 s = Regex.Replace(s, @"^[\-\*\d\.\)\(]+", "").Trim();
                 if (s.Length < 30 || s.Length > 260) continue;
                 if (!Regex.IsMatch(s, "[A-Za-z]")) continue;
+                if (EvidenceNoiseHeading.IsMatch(s)) continue;
+                if (FilePathLike.IsMatch(s)) continue;
                 if (!Regex.IsMatch(s, @"[\.\!\?]$")) s += ".";
                 sentences.Add(s);
             }
             return sentences;
+        }
+
+        private static string SanitizeLessonEvidenceText(string? value)
+        {
+            var text = (value ?? string.Empty)
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n');
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return string.Empty;
+            }
+
+            var lines = text
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Where(line => !EvidenceNoiseHeading.IsMatch(line))
+                .Where(line => !Regex.IsMatch(line, @"^\[\d+\]\s*"))
+                .Where(line => !FilePathLike.IsMatch(line))
+                .ToList();
+
+            var cleaned = string.Join(" ", lines);
+            cleaned = MultiSpace.Replace(cleaned, " ").Trim();
+            return cleaned;
         }
 
         private static List<string> ExtractKeywords(string text)
@@ -1048,7 +1147,7 @@ namespace ETD.Api.Utils
             var s = SanitizeQuestionText(input);
             if (string.IsNullOrWhiteSpace(s))
             {
-                return "The step may be skipped without affecting quality.";
+                return string.Empty;
             }
 
             var simpleReplacements = new (string Pattern, string Replacement)[]
@@ -1134,7 +1233,7 @@ namespace ETD.Api.Utils
                 }
             }
 
-            return "The step may be skipped without affecting quality.";
+            return s;
         }
 
         private static string TrimForSentence(string value)

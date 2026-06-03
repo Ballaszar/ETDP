@@ -1,0 +1,9 @@
+﻿{
+  "Purpose": "Every Qwen-created output must return to Mira for review before Pierre treats it as ready.",
+  "CompareRules": "",
+  "CompileRules": "",
+  "ParseRules": "",
+  "Guardrails": "Do not bypass Mira review.",
+  "OutputFormatRules": "",
+  "UpdatedAtUtc": "2026-04-23T02:37:08.3574376Z"
+}

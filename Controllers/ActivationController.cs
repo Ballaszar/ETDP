@@ -24,7 +24,14 @@ namespace ETD.Api.Controllers
 
         public class ActivateRequest
         {
+            public string LecturerEmail { get; set; } = string.Empty;
             public string ActivationKey { get; set; } = string.Empty;
+        }
+
+        public class IssueRequest
+        {
+            public string LecturerEmail { get; set; } = string.Empty;
+            public int? LifetimeHours { get; set; }
         }
 
         [HttpGet("status")]
@@ -43,17 +50,20 @@ namespace ETD.Api.Controllers
                 });
             }
 
+
+
             var apiKeyRequired = _options.RequireApiKey && _options.ApiKeys.Count > 0;
             var activationRequired = _options.RequireActivation && _options.ActivationKeys.Count > 0;
             var token = Request.Headers["X-Activation-Token"].FirstOrDefault();
-            var tokenValid = _tokenService.TryValidate(token, out var expiresAtUtc);
+            var tokenValid = _tokenService.TryValidateInfo(token, out var tokenInfo);
             var activated = !activationRequired || tokenValid;
 
             return Ok(new
             {
                 bypassed = false,
                 activated,
-                expiresAtUtc = tokenValid ? expiresAtUtc : (DateTimeOffset?)null,
+                expiresAtUtc = tokenValid ? tokenInfo.ExpiresAtUtc : (DateTimeOffset?)null,
+                lecturerEmail = tokenValid ? tokenInfo.LecturerEmail : string.Empty,
                 apiKeyRequired,
                 activationRequired,
                 machine = Environment.MachineName
@@ -71,21 +81,29 @@ namespace ETD.Api.Controllers
                     bypassed = true,
                     activated = true,
                     token = string.Empty,
-                    expiresAtUtc = (DateTimeOffset?)null
+                    expiresAtUtc = (DateTimeOffset?)null,
+                    lecturerEmail = string.Empty
                 });
             }
 
             if (!_options.RequireActivation || _options.ActivationKeys.Count == 0)
             {
                 var openTokenExpiry = DateTimeOffset.UtcNow.AddHours(_options.TokenLifetimeHours);
-                var openToken = _tokenService.CreateToken(openTokenExpiry);
+                var openToken = _tokenService.CreateToken(openTokenExpiry, request?.LecturerEmail);
                 return Ok(new
                 {
                     bypassed = false,
                     activated = true,
                     token = openToken,
-                    expiresAtUtc = openTokenExpiry
+                    expiresAtUtc = openTokenExpiry,
+                    lecturerEmail = request?.LecturerEmail?.Trim() ?? string.Empty
                 });
+            }
+
+            var lecturerEmail = request?.LecturerEmail?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(lecturerEmail))
+            {
+                return BadRequest(new { error = "Lecturer email is required." });
             }
 
             var key = request?.ActivationKey?.Trim() ?? string.Empty;
@@ -101,14 +119,42 @@ namespace ETD.Api.Controllers
             }
 
             var expiresAt = DateTimeOffset.UtcNow.AddHours(_options.TokenLifetimeHours);
-            var token = _tokenService.CreateToken(expiresAt);
+            var token = _tokenService.CreateToken(expiresAt, lecturerEmail);
 
             return Ok(new
             {
                 bypassed = false,
                 activated = true,
                 token,
-                expiresAtUtc = expiresAt
+                expiresAtUtc = expiresAt,
+                lecturerEmail
+            });
+        }
+
+        // Admin-only token issuance for offline key distribution.
+        // Protect with ETDP_ADMIN_SECRET environment variable and X-Admin-Secret header.
+        [HttpPost("issue")]
+        public IActionResult Issue([FromBody] IssueRequest request)
+        {
+            var adminSecret = Environment.GetEnvironmentVariable("ETDP_ADMIN_SECRET") ?? string.Empty;
+            var provided = Request.Headers["X-Admin-Secret"].FirstOrDefault() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(adminSecret) || !string.Equals(adminSecret, provided, StringComparison.Ordinal))
+            {
+                return Unauthorized(new { error = "Admin secret missing or invalid." });
+            }
+
+            var lecturerEmail = request?.LecturerEmail?.Trim() ?? string.Empty;
+            var hours = request?.LifetimeHours ?? _options.TokenLifetimeHours;
+            var expiresAt = DateTimeOffset.UtcNow.AddHours(hours);
+            var token = _tokenService.CreateToken(expiresAt, lecturerEmail);
+
+            return Ok(new
+            {
+                bypassed = false,
+                activated = true,
+                token,
+                expiresAtUtc = expiresAt,
+                lecturerEmail
             });
         }
     }
