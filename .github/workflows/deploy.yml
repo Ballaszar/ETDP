@@ -7,12 +7,19 @@ on:
     paths:
       - 'frontend/**'
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -24,6 +31,11 @@ jobs:
       
       - name: Build
         run: cd frontend && npm run build
+      
+      - name: Configure Git
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
       
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
